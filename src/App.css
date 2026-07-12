@@ -2647,8 +2647,10 @@ select:focus-visible {
 .rain-hour-icon {
   font-size: 0.95rem;
   line-height: 1;
-  min-height: 1.1rem;
-  opacity: 0.9;
+  min-height: 1.35rem;
+  opacity: 0.95;
+  display: grid;
+  place-items: center;
 }
 .rain-hour-track {
   height: 84px;
@@ -2670,6 +2672,8 @@ select:focus-visible {
   min-width: 8px;
   border-radius: 5px 5px 2px 2px;
   transition: height 0.35s ease;
+  position: relative;
+  overflow: hidden;
 }
 .rain-hour-fill.dry {
   background: rgba(148, 163, 184, 0.45);
@@ -2677,15 +2681,312 @@ select:focus-visible {
 [data-theme='light'] .rain-hour-fill.dry {
   background: rgba(100, 116, 139, 0.35);
 }
-.rain-hour-fill.wet {
+.rain-hour-fill.wet,
+.rain-hour-fill.fill-rain.wet,
+.rain-hour-fill.fill-mix.wet {
   background: linear-gradient(180deg, #7dd3fc, #2563eb 75%, #1e3a8a);
   box-shadow: 0 0 10px rgba(56, 189, 248, 0.35);
 }
+.rain-hour-fill.fill-snow.wet {
+  background: linear-gradient(180deg, #f8fafc, #cbd5e1 55%, #94a3b8);
+  box-shadow: 0 0 10px rgba(226, 232, 240, 0.4);
+}
+
+/* Animated precip amount icons — small circular (original size) */
+.precip-motion {
+  display: inline-grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  position: relative;
+}
+.precip-motion.sm {
+  width: 1.35rem;
+  height: 1.35rem;
+}
+.precip-motion.md {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+.precip-motion .precip-dash {
+  color: var(--text-mute);
+  font-size: 0.85rem;
+  opacity: 0.7;
+}
+.precip-motion-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  overflow: hidden;
+  background: radial-gradient(circle at 40% 30%, rgba(125, 211, 252, 0.28), transparent 65%);
+}
+.precip-motion.snow .precip-motion-stage {
+  background: radial-gradient(circle at 40% 30%, rgba(226, 232, 240, 0.4), transparent 65%);
+}
+.precip-motion.mix .precip-motion-stage {
+  background: radial-gradient(circle at 40% 30%, rgba(165, 243, 252, 0.35), transparent 65%);
+}
+.precip-motion .drop {
+  position: absolute;
+  width: 18%;
+  height: 28%;
+  border-radius: 40% 40% 50% 50%;
+  background: linear-gradient(180deg, #e0f2fe, #38bdf8 55%, #0284c7);
+  box-shadow: 0 0 4px rgba(56, 189, 248, 0.55);
+  animation: precip-drop-fall 0.85s linear infinite;
+  opacity: 0.95;
+}
+.precip-motion .drop.d1 {
+  left: 18%;
+  animation-duration: 0.75s;
+}
+.precip-motion .drop.d2 {
+  left: 42%;
+  width: 16%;
+  height: 26%;
+  animation-duration: 0.95s;
+  animation-delay: 0.2s;
+}
+.precip-motion .drop.d3 {
+  left: 64%;
+  animation-duration: 0.7s;
+  animation-delay: 0.4s;
+}
+.precip-motion .drop.d4 {
+  left: 30%;
+  animation-duration: 0.88s;
+  animation-delay: 0.15s;
+}
+.precip-motion .drop.d5 {
+  left: 72%;
+  animation-duration: 0.65s;
+  animation-delay: 0.35s;
+}
+.precip-motion.level-3 .drop {
+  animation-duration: 0.55s;
+}
+.precip-motion .wave {
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  bottom: 8%;
+  height: 28%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(56, 189, 248, 0.55), transparent 70%);
+  animation: precip-wave 1.4s ease-in-out infinite;
+}
+.precip-motion .wave.w2 {
+  bottom: 2%;
+  opacity: 0.6;
+  animation-delay: 0.5s;
+}
+.precip-motion .splash {
+  position: absolute;
+  left: 35%;
+  bottom: 12%;
+  width: 30%;
+  height: 18%;
+  border-radius: 50%;
+  background: rgba(186, 230, 253, 0.7);
+  animation: precip-splash 0.9s ease-out infinite;
+}
+.precip-motion .flake {
+  position: absolute;
+  width: 22%;
+  height: 22%;
+  background: #f8fafc;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.85);
+  clip-path: polygon(
+    50% 0%,
+    61% 35%,
+    98% 35%,
+    68% 57%,
+    79% 91%,
+    50% 70%,
+    21% 91%,
+    32% 57%,
+    2% 35%,
+    39% 35%
+  );
+  animation: precip-flake-fall 1.8s linear infinite;
+  opacity: 0.95;
+}
+.precip-motion .flake.f1 {
+  left: 12%;
+  animation-duration: 1.6s;
+}
+.precip-motion .flake.f2 {
+  left: 40%;
+  width: 18%;
+  height: 18%;
+  animation-duration: 2.1s;
+  animation-delay: 0.3s;
+}
+.precip-motion .flake.f3 {
+  left: 66%;
+  animation-duration: 1.7s;
+  animation-delay: 0.6s;
+}
+.precip-motion .flake.f4 {
+  left: 28%;
+  animation-duration: 1.9s;
+  animation-delay: 0.15s;
+}
+.precip-motion .flake.f5 {
+  left: 78%;
+  width: 16%;
+  height: 16%;
+  animation-duration: 2.2s;
+  animation-delay: 0.45s;
+}
+@keyframes precip-drop-fall {
+  0% {
+    transform: translateY(-120%) scaleY(0.8);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(140%) scaleY(1.1);
+    opacity: 0;
+  }
+}
+@keyframes precip-wave {
+  0%,
+  100% {
+    transform: scaleX(0.85) scaleY(0.7);
+    opacity: 0.45;
+  }
+  50% {
+    transform: scaleX(1.15) scaleY(1);
+    opacity: 0.9;
+  }
+}
+@keyframes precip-splash {
+  0% {
+    transform: scale(0.4);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+@keyframes precip-flake-fall {
+  0% {
+    transform: translateY(-130%) rotate(0deg);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(140%) rotate(160deg) translateX(3px);
+    opacity: 0.2;
+  }
+}
+.rain-hour-fill .fill-water,
+.rain-hour-fill .fill-snow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.rain-hour-fill .fill-water i {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 36%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  animation: fill-water-flow 1.2s linear infinite;
+}
+.rain-hour-fill .fill-water i:nth-child(1) {
+  top: 10%;
+}
+.rain-hour-fill .fill-water i:nth-child(2) {
+  top: 40%;
+  animation-duration: 1.45s;
+  animation-delay: 0.25s;
+}
+.rain-hour-fill .fill-water i:nth-child(3) {
+  top: 68%;
+  animation-duration: 1s;
+  animation-delay: 0.1s;
+}
+.rain-hour-fill .fill-snow i {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 3px #fff;
+  animation: fill-snow-drift 1.6s linear infinite;
+}
+.rain-hour-fill .fill-snow i:nth-child(1) {
+  left: 20%;
+}
+.rain-hour-fill .fill-snow i:nth-child(2) {
+  left: 45%;
+  animation-duration: 1.85s;
+  animation-delay: 0.2s;
+}
+.rain-hour-fill .fill-snow i:nth-child(3) {
+  left: 65%;
+  animation-duration: 1.5s;
+  animation-delay: 0.4s;
+}
+.rain-hour-fill .fill-snow i:nth-child(4) {
+  left: 80%;
+  animation-duration: 1.95s;
+  animation-delay: 0.1s;
+}
+@keyframes fill-water-flow {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+@keyframes fill-snow-drift {
+  0% {
+    transform: translateY(-30%);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(130%) translateX(2px);
+    opacity: 0.25;
+  }
+}
+.rain-hour-amt.snow {
+  color: #e2e8f0 !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .precip-motion .drop,
+  .precip-motion .wave,
+  .precip-motion .splash,
+  .precip-motion .flake,
+  .rain-hour-fill .fill-water i,
+  .rain-hour-fill .fill-snow i {
+    animation: none !important;
+  }
+}
 .rain-hour-amt {
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   font-variant-numeric: tabular-nums;
   color: var(--text-mute);
-  font-weight: 500;
+  font-weight: 600;
+  line-height: 1.15;
+  min-height: 1em;
+  white-space: nowrap;
 }
 .rain-hour-amt.wet {
   color: #7dd3fc;
@@ -4454,4 +4755,250 @@ select:focus-visible {
     width: auto;
     bottom: 4.5rem;
   }
+}
+
+/* Radar product + fire/smoke */
+.radar-product-hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.72rem;
+  color: var(--text-mute);
+  line-height: 1.35;
+}
+.fire-toggle input:checked + span,
+label.fire-toggle {
+  /* keep default */
+}
+.map-layer-error {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 600;
+  font-size: 0.72rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 8px;
+  background: rgba(127, 29, 29, 0.85);
+  color: #fecaca;
+  pointer-events: none;
+}
+
+/* UV / wind strip */
+.uv-wind-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55rem;
+  margin-bottom: 0.75rem;
+}
+.uv-wind-summary .label {
+  display: block;
+  font-size: 0.68rem;
+  color: var(--text-mute);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.uv-wind-summary strong {
+  font-size: 1.05rem;
+}
+.uv-wind-strip {
+  display: flex;
+  gap: 0.3rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+}
+.uv-wind-cell {
+  flex: 0 0 auto;
+  width: 2.6rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  min-height: 7.5rem;
+}
+.uv-hour {
+  font-size: 0.62rem;
+  color: var(--text-mute);
+  font-weight: 650;
+}
+.uv-bar {
+  width: 10px;
+  margin-top: auto;
+  border-radius: 4px;
+  min-height: 6px;
+}
+.uv-val {
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+.wind-val {
+  font-size: 0.6rem;
+  color: var(--text-dim);
+}
+.temp-val {
+  font-size: 0.62rem;
+  color: var(--text-mute);
+}
+
+/* Visibility */
+.vis-main {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55rem;
+  margin-bottom: 0.65rem;
+}
+.vis-main .label {
+  display: block;
+  font-size: 0.68rem;
+  color: var(--text-mute);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.vis-main strong {
+  display: block;
+  font-size: 1.1rem;
+  margin: 0.15rem 0;
+}
+.vis-main .muted {
+  font-size: 0.75rem;
+  color: var(--text-mute);
+}
+.vis-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.vis-list li {
+  display: grid;
+  grid-template-columns: 3.5rem 4.5rem 1fr;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.vis-list .bad {
+  color: #fca5a5;
+  font-weight: 700;
+}
+.vis-list .muted {
+  color: var(--text-mute);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Fire map panel */
+.fire-map-lead {
+  margin: 0 0 0.65rem;
+  font-size: 0.82rem;
+  color: var(--text-mute);
+  line-height: 1.4;
+}
+.fire-map-stage {
+  position: relative;
+  height: min(280px, 42vh);
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: #0a0e18;
+}
+.fire-map {
+  height: 100%;
+  width: 100%;
+  background: #0a0e18;
+}
+.fire-map-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: rgba(10, 14, 24, 0.55);
+  color: #e2e8f0;
+  font-size: 0.85rem;
+  z-index: 10;
+}
+.fire-map-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  margin-top: 0.65rem;
+  font-size: 0.85rem;
+}
+
+/* Map layer status + legends */
+.map-layer-status {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 650;
+  font-size: 0.72rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.88);
+  color: #e2e8f0;
+  border: 1px solid rgba(255,255,255,0.12);
+  pointer-events: none;
+  max-width: 90%;
+  text-align: center;
+}
+.map-layer-status.is-error {
+  background: rgba(127, 29, 29, 0.9);
+  color: #fecaca;
+  border-color: rgba(248, 113, 113, 0.4);
+}
+.map-layer-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.85rem;
+  margin-top: 0.45rem;
+  font-size: 0.7rem;
+  color: var(--text-mute);
+}
+.legend-smoke::before,
+.legend-fire::before {
+  content: '';
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  margin-right: 0.3rem;
+  vertical-align: middle;
+}
+.legend-smoke::before {
+  background: linear-gradient(90deg, #4ade80, #facc15, #ef4444);
+}
+.legend-fire::before {
+  background: linear-gradient(90deg, #fbbf24, #ef4444, #a21caf);
+}
+.fire-map-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+.compact-toggle {
+  font-size: 0.75rem !important;
+  padding: 0.25rem 0.5rem !important;
+  gap: 0.3rem !important;
+}
+.fire-map-stage {
+  min-height: 260px !important;
+}
+.fire-map .leaflet-container {
+  height: 100%;
+  width: 100%;
+  background: #0a0e18;
+  font: inherit;
+}
+.radar-map.leaflet-container,
+.radar-map .leaflet-container {
+  height: 100%;
+  width: 100%;
+}
+.satellite-tiles {
+  mix-blend-mode: screen;
 }

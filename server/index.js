@@ -16,6 +16,7 @@ import {
   postMessage,
   roomIdFromCoords,
 } from './chat.js'
+import { firesNear } from './firms.js'
 
 const app = express()
 const PORT = Number(process.env.PORT) || 8787
@@ -59,7 +60,33 @@ function validatePassword(password) {
 }
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, service: 'atmos-api', features: ['auth', 'chat'] })
+  res.json({
+    ok: true,
+    service: 'atmos-api',
+    features: ['auth', 'chat', 'fires'],
+  })
+})
+
+/** Active fire hotspots near a point (NASA FIRMS 24h) */
+app.get('/api/fires', async (req, res) => {
+  try {
+    const lat = parseFloat(String(req.query.lat ?? ''))
+    const lon = parseFloat(String(req.query.lon ?? ''))
+    if (Number.isNaN(lat) || Number.isNaN(lon)) {
+      return res.status(400).json({ error: 'lat and lon required' })
+    }
+    const radius = parseFloat(String(req.query.radius ?? '2.5')) || 2.5
+    const limit = Math.min(200, Math.max(10, Number(req.query.limit) || 100))
+    const fires = await firesNear(lat, lon, radius, limit)
+    res.json({
+      source: 'NASA FIRMS (MODIS/VIIRS 24h)',
+      count: fires.length,
+      fires,
+    })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ error: 'Could not load fire data' })
+  }
 })
 
 /** Resolve area chat room from coordinates */

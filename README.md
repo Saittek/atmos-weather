@@ -1,6 +1,6 @@
 # Atmos — Weather Command
 
-Full-featured weather dashboard: **video-smooth HQ radar**, multi-model forecasts, air quality, severe alerts, tropical storms, and PWA install.
+Full-featured weather dashboard: **video-smooth HQ radar**, multi-model forecasts, air quality, severe alerts (US + Canada), fire/smoke maps, area chat, tropical storms, and PWA install.
 
 ## Run (web)
 
@@ -10,8 +10,16 @@ npm install
 npm run dev
 ```
 
-This starts the **auth API** (`:8787`) and the **web app** together.  
+This starts the **API** (`:8787` — auth, area chat, NASA FIRMS fires) and the **web app** together.  
 Open **http://localhost:5173/**
+
+### Highlights
+
+- **Radar products** — precip, rain-only, snow, classic, NEXRAD, storm, satellite IR (RainViewer + NASA GIBS fallback), radar+sat
+- **Fire & smoke** — NASA FIRMS hotspots + PM2.5 haze on the radar map and a dedicated fire map panel
+- **Area chat** — geo-bucketed chat (~20 km) for people viewing the same area (sign-in to post)
+- **Core weather** — will I get wet, next 2h precip, UV/wind, visibility, 7-day, hazards, storm mode
+- **Accounts** — favorites & prefs (local + optional cloud via the API)
 
 ## iOS App Store
 

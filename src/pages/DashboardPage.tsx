@@ -39,6 +39,9 @@ import { WeekStrip } from '../components/WeekStrip'
 import { HazardBadges } from '../components/HazardBadges'
 import { PrecipTotals } from '../components/PrecipTotals'
 import { AreaChat } from '../components/AreaChat'
+import { UvWindPanel } from '../components/UvWindPanel'
+import { VisibilityPanel } from '../components/VisibilityPanel'
+import { FireMapPanel } from '../components/FireMapPanel'
 import { useWeather } from '../hooks/useWeather'
 import { useAuth } from '../hooks/useAuth'
 import { useRainWatch } from '../hooks/useRainWatch'
@@ -368,7 +371,16 @@ export default function DashboardPage() {
               {!stormMode && radarBlock}
 
               <HourlyForecast weather={weather} units={units} />
+              <UvWindPanel weather={weather} units={units} />
               <PrecipTotals weather={weather} units={units} />
+              <VisibilityPanel weather={weather} units={units} />
+              <FireMapPanel
+                lat={location.latitude}
+                lon={location.longitude}
+                placeName={location.name}
+                weather={weather}
+                air={air}
+              />
               <WeatherStory
                 weather={weather}
                 units={units}
@@ -436,6 +448,10 @@ export default function DashboardPage() {
                   {' / '}
                   <a href="https://www.weather.gc.ca/" target="_blank" rel="noreferrer">
                     ECCC
+                  </a>
+                  . Fires{' '}
+                  <a href="https://firms.modaps.eosdis.nasa.gov/" target="_blank" rel="noreferrer">
+                    NASA FIRMS
                   </a>
                   .
                 </p>

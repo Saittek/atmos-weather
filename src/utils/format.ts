@@ -45,10 +45,33 @@ export function formatDistance(meters: number, units: Units): string {
   return `${v >= 10 ? Math.round(v) : v.toFixed(1)} ${distanceUnit(units)}`
 }
 
-export function formatPrecip(mm: number, units: Units): string {
+/** True if amount is meaningful rain/snow (API values are always mm). */
+export function hasPrecipMm(mm: number): boolean {
+  return Number.isFinite(mm) && mm >= 0.05
+}
+
+/** Compact amount label for timelines (no unit suffix). */
+export function formatPrecipAmount(mm: number, units: Units): string {
+  if (!Number.isFinite(mm) || mm < 0.05) return '0'
   const v = convertPrecip(mm, units)
-  if (v === 0) return `0 ${precipUnit(units)}`
-  return `${units === 'metric' ? v.toFixed(1) : v.toFixed(2)} ${precipUnit(units)}`
+  if (units === 'metric') {
+    if (v < 0.1) return '<0.1'
+    return v >= 10 ? v.toFixed(0) : v.toFixed(1)
+  }
+  // inches
+  if (v < 0.01) return '<0.01'
+  return v >= 1 ? v.toFixed(2) : v.toFixed(2)
+}
+
+export function formatPrecip(mm: number, units: Units): string {
+  if (!Number.isFinite(mm) || mm < 0.05) return `0 ${precipUnit(units)}`
+  const v = convertPrecip(mm, units)
+  if (units === 'metric') {
+    if (v < 0.1) return `<0.1 ${precipUnit(units)}`
+    return `${v >= 10 ? Math.round(v) : v.toFixed(1)} ${precipUnit(units)}`
+  }
+  if (v < 0.01) return `<0.01 ${precipUnit(units)}`
+  return `${v.toFixed(2)} ${precipUnit(units)}`
 }
 
 export function formatPressure(hpa: number, units: Units): string {

@@ -14,14 +14,20 @@ import {
   fetchRadarMaps,
   getAllFrames,
   getSatelliteFrames,
+  gibsInfraredAttribution,
+  gibsInfraredTileUrl,
+  productSettings,
+  RADAR_PRODUCTS,
   satelliteTileUrl,
   tileUrl,
   type ColorScheme,
+  type RadarProduct,
 } from '../api/radar'
 import type { RadarFrame, RadarMaps } from '../api/types'
 import { formatRadarTime } from '../utils/format'
 import type { Units } from '../utils/format'
 import { MapOverlays, type OverlayMode } from './MapOverlays'
+import { FireSmokeLayers } from './FireSmokeLayers'
 
 interface Props {
   lat: number
@@ -323,7 +329,7 @@ function CoverageLayer({ host, show }: { host: string; show: boolean }) {
   return null
 }
 
-/** Single latest (or scrubbed) satellite IR frame */
+/** RainViewer satellite IR when frames exist */
 function SatelliteLayer({
   host,
   frame,
@@ -334,7 +340,6 @@ function SatelliteLayer({
   opacity: number
 }) {
   const map = useMap()
-  const layerRef = useRef<L.TileLayer | null>(null)
 
   useEffect(() => {
     if (!frame) return
@@ -344,15 +349,36 @@ function SatelliteLayer({
       maxZoom: 12,
       maxNativeZoom: 7,
       className: 'satellite-tiles',
+      attribution: 'Satellite &copy; RainViewer',
     })
     layer.addTo(map)
-    layerRef.current = layer
     return () => {
       map.removeLayer(layer)
-      layerRef.current = null
     }
   }, [host, frame, map, opacity])
 
+  return null
+}
+
+/** NASA GIBS IR fallback when RainViewer satellite list is empty */
+function GibsInfraredLayer({ show, opacity }: { show: boolean; opacity: number }) {
+  const map = useMap()
+  useEffect(() => {
+    if (!show) return
+    const layer = L.tileLayer(gibsInfraredTileUrl(), {
+      opacity,
+      zIndex: 175,
+      maxZoom: 9,
+      maxNativeZoom: 7,
+      className: 'satellite-tiles gibs-ir',
+      attribution: gibsInfraredAttribution(),
+      crossOrigin: true,
+    })
+    layer.addTo(map)
+    return () => {
+      map.removeLayer(layer)
+    }
+  }, [show, opacity, map])
   return null
 }
 
@@ -372,6 +398,7 @@ export function RadarMap({
   const [playing, setPlaying] = useState(true)
   const [speed, setSpeed] = useState<SpeedKey>('normal')
   const [opacity, setOpacity] = useState(0.78)
+  const [product, setProduct] = useState<RadarProduct>('precip')
   const [color, setColor] = useState<ColorScheme>(6)
   const [basemap, setBasemap] = useState<Basemap>('dark')
   const [smooth, setSmooth] = useState(true)
@@ -379,6 +406,8 @@ export function RadarMap({
   const [showCoverage, setShowCoverage] = useState(false)
   const [showRadar, setShowRadar] = useState(true)
   const [showSatellite, setShowSatellite] = useState(false)
+  const [showFires, setShowFires] = useState(false)
+  const [showSmoke, setShowSmoke] = useState(false)
   const [overlay, setOverlay] = useState<OverlayMode>('none')
   const [fullscreen, setFullscreen] = useState(false)
   const [bufferReady, setBufferReady] = useState(false)
@@ -403,7 +432,17 @@ export function RadarMap({
   const satFrame = satFrames.length
     ? satFrames[Math.min(frameIdx, satFrames.length - 1)]
     : null
+  const useGibsSat = showSatellite && !satFrame
   const fadeDuration = fadeMs(speed)
+
+  // Satellite-only with no RainViewer frames: still allow “ready” playback UI
+  useEffect(() => {
+    if (showRadar && radarFrames.length) return
+    if (showSatellite && (satFrame || useGibsSat)) {
+      setBufferReady(true)
+      setBufferProgress(1)
+    }
+  }, [showRadar, showSatellite, radarFrames.length, satFrame, useGibsSat])
 
   const onBuffer = useCallback((ready: boolean, progress: number) => {
     setBufferReady(ready)
@@ -436,22 +475,44 @@ export function RadarMap({
 
   // Video-style loop: hold each frame, longer hold on last, then restart
   useEffect(() => {
-    if (!playing || radarFrames.length < 2 || !bufferReady || !showRadar) return
+    const canLoopRadar = showRadar && radarFrames.length >= 2 && bufferReady
+    const canLoopSat = !showRadar && showSatellite && satFrames.length >= 2
+    if (!playing || (!canLoopRadar && !canLoopSat)) return
 
-    const isLast = frameIdx >= radarFrames.length - 1
+    const len = canLoopRadar ? radarFrames.length : satFrames.length
+    const isLast = frameIdx >= len - 1
     const wait = isLast ? SPEED_MS[speed] + LOOP_HOLD_MS : SPEED_MS[speed]
     const timer = window.setTimeout(() => {
-      setFrameIdx((i) => (i + 1) % radarFrames.length)
+      setFrameIdx((i) => (i + 1) % len)
     }, wait)
 
     return () => window.clearTimeout(timer)
-  }, [playing, radarFrames.length, speed, bufferReady, frameIdx, showRadar])
+  }, [
+    playing,
+    radarFrames.length,
+    satFrames.length,
+    speed,
+    bufferReady,
+    frameIdx,
+    showRadar,
+    showSatellite,
+  ])
+
+  // Apply radar product presets (color / snow / sat combo)
+  useEffect(() => {
+    const s = productSettings(product)
+    setColor(s.color)
+    setSmooth(s.smooth)
+    setSnow(s.snow)
+    setShowRadar(s.showRadar)
+    setShowSatellite(s.showSatellite)
+  }, [product])
 
   // Severe mode: auto-play + slightly higher opacity
   useEffect(() => {
     if (severeMode) {
       setPlaying(true)
-      setShowRadar(true)
+      setProduct('storm')
       setOpacity((o) => Math.max(o, 0.82))
     }
   }, [severeMode])
@@ -492,7 +553,7 @@ export function RadarMap({
         <div>
           <h2>Live Weather Radar</h2>
           <p className="radar-sub">
-            Video-smooth loop · RainViewer · satellite · overlays
+            Multi-product radar · satellite · fire/smoke · model overlays
             {mobileFocus ? ' · mobile focus' : ''}
           </p>
         </div>
@@ -554,7 +615,14 @@ export function RadarMap({
           <TileLayer url={base.url} attribution={base.attr} maxZoom={19} />
           <CoverageLayer host={host} show={showCoverage} />
           {showSatellite && satFrame && (
-            <SatelliteLayer host={host} frame={satFrame} opacity={0.85} />
+            <SatelliteLayer
+              host={host}
+              frame={satFrame}
+              opacity={showRadar ? 0.55 : 0.88}
+            />
+          )}
+          {useGibsSat && (
+            <GibsInfraredLayer show opacity={showRadar ? 0.5 : 0.85} />
           )}
           {showRadar && radarFrames.length > 0 && (
             <RadarEngine
@@ -569,6 +637,12 @@ export function RadarMap({
               onBuffer={onBuffer}
             />
           )}
+          <FireSmokeLayers
+            lat={lat}
+            lon={lon}
+            showFires={showFires}
+            showSmoke={showSmoke}
+          />
           <MapOverlays
             lat={lat}
             lon={lon}
@@ -686,6 +760,20 @@ export function RadarMap({
 
         <div className="radar-options">
           <label className="opt">
+            Radar product
+            <select
+              value={product}
+              onChange={(e) => setProduct(e.target.value as RadarProduct)}
+            >
+              {RADAR_PRODUCTS.map((p) => (
+                <option key={p.id} value={p.id} title={p.desc}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="opt">
             Opacity
             <input
               type="range"
@@ -726,7 +814,7 @@ export function RadarMap({
           </label>
 
           <label className="opt">
-            Overlay
+            Model overlay
             <select
               value={overlay}
               onChange={(e) => setOverlay(e.target.value as OverlayMode)}
@@ -756,6 +844,22 @@ export function RadarMap({
             />
             Satellite IR{!satFrames.length ? ' (n/a)' : ''}
           </label>
+          <label className="toggle fire-toggle">
+            <input
+              type="checkbox"
+              checked={showFires}
+              onChange={(e) => setShowFires(e.target.checked)}
+            />
+            🔥 Fires
+          </label>
+          <label className="toggle smoke-toggle">
+            <input
+              type="checkbox"
+              checked={showSmoke}
+              onChange={(e) => setShowSmoke(e.target.checked)}
+            />
+            💨 Smoke
+          </label>
           <label className="toggle">
             <input
               type="checkbox"
@@ -777,6 +881,24 @@ export function RadarMap({
             Coverage mask
           </label>
         </div>
+        <p className="radar-product-hint">
+          {RADAR_PRODUCTS.find((p) => p.id === product)?.desc}
+          {useGibsSat ? ' · Satellite via NASA GIBS (RainViewer IR offline)' : ''}
+          {showFires ? ' · NASA FIRMS hotspots (24h)' : ''}
+          {showSmoke ? ' · PM2.5 smoke / haze field' : ''}
+        </p>
+        {(showSmoke || showFires) && (
+          <div className="map-layer-legend" aria-hidden>
+            {showSmoke && (
+              <span className="legend-smoke">
+                Smoke: green=clean → yellow → orange → red=hazardous PM2.5
+              </span>
+            )}
+            {showFires && (
+              <span className="legend-fire">Fires: yellow=weak → purple=intense FRP</span>
+            )}
+          </div>
+        )}
       </div>
     </section>
   )
