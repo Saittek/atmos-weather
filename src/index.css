@@ -1,0 +1,110 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  color-scheme: dark;
+  /* iOS safe areas (notch / home indicator) */
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+}
+
+html[data-theme='light'] {
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: #0b1220;
+  /* Prevent iOS rubber-band overscroll flash */
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+}
+
+html[data-theme='light'] body {
+  background: #e8eef7;
+}
+
+#root {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* Full-page radar needs a definite height chain for Leaflet */
+#root:has(.radar-page) {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* Capacitor / iOS shell */
+body.native-ios .app-shell {
+  padding-left: max(1.25rem, var(--sal));
+  padding-right: max(1.25rem, var(--sar));
+  padding-bottom: max(3rem, calc(var(--sab) + 1.5rem));
+}
+
+body.native-ios .alert-top-bar {
+  padding-top: var(--sat);
+}
+
+body.native-ios .topbar {
+  top: max(0.4rem, calc(var(--sat) * 0.15));
+}
+
+body.native-ios .radar-page-bar,
+body.native-ios .widget-bar {
+  padding-top: max(0.55rem, var(--sat));
+  padding-left: max(0.75rem, var(--sal));
+  padding-right: max(0.75rem, var(--sar));
+}
+
+body.native-ios .radar-page {
+  padding-bottom: var(--sab);
+}
+
+.error-boundary {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 2rem;
+  text-align: center;
+  background: #0b1220;
+  color: #f1f5f9;
+  font-family: system-ui, sans-serif;
+}
+.error-boundary h1 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+.error-boundary p {
+  margin: 0;
+  color: rgba(226, 232, 240, 0.7);
+  max-width: 28rem;
+}
+
+/* Leaflet default icon path fix not needed — we use CircleMarker */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
+}

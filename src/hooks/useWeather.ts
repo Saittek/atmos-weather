@@ -1,0 +1,543 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  fetchAirQuality,
+  fetchAlerts,
+  fetchMultiModel,
+  fetchPressureProfile,
+  fetchTropicalStorms,
+  fetchWeather,
+  locationKey,
+  parseShareParams,
+  reverseGeocode,
+} from '../api/weather'
+import { saveUserData, type CloudPrefs } from '../api/auth'
+import type {
+  AirQualityData,
+  DensityMode,
+  LocationResult,
+  ModelSeries,
+  PressureLevelProfile,
+  ThemeMode,
+  TropicalStorm,
+  WeatherAlert,
+  WeatherData,
+} from '../api/types'
+import type { Units } from '../utils/format'
+import { useAuth } from './useAuth'
+import { getCurrentPosition } from '../lib/native'
+
+const STORAGE_KEY = 'atmos-weather-prefs-v2'
+const NOTIFIED_KEY = 'atmos-notified-alerts'
+
+export interface Prefs {
+  units: Units
+  theme: ThemeMode
+  density: DensityMode
+  lastLocation?: LocationResult
+  favorites: LocationResult[]
+  severeMode: boolean
+  /** Radar-first, intense UI — the signature “stand out” mode */
+  stormMode: boolean
+  notifyAlerts: boolean
+}
+
+function loadPrefs(): Prefs {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (raw) {
+      const p = JSON.parse(raw) as Partial<Prefs>
+      return {
+        units: p.units ?? 'imperial',
+        theme: p.theme ?? 'dark',
+        density: p.density ?? 'comfortable',
+        lastLocation: p.lastLocation,
+        favorites: Array.isArray(p.favorites) ? p.favorites : [],
+        severeMode: p.severeMode ?? true,
+        stormMode: p.stormMode ?? false,
+        notifyAlerts: p.notifyAlerts ?? false,
+      }
+    }
+    const old = localStorage.getItem('atmos-weather-prefs')
+    if (old) {
+      const p = JSON.parse(old) as { units?: Units; lastLocation?: LocationResult }
+      return {
+        units: p.units ?? 'imperial',
+        theme: 'dark',
+        density: 'comfortable',
+        lastLocation: p.lastLocation,
+        favorites: [],
+        severeMode: true,
+        stormMode: false,
+        notifyAlerts: false,
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return {
+    units: 'imperial',
+    theme: 'dark',
+    density: 'comfortable',
+    favorites: [],
+    severeMode: true,
+    stormMode: false,
+    notifyAlerts: false,
+  }
+}
+
+function saveLocal(prefs: Prefs) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs))
+  } catch {
+    /* ignore */
+  }
+}
+
+function applyTheme(theme: ThemeMode) {
+  const root = document.documentElement
+  let mode: 'dark' | 'light' = 'dark'
+  if (theme === 'light') mode = 'light'
+  else if (theme === 'auto') {
+    mode = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+  }
+  root.dataset.theme = mode
+  root.style.colorScheme = mode
+  return mode
+}
+
+function prefsToCloud(p: Prefs): CloudPrefs {
+  return {
+    units: p.units,
+    theme: p.theme,
+    density: p.density,
+    lastLocation: p.lastLocation ?? null,
+    favorites: p.favorites,
+    severeMode: p.severeMode,
+    stormMode: p.stormMode,
+    notifyAlerts: p.notifyAlerts,
+  }
+}
+
+function cloudToPrefs(c: CloudPrefs, local: Prefs): Prefs {
+  const map = new Map<string, LocationResult>()
+  for (const f of [...(c.favorites ?? []), ...local.favorites]) {
+    if (f?.latitude != null && f?.longitude != null) {
+      map.set(locationKey(f), f)
+    }
+  }
+  return {
+    units: c.units ?? local.units,
+    theme: c.theme ?? local.theme,
+    density: c.density ?? local.density,
+    lastLocation: c.lastLocation ?? local.lastLocation,
+    favorites: [...map.values()].slice(0, 12),
+    severeMode: c.severeMode ?? local.severeMode,
+    stormMode: c.stormMode ?? local.stormMode,
+    notifyAlerts: c.notifyAlerts ?? local.notifyAlerts,
+  }
+}
+
+function loadNotified(): Set<string> {
+  try {
+    const raw = sessionStorage.getItem(NOTIFIED_KEY)
+    if (raw) return new Set(JSON.parse(raw) as string[])
+  } catch {
+    /* ignore */
+  }
+  return new Set()
+}
+
+function saveNotified(set: Set<string>) {
+  try {
+    sessionStorage.setItem(NOTIFIED_KEY, JSON.stringify([...set].slice(-40)))
+  } catch {
+    /* ignore */
+  }
+}
+
+export function useWeather() {
+  const { user, cloudData, setCloudData } = useAuth()
+  const [prefs, setPrefs] = useState<Prefs>(loadPrefs)
+  const [resolvedTheme, setResolvedTheme] = useState<'dark' | 'light'>(() =>
+    applyTheme(loadPrefs().theme),
+  )
+  const [location, setLocation] = useState<LocationResult | null>(prefs.lastLocation ?? null)
+  const [weather, setWeather] = useState<WeatherData | null>(null)
+  const [air, setAir] = useState<AirQualityData | null>(null)
+  const [alerts, setAlerts] = useState<WeatherAlert[]>([])
+  const [models, setModels] = useState<ModelSeries[]>([])
+  const [profile, setProfile] = useState<PressureLevelProfile | null>(null)
+  const [storms, setStorms] = useState<TropicalStorm[]>([])
+  const [loading, setLoading] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [geoLoading, setGeoLoading] = useState(false)
+  const [severeActive, setSevereActive] = useState(false)
+  const [cloudSynced, setCloudSynced] = useState(false)
+  const [cloudStatus, setCloudStatus] = useState<string | null>(null)
+  const [updatedAt, setUpdatedAt] = useState<number | null>(null)
+
+  const prefsRef = useRef(prefs)
+  prefsRef.current = prefs
+  const syncTimer = useRef<number | null>(null)
+  const statusTimer = useRef<number | null>(null)
+  const skipCloudPush = useRef(false)
+  const hydratedUser = useRef<string | null>(null)
+  const initialLoadDone = useRef(false)
+  const fetchGen = useRef(0)
+  const notifiedRef = useRef<Set<string>>(loadNotified())
+  const locationRef = useRef(location)
+  locationRef.current = location
+  const weatherRef = useRef(weather)
+  weatherRef.current = weather
+
+  const showStatus = useCallback((msg: string, ms = 2200) => {
+    setCloudStatus(msg)
+    if (statusTimer.current) window.clearTimeout(statusTimer.current)
+    statusTimer.current = window.setTimeout(() => setCloudStatus(null), ms)
+  }, [])
+
+  useEffect(() => {
+    const mode = applyTheme(prefs.theme)
+    setResolvedTheme(mode)
+    document.documentElement.dataset.density = prefs.density
+
+    if (prefs.theme !== 'auto') return
+    const mq = window.matchMedia('(prefers-color-scheme: light)')
+    const onChange = () => setResolvedTheme(applyTheme('auto'))
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [prefs.theme, prefs.density])
+
+  useEffect(() => {
+    return () => {
+      if (syncTimer.current) window.clearTimeout(syncTimer.current)
+      if (statusTimer.current) window.clearTimeout(statusTimer.current)
+    }
+  }, [])
+
+  const pushCloud = useCallback(
+    async (p: Prefs, quiet = false) => {
+      if (!user) return
+      try {
+        const saved = await saveUserData(prefsToCloud(p))
+        setCloudData(saved)
+        setCloudSynced(true)
+        if (!quiet) showStatus('Saved to account')
+      } catch {
+        setCloudSynced(false)
+        if (!quiet) showStatus('Cloud save failed — check that the server is running', 3500)
+      }
+    },
+    [user, setCloudData, showStatus],
+  )
+
+  const scheduleCloudPush = useCallback(
+    (p: Prefs) => {
+      if (!user || skipCloudPush.current) return
+      if (syncTimer.current) window.clearTimeout(syncTimer.current)
+      syncTimer.current = window.setTimeout(() => {
+        void pushCloud(p)
+      }, 700)
+    },
+    [user, pushCloud],
+  )
+
+  const commitPrefs = useCallback(
+    (next: Prefs) => {
+      saveLocal(next)
+      setPrefs(next)
+      scheduleCloudPush(next)
+    },
+    [scheduleCloudPush],
+  )
+
+  const patchPrefs = useCallback(
+    (partial: Partial<Prefs>) => {
+      commitPrefs({ ...prefsRef.current, ...partial })
+    },
+    [commitPrefs],
+  )
+
+  const loadForLocationRef = useRef<
+    ((loc: LocationResult, opts?: { soft?: boolean }) => Promise<void>) | null
+  >(null)
+
+  // Hydrate account data once per login
+  useEffect(() => {
+    if (!user || !cloudData) {
+      if (!user) {
+        hydratedUser.current = null
+        setCloudSynced(false)
+      }
+      return
+    }
+    if (hydratedUser.current === user.id) return
+    hydratedUser.current = user.id
+
+    skipCloudPush.current = true
+    const local = prefsRef.current
+    const merged = cloudToPrefs(cloudData, local)
+    saveLocal(merged)
+    setPrefs(merged)
+    setCloudSynced(true)
+    showStatus('Account data loaded')
+
+    window.setTimeout(() => {
+      skipCloudPush.current = false
+      void pushCloud(merged, true)
+    }, 80)
+
+    if (merged.lastLocation && !parseShareParams()) {
+      const cur = locationRef.current
+      const next = merged.lastLocation
+      if (!cur || locationKey(cur) !== locationKey(next)) {
+        window.setTimeout(() => {
+          void loadForLocationRef.current?.(next)
+        }, 120)
+      }
+    }
+  }, [user, cloudData, pushCloud, showStatus])
+
+  const loadForLocation = useCallback(
+    async (loc: LocationResult, opts?: { soft?: boolean }) => {
+      const gen = ++fetchGen.current
+      const soft = Boolean(opts?.soft && weatherRef.current)
+      if (soft) setRefreshing(true)
+      else setLoading(true)
+      setError(null)
+      setLocation(loc)
+
+      // Only persist location change when not a background soft refresh of same place
+      const prev = prefsRef.current.lastLocation
+      const samePlace = prev && locationKey(prev) === locationKey(loc)
+      if (!soft || !samePlace) {
+        commitPrefs({ ...prefsRef.current, lastLocation: loc })
+      }
+
+      try {
+        const u = new URL(window.location.href)
+        u.searchParams.set('lat', loc.latitude.toFixed(4))
+        u.searchParams.set('lon', loc.longitude.toFixed(4))
+        u.searchParams.set('name', loc.name)
+        if (loc.admin1) u.searchParams.set('region', loc.admin1)
+        else u.searchParams.delete('region')
+        if (loc.country) u.searchParams.set('country', loc.country)
+        else u.searchParams.delete('country')
+        window.history.replaceState({}, '', u.toString())
+      } catch {
+        /* ignore */
+      }
+
+      try {
+        const [w, a, al, m, pr, st] = await Promise.all([
+          fetchWeather(loc.latitude, loc.longitude),
+          fetchAirQuality(loc.latitude, loc.longitude),
+          fetchAlerts(loc.latitude, loc.longitude),
+          fetchMultiModel(loc.latitude, loc.longitude),
+          fetchPressureProfile(loc.latitude, loc.longitude),
+          fetchTropicalStorms(),
+        ])
+
+        if (gen !== fetchGen.current) return
+
+        setWeather(w)
+        setAir(a)
+        setAlerts(al)
+        setModels(m)
+        setProfile(pr)
+        setStorms(st)
+        setUpdatedAt(Date.now())
+
+        const severe = al.some((x) =>
+          ['Extreme', 'Severe', 'Moderate'].includes(x.severity),
+        )
+        setSevereActive(severe)
+
+        const notify = prefsRef.current.notifyAlerts
+        if (
+          notify &&
+          severe &&
+          'Notification' in window &&
+          Notification.permission === 'granted'
+        ) {
+          for (const top of al.slice(0, 3)) {
+            if (notifiedRef.current.has(top.id)) continue
+            notifiedRef.current.add(top.id)
+            try {
+              new Notification(`Atmos: ${top.event}`, {
+                body: top.headline,
+                icon: '/icons/icon.svg',
+                tag: top.id,
+              })
+            } catch {
+              /* ignore */
+            }
+          }
+          saveNotified(notifiedRef.current)
+        }
+      } catch (e) {
+        if (gen !== fetchGen.current) return
+        setError(e instanceof Error ? e.message : 'Failed to load weather')
+      } finally {
+        if (gen === fetchGen.current) {
+          setLoading(false)
+          setRefreshing(false)
+        }
+      }
+    },
+    [commitPrefs],
+  )
+
+  loadForLocationRef.current = loadForLocation
+
+  const setUnits = useCallback((units: Units) => patchPrefs({ units }), [patchPrefs])
+  const setTheme = useCallback((theme: ThemeMode) => patchPrefs({ theme }), [patchPrefs])
+  const setDensity = useCallback((density: DensityMode) => patchPrefs({ density }), [patchPrefs])
+  const setSevereMode = useCallback(
+    (severeMode: boolean) => patchPrefs({ severeMode }),
+    [patchPrefs],
+  )
+
+  const setStormMode = useCallback(
+    (stormMode: boolean) => {
+      // Storm mode: radar-first + keep severe highlighting on
+      patchPrefs({
+        stormMode,
+        severeMode: stormMode ? true : prefsRef.current.severeMode,
+      })
+    },
+    [patchPrefs],
+  )
+
+  const setNotifyAlerts = useCallback(
+    async (notifyAlerts: boolean) => {
+      if (notifyAlerts && 'Notification' in window) {
+        const perm = await Notification.requestPermission()
+        if (perm !== 'granted') {
+          patchPrefs({ notifyAlerts: false })
+          showStatus('Notification permission denied')
+          return false
+        }
+      }
+      patchPrefs({ notifyAlerts })
+      return true
+    },
+    [patchPrefs, showStatus],
+  )
+
+  const toggleFavorite = useCallback(
+    (loc: LocationResult) => {
+      const p = prefsRef.current
+      const key = locationKey(loc)
+      const exists = p.favorites.some((f) => locationKey(f) === key)
+      const favorites = exists
+        ? p.favorites.filter((f) => locationKey(f) !== key)
+        : [...p.favorites, loc].slice(0, 12)
+      commitPrefs({ ...p, favorites })
+      showStatus(exists ? 'Removed from favorites' : 'Saved to favorites')
+    },
+    [commitPrefs, showStatus],
+  )
+
+  const isFavorite = useCallback(
+    (loc: LocationResult | null) => {
+      if (!loc) return false
+      return prefs.favorites.some((f) => locationKey(f) === locationKey(loc))
+    },
+    [prefs.favorites],
+  )
+
+  const requestMyLocation = useCallback(() => {
+    setGeoLoading(true)
+    setError(null)
+    void (async () => {
+      try {
+        const pos = await getCurrentPosition()
+        const loc = await reverseGeocode(pos.latitude, pos.longitude)
+        await loadForLocation(loc)
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Could not get your location'
+        setError(
+          /permission/i.test(msg)
+            ? 'Location permission denied — search for a city instead'
+            : msg,
+        )
+      } finally {
+        setGeoLoading(false)
+      }
+    })()
+  }, [loadForLocation])
+
+  const syncNow = useCallback(async () => {
+    if (!user) {
+      showStatus('Sign in to sync')
+      return
+    }
+    await pushCloud(prefsRef.current)
+  }, [user, pushCloud, showStatus])
+
+  const clearError = useCallback(() => setError(null), [])
+
+  // Initial load once
+  useEffect(() => {
+    if (initialLoadDone.current) return
+    initialLoadDone.current = true
+    const shared = parseShareParams()
+    if (shared) void loadForLocation(shared)
+    else if (prefs.lastLocation) void loadForLocation(prefs.lastLocation)
+    else requestMyLocation()
+    // Only on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Soft auto-refresh every 10 minutes
+  useEffect(() => {
+    if (!location) return
+    const id = window.setInterval(() => {
+      void loadForLocationRef.current?.(location, { soft: true })
+    }, 10 * 60 * 1000)
+    return () => clearInterval(id)
+  }, [location])
+
+  return {
+    location,
+    weather,
+    air,
+    alerts,
+    models,
+    profile,
+    storms,
+    loading,
+    refreshing,
+    error,
+    geoLoading,
+    units: prefs.units,
+    theme: prefs.theme,
+    resolvedTheme,
+    density: prefs.density,
+    favorites: prefs.favorites,
+    severeMode: prefs.severeMode,
+    stormMode: prefs.stormMode,
+    notifyAlerts: prefs.notifyAlerts,
+    severeActive,
+    cloudSynced,
+    cloudStatus,
+    updatedAt,
+    setUnits,
+    setTheme,
+    setDensity,
+    setSevereMode,
+    setStormMode,
+    setNotifyAlerts,
+    toggleFavorite,
+    isFavorite,
+    loadForLocation,
+    requestMyLocation,
+    /** @deprecated use requestMyLocation */
+    useMyLocation: requestMyLocation,
+    syncNow,
+    clearError,
+    refresh: () => location && loadForLocation(location, { soft: !!weather }),
+  }
+}

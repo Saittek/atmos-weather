@@ -1,0 +1,450 @@
+import { useCallback, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { SearchBar } from '../components/SearchBar'
+import { CurrentWeather } from '../components/CurrentWeather'
+import { HourlyForecast } from '../components/HourlyForecast'
+import { DailyForecast } from '../components/DailyForecast'
+import { WeatherDetails } from '../components/WeatherDetails'
+import { AirQuality } from '../components/AirQuality'
+import { Alerts } from '../components/Alerts'
+import { SunMoon } from '../components/SunMoon'
+import { PrecipChart } from '../components/PrecipChart'
+import { RadarMap } from '../components/RadarMap'
+import { Favorites } from '../components/Favorites'
+import { RainNextHour } from '../components/RainNextHour'
+import { HourlyCharts } from '../components/HourlyCharts'
+import { OutlookTips } from '../components/OutlookTips'
+import { ModelCompare } from '../components/ModelCompare'
+import { Sounding } from '../components/Sounding'
+import { Tropical } from '../components/Tropical'
+import { SettingsBar } from '../components/SettingsBar'
+import { HomePins } from '../components/HomePins'
+import { WillIGetWet } from '../components/WillIGetWet'
+import { PollenPanel } from '../components/PollenPanel'
+import { FireSmoke } from '../components/FireSmoke'
+import { TripPlanner } from '../components/TripPlanner'
+import { CityCompare } from '../components/CityCompare'
+import { InstallPrompt } from '../components/InstallPrompt'
+import { AlertTopBar } from '../components/AlertTopBar'
+import { WeatherStory } from '../components/WeatherStory'
+import { ComfortPanel } from '../components/ComfortPanel'
+import { ClimateCompare } from '../components/ClimateCompare'
+import { SnowOutlook } from '../components/SnowOutlook'
+import { LifestyleScores } from '../components/LifestyleScores'
+import { AmbientOrbs } from '../components/AmbientOrbs'
+import { AdvancedSection } from '../components/AdvancedSection'
+import { DashboardSkeleton } from '../components/Skeleton'
+import { TodayTimeline } from '../components/TodayTimeline'
+import { WeekStrip } from '../components/WeekStrip'
+import { HazardBadges } from '../components/HazardBadges'
+import { PrecipTotals } from '../components/PrecipTotals'
+import { useWeather } from '../hooks/useWeather'
+import { useAuth } from '../hooks/useAuth'
+import { useRainWatch } from '../hooks/useRainWatch'
+import { getWeatherInfo } from '../utils/weatherCodes'
+import { locationKey, shareUrl } from '../api/weather'
+import type { LocationResult } from '../api/types'
+
+export default function DashboardPage() {
+  const {
+    location,
+    weather,
+    air,
+    alerts,
+    models,
+    profile,
+    storms,
+    loading,
+    refreshing,
+    error,
+    geoLoading,
+    units,
+    theme,
+    resolvedTheme,
+    density,
+    favorites,
+    severeMode,
+    stormMode,
+    notifyAlerts,
+    severeActive,
+    setUnits,
+    setTheme,
+    setDensity,
+    setSevereMode,
+    setStormMode,
+    setNotifyAlerts,
+    toggleFavorite,
+    isFavorite,
+    loadForLocation,
+    requestMyLocation,
+    syncNow,
+    cloudSynced,
+    cloudStatus,
+    updatedAt,
+    clearError,
+    refresh,
+  } = useWeather()
+  const { user } = useAuth()
+
+  const rainWatch = useRainWatch(favorites, notifyAlerts, location)
+
+  const [shareMsg, setShareMsg] = useState<string | null>(null)
+
+  const bg =
+    weather != null && resolvedTheme === 'dark'
+      ? getWeatherInfo(weather.current.weather_code, weather.current.is_day === 1).gradient
+      : undefined
+
+  const onShare = useCallback(async () => {
+    if (!location) return
+    const url = shareUrl(location)
+    try {
+      await navigator.clipboard.writeText(url)
+      setShareMsg('Link copied to clipboard')
+    } catch {
+      setShareMsg(url)
+    }
+    window.setTimeout(() => setShareMsg(null), 2500)
+  }, [location])
+
+  const radarPath = location
+    ? `/radar?lat=${location.latitude.toFixed(4)}&lon=${location.longitude.toFixed(4)}&name=${encodeURIComponent(location.name)}`
+    : '/radar'
+
+  const jumpRadar = () => {
+    document.getElementById('radar-map')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  const stormLat = weather?.latitude
+  const stormLon = weather?.longitude
+
+  // Storm mode: jump radar into view once when enabled (or location changes)
+  useEffect(() => {
+    if (!stormMode || stormLat == null || stormLon == null) return
+    const t = window.setTimeout(jumpRadar, 350)
+    return () => window.clearTimeout(t)
+  }, [stormMode, stormLat, stormLon])
+
+  const openStorm = (lat: number, lon: number, name: string) => {
+    const loc: LocationResult = {
+      id: Date.now(),
+      name,
+      latitude: lat,
+      longitude: lon,
+      admin1: 'Tropical system',
+    }
+    void loadForLocation(loc)
+    window.setTimeout(jumpRadar, 450)
+  }
+
+  const openPin = (lat: number, lon: number, name: string) => {
+    void loadForLocation({
+      id: Date.now(),
+      name,
+      latitude: lat,
+      longitude: lon,
+    })
+  }
+
+  const severe = (severeMode && severeActive) || stormMode
+  const statusMsg = shareMsg || cloudStatus || rainWatch.banner
+  const currentKey = location ? locationKey(location) : undefined
+
+  const jumpAlerts = () => {
+    document.getElementById('alerts-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  const radarBlock = location && weather && (
+    <div className="priority-radar" id="radar-map-wrap">
+      <div className="radar-jump-row">
+        <Link to={radarPath} className="primary-btn radar-open-btn">
+          📡 Full-page radar
+        </Link>
+        <Link to="/widget" className="chip-btn">
+          ☔ Rain widget
+        </Link>
+        {!stormMode && (
+          <button type="button" className="chip-btn" onClick={() => setStormMode(true)}>
+            🌩 Enter storm mode
+          </button>
+        )}
+      </div>
+      <RadarMap
+        lat={location.latitude}
+        lon={location.longitude}
+        placeName={location.name}
+        units={units}
+        severeMode={severe}
+        mapId="radar-map"
+      />
+    </div>
+  )
+
+  return (
+    <div
+      className={`app ${severe ? 'app-severe' : ''} ${stormMode ? 'app-storm' : ''} ${refreshing ? 'is-refreshing' : ''} ${alerts.length ? 'has-alerts' : ''}`}
+      style={bg ? { background: bg } : undefined}
+      data-theme-active={theme}
+      data-density={density}
+    >
+      <div className="bg-noise" aria-hidden />
+      <div className="bg-scrim" aria-hidden />
+      <AmbientOrbs />
+
+      <AlertTopBar
+        alerts={alerts}
+        placeName={location?.name}
+        onJumpDetails={jumpAlerts}
+      />
+
+      <div className="app-shell">
+        <InstallPrompt />
+        <header className="topbar">
+          <div className="brand">
+            <span className="brand-mark" aria-hidden>
+              ⚡
+            </span>
+            <div>
+              <strong>Atmos</strong>
+              <span className="brand-tag">
+                {stormMode ? 'Storm mode' : 'Will you get wet?'}
+              </span>
+            </div>
+          </div>
+          <SearchBar
+            onSelect={loadForLocation}
+            onUseLocation={requestMyLocation}
+            geoLoading={geoLoading}
+          />
+          <div className="topbar-right">
+            <nav className="quick-nav" aria-label="App modes">
+              <Link to={radarPath} className="chip-btn icon-chip nav-chip" title="Full-page radar" aria-label="Radar">
+                📡
+              </Link>
+              <Link
+                to="/widget"
+                className="chip-btn icon-chip nav-chip hide-sm"
+                title="Rain widget"
+                aria-label="Rain widget"
+              >
+                ☔
+              </Link>
+            </nav>
+            <SettingsBar
+              units={units}
+              theme={theme}
+              density={density}
+              severeMode={severeMode}
+              stormMode={stormMode}
+              notifyAlerts={notifyAlerts}
+              isFavorite={isFavorite(location)}
+              cloudSynced={cloudSynced}
+              onUnits={setUnits}
+              onTheme={setTheme}
+              onDensity={setDensity}
+              onSevereMode={setSevereMode}
+              onStormMode={setStormMode}
+              onNotify={(v) => void setNotifyAlerts(v)}
+              onToggleFavorite={() => location && toggleFavorite(location)}
+              onShare={() => void onShare()}
+              onRefresh={() => refresh()}
+              onCloudSync={() => void syncNow()}
+              loading={loading}
+              refreshing={refreshing}
+            />
+          </div>
+        </header>
+
+        <p className="brand-promise">
+          Weather that tells you if you&apos;ll get wet — radar, alerts, and your places.
+        </p>
+
+        {stormMode && (
+          <div className="storm-mode-banner" role="status">
+            <div>
+              <strong>🌩 Storm mode on</strong>
+              <span>Radar first · intense map · severe highlighting</span>
+            </div>
+            <button type="button" className="chip-btn" onClick={() => setStormMode(false)}>
+              Exit
+            </button>
+          </div>
+        )}
+
+        {statusMsg && (
+          <div
+            className={`banner share-banner toast-banner ${rainWatch.banner ? 'rain-banner' : ''}`}
+            role="status"
+          >
+            <span>{statusMsg}</span>
+          </div>
+        )}
+
+        {error && (
+          <div className="banner error" role="alert">
+            <span>{error}</span>
+            <div className="banner-actions">
+              <button type="button" onClick={requestMyLocation}>
+                My location
+              </button>
+              <button type="button" className="banner-dismiss" onClick={clearError}>
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!location && !loading && !error && (
+          <div className="empty-state empty-state-rich">
+            <div className="empty-icon" aria-hidden>
+              ⚡
+            </div>
+            <h1>Where should we look?</h1>
+            <p className="empty-lead">
+              Atmos answers one thing first: <strong>will you get wet?</strong>
+              <br />
+              Then radar, alerts (US + Canada), and your pinned places.
+            </p>
+            <div className="empty-actions">
+              <button type="button" className="primary-btn" onClick={requestMyLocation}>
+                Use my location
+              </button>
+              <Link to="/radar" className="chip-btn empty-secondary">
+                Open radar anyway
+              </Link>
+            </div>
+            <ul className="empty-hints">
+              <li>Search any city in the bar above</li>
+              <li>Star places for rain watch</li>
+              <li>Storm mode prioritizes live radar</li>
+            </ul>
+          </div>
+        )}
+
+        {loading && !weather && <DashboardSkeleton />}
+
+        {weather && location && (
+          <main className={`dashboard ${stormMode ? 'dashboard-storm' : ''}`}>
+            <div className="col main-col">
+              {/* Priority: story of now */}
+              <div className="priority-stack">
+                <CurrentWeather
+                  weather={weather}
+                  location={location}
+                  units={units}
+                  isFavorite={isFavorite(location)}
+                  onToggleFavorite={() => toggleFavorite(location)}
+                  updatedAt={updatedAt}
+                  refreshing={refreshing}
+                  alertCount={alerts.length}
+                />
+                <WillIGetWet weather={weather} />
+                <RainNextHour weather={weather} units={units} />
+                <HazardBadges weather={weather} units={units} />
+                <TodayTimeline weather={weather} units={units} />
+              </div>
+
+              {/* Storm: radar immediately after priority */}
+              {stormMode && radarBlock}
+
+              <WeekStrip weather={weather} units={units} />
+
+              <HomePins
+                snapshots={rainWatch.snapshots}
+                loading={rainWatch.loading}
+                units={units}
+                currentKey={currentKey}
+                onSelect={openPin}
+                onRefresh={() => void rainWatch.refresh()}
+              />
+
+              <div id="alerts-panel">
+                <Alerts alerts={alerts} />
+              </div>
+
+              {!stormMode && radarBlock}
+
+              <HourlyForecast weather={weather} units={units} />
+              <PrecipTotals weather={weather} units={units} />
+              <WeatherStory
+                weather={weather}
+                units={units}
+                placeName={location.name}
+              />
+
+              <AdvancedSection title="More details" defaultOpen={false}>
+                <div className="advanced-grid">
+                  <HourlyCharts weather={weather} units={units} />
+                  <PrecipChart weather={weather} units={units} />
+                  <ComfortPanel weather={weather} units={units} />
+                  <LifestyleScores weather={weather} units={units} />
+                  <WeatherDetails weather={weather} units={units} />
+                  <ModelCompare models={models} units={units} timezone={weather.timezone} />
+                  <CityCompare units={units} home={location} homeWeather={weather} />
+                </div>
+              </AdvancedSection>
+            </div>
+
+            <aside className="col side-col">
+              <Favorites
+                favorites={favorites}
+                current={location}
+                onSelect={loadForLocation}
+                onRemove={toggleFavorite}
+                signedIn={!!user}
+                accountSynced={cloudSynced}
+              />
+              <DailyForecast weather={weather} units={units} />
+
+              <AdvancedSection title="Planning & environment" defaultOpen={false} id="advanced-side">
+                <div className="advanced-grid">
+                  <ClimateCompare
+                    weather={weather}
+                    units={units}
+                    lat={location.latitude}
+                    lon={location.longitude}
+                  />
+                  <SnowOutlook weather={weather} units={units} />
+                  <TripPlanner weather={weather} units={units} placeName={location.name} />
+                  <OutlookTips weather={weather} units={units} />
+                  <PollenPanel air={air} />
+                  <FireSmoke weather={weather} air={air} />
+                  <SunMoon weather={weather} />
+                  <Sounding profile={profile} units={units} timezone={weather.timezone} />
+                  <Tropical storms={storms} onFocus={openStorm} />
+                  <AirQuality air={air} />
+                </div>
+              </AdvancedSection>
+
+              <footer className="credits">
+                <p>
+                  Forecasts by{' '}
+                  <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">
+                    Open-Meteo
+                  </a>
+                  . Radar by{' '}
+                  <a href="https://www.rainviewer.com/" target="_blank" rel="noreferrer">
+                    RainViewer
+                  </a>
+                  . Alerts{' '}
+                  <a href="https://www.weather.gov/" target="_blank" rel="noreferrer">
+                    NWS
+                  </a>
+                  {' / '}
+                  <a href="https://www.weather.gc.ca/" target="_blank" rel="noreferrer">
+                    ECCC
+                  </a>
+                  .
+                </p>
+                <p className="tiny">
+                  {user ? `Signed in as ${user.email} · ` : ''}
+                  <strong>Storm mode</strong> = radar first. <strong>Notify</strong> = rain watch.
+                </p>
+              </footer>
+            </aside>
+          </main>
+        )}
+      </div>
+    </div>
+  )
+}

@@ -1,0 +1,150 @@
+import { useRef, type MouseEvent } from 'react'
+import type { LocationResult, WeatherData } from '../api/types'
+import { formatLocationLabel } from '../api/weather'
+import type { Units } from '../utils/format'
+import { formatTemp, formatTime } from '../utils/format'
+import { getWeatherInfo } from '../utils/weatherCodes'
+import { nextPrecipLabel, todayDailyIndex } from '../utils/weatherStory'
+import { WeatherIcon3D } from './WeatherIcon3D'
+
+interface Props {
+  weather: WeatherData
+  location: LocationResult
+  units: Units
+  isFavorite?: boolean
+  onToggleFavorite?: () => void
+  updatedAt?: number | null
+  refreshing?: boolean
+  alertCount?: number
+}
+
+export function CurrentWeather({
+  weather,
+  location,
+  units,
+  isFavorite,
+  onToggleFavorite,
+  updatedAt,
+  refreshing,
+  alertCount = 0,
+}: Props) {
+  const c = weather.current
+  const info = getWeatherInfo(c.weather_code, c.is_day === 1)
+  const ti = todayDailyIndex(weather)
+  const today = weather.daily
+  const high = today.temperature_2m_max[ti]
+  const low = today.temperature_2m_min[ti]
+  const rainLabel = nextPrecipLabel(weather)
+  const cardRef = useRef<HTMLElement>(null)
+
+  const updatedLabel = updatedAt
+    ? new Date(updatedAt).toLocaleTimeString(undefined, {
+        hour: 'numeric',
+        minute: '2-digit',
+      })
+    : null
+
+  const onMove = (e: MouseEvent<HTMLElement>) => {
+    const el = cardRef.current
+    if (!el || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    const r = el.getBoundingClientRect()
+    const x = (e.clientX - r.left) / r.width - 0.5
+    const y = (e.clientY - r.top) / r.height - 0.5
+    el.style.setProperty('--tilt-x', `${(-y * 6).toFixed(2)}deg`)
+    el.style.setProperty('--tilt-y', `${(x * 8).toFixed(2)}deg`)
+    el.style.setProperty('--glow-x', `${50 + x * 30}%`)
+    el.style.setProperty('--glow-y', `${50 + y * 30}%`)
+  }
+
+  const onLeave = () => {
+    const el = cardRef.current
+    if (!el) return
+    el.style.setProperty('--tilt-x', '0deg')
+    el.style.setProperty('--tilt-y', '0deg')
+    el.style.setProperty('--glow-x', '50%')
+    el.style.setProperty('--glow-y', '40%')
+  }
+
+  return (
+    <section
+      className="panel current-weather current-hero"
+      ref={cardRef}
+      onMouseMove={onMove}
+      onMouseLeave={onLeave}
+    >
+      <div className="hero-glow" aria-hidden />
+      <div className="hero-grid" aria-hidden />
+
+      <div className="current-top">
+        <div className="current-place">
+          <div className="place-row">
+            <h1 className="place-name">{location.name}</h1>
+            {onToggleFavorite && (
+              <button
+                type="button"
+                className={`fav-inline ${isFavorite ? 'on' : ''}`}
+                onClick={onToggleFavorite}
+                title={isFavorite ? 'Remove from favorites' : 'Save to favorites'}
+                aria-label={isFavorite ? 'Remove from favorites' : 'Save to favorites'}
+              >
+                {isFavorite ? '★' : '☆'}
+              </button>
+            )}
+          </div>
+          <p className="place-meta">
+            {[location.admin1, location.country].filter(Boolean).join(' · ') ||
+              formatLocationLabel(location)}
+            {weather.elevation != null && (
+              <span className="elev"> · {Math.round(weather.elevation)} m</span>
+            )}
+          </p>
+          <p className="local-time">
+            Local {formatTime(c.time, weather.timezone)}
+            {weather.timezone_abbreviation ? ` · ${weather.timezone_abbreviation}` : ''}
+            {updatedLabel && (
+              <span className="updated-at">
+                {' '}
+                · Updated {updatedLabel}
+                {refreshing ? ' · refreshing…' : ''}
+              </span>
+            )}
+          </p>
+          <div className="current-chips">
+            {alertCount > 0 && (
+              <span className="current-chip alert">
+                ⚠️ {alertCount} alert{alertCount > 1 ? 's' : ''}
+              </span>
+            )}
+            {rainLabel && <span className="current-chip rain">☔ {rainLabel}</span>}
+            <span className="current-chip">💨 {Math.round(c.wind_speed_10m)} km/h</span>
+            <span className="current-chip">💧 {c.relative_humidity_2m}%</span>
+          </div>
+        </div>
+
+        <div className="current-3d-wrap" title={info.description}>
+          <WeatherIcon3D
+            code={c.weather_code}
+            isDay={c.is_day === 1}
+            size="xl"
+            forceAnimate
+          />
+        </div>
+      </div>
+
+      <div className="current-main">
+        <div className="temp-block">
+          <span className="temp-big">{formatTemp(c.temperature_2m, units)}</span>
+          <div className="temp-side">
+            <span className="condition">{info.label}</span>
+            <span className="feels">
+              Feels like {formatTemp(c.apparent_temperature, units)}
+            </span>
+            <span className="hi-lo">
+              H {formatTemp(high, units)} · L {formatTemp(low, units)}
+            </span>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
