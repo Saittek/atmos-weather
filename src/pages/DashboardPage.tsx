@@ -38,6 +38,7 @@ import { TodayTimeline } from '../components/TodayTimeline'
 import { WeekStrip } from '../components/WeekStrip'
 import { HazardBadges } from '../components/HazardBadges'
 import { PrecipTotals } from '../components/PrecipTotals'
+import { AreaChat } from '../components/AreaChat'
 import { useWeather } from '../hooks/useWeather'
 import { useAuth } from '../hooks/useAuth'
 import { useRainWatch } from '../hooks/useRainWatch'
@@ -322,6 +323,8 @@ export default function DashboardPage() {
         )}
 
         {loading && !weather && <DashboardSkeleton />}
+
+        <AreaChat location={location} />
 
         {weather && location && (
           <main className={`dashboard ${stormMode ? 'dashboard-storm' : ''}`}>

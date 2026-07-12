@@ -108,15 +108,93 @@ function Clouds({ dark = false, storm = false }: { dark?: boolean; storm?: boole
 }
 
 function Sun({ small = false }: { small?: boolean }) {
+  const uid = useId().replace(/:/g, '')
+  // Classic 8 major + 8 minor rays
+  const major = Array.from({ length: 8 }, (_, i) => i * 45)
+  const minor = Array.from({ length: 8 }, (_, i) => i * 45 + 22.5)
+
   return (
     <div className={`w3d-sun ${small ? 'small' : ''}`}>
-      <span className="w3d-sun-core" />
-      <span className="w3d-sun-glow" />
-      <span className="w3d-sun-ring" />
-      <span className="w3d-sun-ring r2" />
-      {Array.from({ length: 12 }, (_, i) => (
-        <span key={i} className="w3d-ray" style={{ ['--i' as string]: i }} />
-      ))}
+      <svg className="w3d-sun-svg" viewBox="0 0 100 100" aria-hidden>
+        <defs>
+          <radialGradient id={`${uid}-core`} cx="34%" cy="30%" r="68%">
+            <stop offset="0%" stopColor="#fffef5" />
+            <stop offset="18%" stopColor="#fef9c3" />
+            <stop offset="42%" stopColor="#fde047" />
+            <stop offset="70%" stopColor="#fbbf24" />
+            <stop offset="92%" stopColor="#f59e0b" />
+            <stop offset="100%" stopColor="#d97706" />
+          </radialGradient>
+          <radialGradient id={`${uid}-limb`} cx="40%" cy="36%" r="62%">
+            <stop offset="55%" stopColor="rgba(180,83,9,0)" />
+            <stop offset="100%" stopColor="rgba(146,64,14,0.45)" />
+          </radialGradient>
+          <radialGradient id={`${uid}-glow`} cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="rgba(254,243,199,0.85)" />
+            <stop offset="35%" stopColor="rgba(253,224,71,0.45)" />
+            <stop offset="70%" stopColor="rgba(251,191,36,0.18)" />
+            <stop offset="100%" stopColor="rgba(251,191,36,0)" />
+          </radialGradient>
+          <linearGradient id={`${uid}-ray`} x1="0" y1="1" x2="0" y2="0">
+            <stop offset="0%" stopColor="rgba(253,224,71,0)" />
+            <stop offset="35%" stopColor="rgba(253,224,71,0.85)" />
+            <stop offset="75%" stopColor="rgba(254,243,199,0.95)" />
+            <stop offset="100%" stopColor="rgba(255,255,255,0.35)" />
+          </linearGradient>
+          <filter id={`${uid}-blur`} x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="1.2" />
+          </filter>
+        </defs>
+
+        {/* Soft corona */}
+        <circle className="w3d-sun-corona" cx="50" cy="50" r="48" fill={`url(#${uid}-glow)`} />
+
+        {/* Rays — rotate as a group, disc stays still */}
+        <g className="w3d-sun-rays">
+          {major.map((deg) => (
+            <path
+              key={`m${deg}`}
+              className="w3d-sun-ray major"
+              d="M50 8 L53.2 28 L50 32 L46.8 28 Z"
+              fill={`url(#${uid}-ray)`}
+              transform={`rotate(${deg} 50 50)`}
+            />
+          ))}
+          {minor.map((deg) => (
+            <path
+              key={`n${deg}`}
+              className="w3d-sun-ray minor"
+              d="M50 14 L51.8 30 L50 33 L48.2 30 Z"
+              fill={`url(#${uid}-ray)`}
+              opacity="0.65"
+              transform={`rotate(${deg} 50 50)`}
+            />
+          ))}
+        </g>
+
+        {/* Photosphere */}
+        <circle className="w3d-sun-disc" cx="50" cy="50" r="22" fill={`url(#${uid}-core)`} />
+        {/* Subtle granulation / hot spots */}
+        <g className="w3d-sun-surface" opacity="0.35" filter={`url(#${uid}-blur)`}>
+          <ellipse cx="42" cy="42" rx="6" ry="5" fill="rgba(255,255,255,0.55)" />
+          <ellipse cx="58" cy="48" rx="4" ry="3.5" fill="rgba(255,251,235,0.4)" />
+          <ellipse cx="48" cy="58" rx="5" ry="3" fill="rgba(245,158,11,0.35)" />
+        </g>
+        {/* Soft sunspot suggestion */}
+        <ellipse cx="60" cy="56" rx="2.2" ry="1.6" fill="rgba(180,83,9,0.28)" />
+        <ellipse cx="40" cy="52" rx="1.4" ry="1.1" fill="rgba(180,83,9,0.22)" />
+        <circle cx="50" cy="50" r="22" fill={`url(#${uid}-limb)`} />
+        {/* Bright rim glint */}
+        <circle
+          cx="50"
+          cy="50"
+          r="22"
+          fill="none"
+          stroke="rgba(255,251,235,0.55)"
+          strokeWidth="1.2"
+        />
+        <ellipse cx="42" cy="40" rx="8" ry="6" fill="rgba(255,255,255,0.22)" />
+      </svg>
     </div>
   )
 }

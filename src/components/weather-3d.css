@@ -90,110 +90,73 @@
   }
 }
 
-/* ========== SUN ========== */
+/* ========== SUN (SVG photosphere + classic rays) ========== */
 .w3d-sun {
   position: absolute;
-  inset: 10% 10% 16% 10%;
+  inset: 6%;
+  display: grid;
+  place-items: center;
   transform-style: preserve-3d;
-  animation: w3d-sun-spin 20s linear infinite;
+  pointer-events: none;
 }
 
 .w3d-sun.small {
-  inset: 4% 30% 42% 4%;
-  z-index: 1;
-  animation-duration: 24s;
-}
-
-.w3d-sun-core {
-  position: absolute;
-  inset: 22%;
-  border-radius: 50%;
-  background: radial-gradient(circle at 32% 28%, #fffbeb 0%, #fde047 28%, #fbbf24 55%, #f59e0b 82%, #b45309 100%);
-  box-shadow:
-    0 0 24px rgba(251, 191, 36, 0.85),
-    0 0 48px rgba(245, 158, 11, 0.35),
-    0 10px 20px rgba(146, 64, 14, 0.4),
-    inset -5px -8px 14px rgba(120, 53, 15, 0.4),
-    inset 5px 5px 12px rgba(255, 255, 255, 0.65);
-  z-index: 3;
-  animation: w3d-core-pulse 2.8s ease-in-out infinite;
-  transform: translateZ(8px);
-}
-
-.w3d-sun-glow {
-  position: absolute;
-  inset: 4%;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(253, 224, 71, 0.65), transparent 68%);
-  animation: w3d-pulse 2.6s ease-in-out infinite;
+  inset: 0 28% 40% 0;
   z-index: 1;
 }
 
-.w3d-sun-ring {
-  position: absolute;
-  inset: 2%;
-  border-radius: 50%;
-  border: 2px solid rgba(253, 224, 71, 0.3);
-  z-index: 0;
-  animation: w3d-ring 4s ease-in-out infinite;
-}
-.w3d-sun-ring.r2 {
-  inset: -6%;
-  border-color: rgba(251, 191, 36, 0.15);
-  animation-delay: -1.2s;
+.w3d-sun-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+  filter: drop-shadow(0 0 10px rgba(251, 191, 36, 0.55))
+    drop-shadow(0 4px 14px rgba(180, 83, 9, 0.35));
+  transform: translateZ(6px);
+  animation: w3d-sun-breathe 3.2s ease-in-out infinite;
 }
 
-.w3d-ray {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 9%;
-  height: 46%;
-  margin-left: -4.5%;
-  margin-top: -46%;
-  transform-origin: 50% 100%;
-  transform: rotate(calc(var(--i) * 30deg));
-  background: linear-gradient(to top, transparent 10%, rgba(254, 243, 199, 0.95) 55%, rgba(253, 224, 71, 0.2));
-  border-radius: 99px;
-  filter: blur(0.3px);
-  opacity: 0.9;
-  box-shadow: 0 0 8px rgba(253, 224, 71, 0.35);
+.w3d-sun-corona {
+  animation: w3d-sun-corona-pulse 2.8s ease-in-out infinite;
+  transform-origin: 50px 50px;
+}
+
+.w3d-sun-rays {
+  transform-origin: 50px 50px;
+  animation: w3d-sun-spin 28s linear infinite;
+}
+
+.w3d-sun-ray.major {
+  filter: drop-shadow(0 0 1.5px rgba(253, 224, 71, 0.65));
+}
+
+.w3d-sun-disc {
+  filter: drop-shadow(0 0 6px rgba(251, 191, 36, 0.75));
 }
 
 @keyframes w3d-sun-spin {
   to {
-    transform: rotateZ(360deg);
+    transform: rotate(360deg);
   }
 }
-@keyframes w3d-core-pulse {
+@keyframes w3d-sun-breathe {
   0%,
   100% {
-    transform: translateZ(8px) scale(1);
+    transform: translateZ(6px) scale(1);
   }
   50% {
-    transform: translateZ(8px) scale(1.05);
+    transform: translateZ(6px) scale(1.04);
   }
 }
-@keyframes w3d-pulse {
+@keyframes w3d-sun-corona-pulse {
   0%,
   100% {
-    opacity: 0.65;
+    opacity: 0.85;
     transform: scale(1);
   }
   50% {
     opacity: 1;
-    transform: scale(1.12);
-  }
-}
-@keyframes w3d-ring {
-  0%,
-  100% {
-    transform: scale(1);
-    opacity: 0.5;
-  }
-  50% {
-    transform: scale(1.08);
-    opacity: 0.9;
+    transform: scale(1.06);
   }
 }
 
@@ -765,7 +728,7 @@
 .w3d-sm:not(.w3d-force) .w3d-star.s5 {
   display: none;
 }
-.w3d-sm:not(.w3d-force) .w3d-sun-ring.r2 {
+.w3d-sm:not(.w3d-force) .w3d-sun-ray.minor {
   display: none;
 }
 
@@ -776,8 +739,11 @@
 .w3d-force .w3d-orbit {
   animation: w3d-yaw 7s ease-in-out infinite;
 }
-.w3d-force .w3d-sun {
-  animation: w3d-sun-spin 14s linear infinite;
+.w3d-force .w3d-sun-rays {
+  animation: w3d-sun-spin 18s linear infinite;
+}
+.w3d-force .w3d-sun-svg {
+  animation-duration: 2.6s;
 }
 .w3d-force .w3d-precip.light span {
   animation-duration: 0.95s;
@@ -811,10 +777,9 @@
   .w3d-stage,
   .w3d-orbit,
   .w3d-sun,
-  .w3d-sun-core,
-  .w3d-sun-glow,
-  .w3d-sun-ring,
-  .w3d-ray,
+  .w3d-sun-svg,
+  .w3d-sun-rays,
+  .w3d-sun-corona,
   .w3d-moon,
   .w3d-star,
   .w3d-clouds,

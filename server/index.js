@@ -10,6 +10,12 @@ import {
   updateUserData,
   defaultUserData,
 } from './db.js'
+import {
+  getRoomMeta,
+  listMessages,
+  postMessage,
+  roomIdFromCoords,
+} from './chat.js'
 
 const app = express()
 const PORT = Number(process.env.PORT) || 8787
@@ -53,7 +59,75 @@ function validatePassword(password) {
 }
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, service: 'atmos-auth' })
+  res.json({ ok: true, service: 'atmos-api', features: ['auth', 'chat'] })
+})
+
+/** Resolve area chat room from coordinates */
+app.get('/api/chat/room', (req, res) => {
+  const lat = parseFloat(String(req.query.lat ?? ''))
+  const lon = parseFloat(String(req.query.lon ?? ''))
+  if (Number.isNaN(lat) || Number.isNaN(lon)) {
+    return res.status(400).json({ error: 'lat and lon required' })
+  }
+  const name = typeof req.query.name === 'string' ? req.query.name : ''
+  const meta = getRoomMeta(lat, lon, name)
+  const data = listMessages(meta.id, { limit: 1 })
+  res.json({
+    ...meta,
+    label: data.label && data.label !== 'Area chat' ? data.label : meta.label,
+    messageCount: data.total ?? 0,
+    activeNearby: data.onlineHint,
+  })
+})
+
+/** List messages for a room (public read) */
+app.get('/api/chat/:roomId/messages', (req, res) => {
+  const roomId = String(req.params.roomId || '')
+  if (!/^g_-?\d+(\.\d+)?_-?\d+(\.\d+)?$/.test(roomId)) {
+    return res.status(400).json({ error: 'Invalid room' })
+  }
+  const after = typeof req.query.after === 'string' ? req.query.after : undefined
+  const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 80))
+  const data = listMessages(roomId, { after, limit })
+  res.json(data)
+})
+
+/** Post a message (signed-in only) */
+app.post('/api/chat/:roomId/messages', authMiddleware, (req, res) => {
+  try {
+    const roomId = String(req.params.roomId || '')
+    if (!/^g_-?\d+(\.\d+)?_-?\d+(\.\d+)?$/.test(roomId)) {
+      return res.status(400).json({ error: 'Invalid room' })
+    }
+    // Ensure room matches claimed coords if provided
+    const lat = parseFloat(String(req.body?.lat ?? ''))
+    const lon = parseFloat(String(req.body?.lon ?? ''))
+    if (!Number.isNaN(lat) && !Number.isNaN(lon)) {
+      const expected = roomIdFromCoords(lat, lon)
+      if (expected !== roomId) {
+        return res.status(400).json({ error: 'Location does not match this chat area' })
+      }
+    }
+
+    const msg = postMessage({
+      roomId,
+      userId: req.user.id,
+      userName: req.user.name || req.user.email?.split('@')[0] || 'User',
+      text: req.body?.text,
+      placeLabel:
+        typeof req.body?.placeLabel === 'string'
+          ? `Near ${req.body.placeLabel}`
+          : undefined,
+      lat: Number.isNaN(lat) ? undefined : lat,
+      lon: Number.isNaN(lon) ? undefined : lon,
+    })
+    res.status(201).json({ message: msg })
+  } catch (e) {
+    if (e.code === 'EMPTY') return res.status(400).json({ error: e.message })
+    if (e.code === 'RATE') return res.status(429).json({ error: e.message })
+    console.error(e)
+    res.status(500).json({ error: 'Could not send message' })
+  }
 })
 
 app.post('/api/auth/register', async (req, res) => {
@@ -152,5 +226,5 @@ app.put('/api/user/data', authMiddleware, (req, res) => {
 })
 
 app.listen(PORT, () => {
-  console.log(`Atmos auth API → http://localhost:${PORT}`)
+  console.log(`Atmos API (auth + area chat) → http://localhost:${PORT}`)
 })
