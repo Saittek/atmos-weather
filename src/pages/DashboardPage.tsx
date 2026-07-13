@@ -42,6 +42,12 @@ import { AreaChat } from '../components/AreaChat'
 import { UvWindPanel } from '../components/UvWindPanel'
 import { VisibilityPanel } from '../components/VisibilityPanel'
 import { FireMapPanel } from '../components/FireMapPanel'
+import { SevereTimeline } from '../components/SevereTimeline'
+import { ActivityModes } from '../components/ActivityModes'
+import { ShareWeatherCard } from '../components/ShareWeatherCard'
+import { OutdoorAirStrip } from '../components/OutdoorAirStrip'
+import { StormRisk } from '../components/StormRisk'
+import { DayLastYear } from '../components/DayLastYear'
 import { useWeather } from '../hooks/useWeather'
 import { useAuth } from '../hooks/useAuth'
 import { useRainWatch } from '../hooks/useRainWatch'
@@ -85,6 +91,7 @@ export default function DashboardPage() {
     cloudSynced,
     cloudStatus,
     updatedAt,
+    offline,
     clearError,
     refresh,
   } = useWeather()
@@ -151,7 +158,11 @@ export default function DashboardPage() {
   }
 
   const severe = (severeMode && severeActive) || stormMode
-  const statusMsg = shareMsg || cloudStatus || rainWatch.banner
+  const statusMsg =
+    shareMsg ||
+    cloudStatus ||
+    rainWatch.banner ||
+    (offline ? 'Offline — showing last saved weather' : null)
   const currentKey = location ? locationKey(location) : undefined
 
   const jumpAlerts = () => {
@@ -343,9 +354,18 @@ export default function DashboardPage() {
                   updatedAt={updatedAt}
                   refreshing={refreshing}
                   alertCount={alerts.length}
+                  offline={offline}
                 />
                 <WillIGetWet weather={weather} />
+                <SevereTimeline
+                  weather={weather}
+                  units={units}
+                  alerts={alerts}
+                  air={air}
+                  profile={profile}
+                />
                 <RainNextHour weather={weather} units={units} />
+                <ActivityModes weather={weather} units={units} air={air} />
                 <HazardBadges weather={weather} units={units} />
                 <TodayTimeline weather={weather} units={units} />
               </div>
@@ -371,15 +391,22 @@ export default function DashboardPage() {
               {!stormMode && radarBlock}
 
               <HourlyForecast weather={weather} units={units} />
+              <OutdoorAirStrip weather={weather} air={air} />
               <UvWindPanel weather={weather} units={units} />
               <PrecipTotals weather={weather} units={units} />
               <VisibilityPanel weather={weather} units={units} />
+              <StormRisk weather={weather} profile={profile} />
               <FireMapPanel
                 lat={location.latitude}
                 lon={location.longitude}
                 placeName={location.name}
                 weather={weather}
                 air={air}
+              />
+              <ShareWeatherCard
+                weather={weather}
+                location={location}
+                units={units}
               />
               <WeatherStory
                 weather={weather}
@@ -394,6 +421,12 @@ export default function DashboardPage() {
                   <ComfortPanel weather={weather} units={units} />
                   <LifestyleScores weather={weather} units={units} />
                   <WeatherDetails weather={weather} units={units} />
+                  <DayLastYear
+                    weather={weather}
+                    units={units}
+                    lat={location.latitude}
+                    lon={location.longitude}
+                  />
                   <ModelCompare models={models} units={units} timezone={weather.timezone} />
                   <CityCompare units={units} home={location} homeWeather={weather} />
                 </div>

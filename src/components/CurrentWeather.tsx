@@ -1,10 +1,11 @@
-import { useRef, type MouseEvent } from 'react'
+import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import type { LocationResult, WeatherData } from '../api/types'
-import { formatLocationLabel } from '../api/weather'
+import { fetchClimateNormal, formatLocationLabel } from '../api/weather'
 import type { Units } from '../utils/format'
 import { formatTemp, formatTime } from '../utils/format'
 import { getWeatherInfo } from '../utils/weatherCodes'
 import { nextPrecipLabel, todayDailyIndex } from '../utils/weatherStory'
+import { vsNormalLine } from '../utils/severeTimeline'
 import { WeatherIcon3D } from './WeatherIcon3D'
 
 interface Props {
@@ -16,6 +17,7 @@ interface Props {
   updatedAt?: number | null
   refreshing?: boolean
   alertCount?: number
+  offline?: boolean
 }
 
 export function CurrentWeather({
@@ -27,6 +29,7 @@ export function CurrentWeather({
   updatedAt,
   refreshing,
   alertCount = 0,
+  offline = false,
 }: Props) {
   const c = weather.current
   const info = getWeatherInfo(c.weather_code, c.is_day === 1)
@@ -36,6 +39,18 @@ export function CurrentWeather({
   const low = today.temperature_2m_min[ti]
   const rainLabel = nextPrecipLabel(weather)
   const cardRef = useRef<HTMLElement>(null)
+  const [vsNormal, setVsNormal] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    void fetchClimateNormal(location.latitude, location.longitude).then((n) => {
+      if (cancelled || !n) return
+      setVsNormal(vsNormalLine(high, n.avgHigh, units))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [location.latitude, location.longitude, high, units])
 
   const updatedLabel = updatedAt
     ? new Date(updatedAt).toLocaleTimeString(undefined, {
@@ -106,16 +121,19 @@ export function CurrentWeather({
                 {' '}
                 · Updated {updatedLabel}
                 {refreshing ? ' · refreshing…' : ''}
+                {offline ? ' · offline cache' : ''}
               </span>
             )}
           </p>
           <div className="current-chips">
+            {offline && <span className="current-chip offline">Offline</span>}
             {alertCount > 0 && (
               <span className="current-chip alert">
                 ⚠️ {alertCount} alert{alertCount > 1 ? 's' : ''}
               </span>
             )}
             {rainLabel && <span className="current-chip rain">☔ {rainLabel}</span>}
+            {vsNormal && <span className="current-chip normal">📊 {vsNormal}</span>}
             <span className="current-chip">💨 {Math.round(c.wind_speed_10m)} km/h</span>
             <span className="current-chip">💧 {c.relative_humidity_2m}%</span>
           </div>
@@ -142,6 +160,7 @@ export function CurrentWeather({
             <span className="hi-lo">
               H {formatTemp(high, units)} · L {formatTemp(low, units)}
             </span>
+            {vsNormal && <span className="vs-normal-line">{vsNormal}</span>}
           </div>
         </div>
       </div>

@@ -23,8 +23,18 @@ function saveNotified(s: Set<string>) {
   }
 }
 
+function notify(title: string, body: string, tag: string) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return
+  try {
+    new Notification(title, { body, icon: '/icons/icon.svg', tag })
+  } catch {
+    /* ignore */
+  }
+}
+
 /**
- * Polls favorite locations for approaching rain and fires browser notifications.
+ * Polls favorite locations (+ optional current) for approaching rain
+ * and fires browser notifications.
  */
 export function useRainWatch(
   favorites: LocationResult[],
@@ -37,7 +47,12 @@ export function useRainWatch(
   const notified = useRef(loadNotified())
 
   const refresh = useCallback(async () => {
-    const places = favorites.slice(0, 6)
+    const map = new Map<string, LocationResult>()
+    for (const p of favorites.slice(0, 6)) {
+      map.set(locationKey(p), p)
+    }
+    if (currentLoc) map.set(locationKey(currentLoc), currentLoc)
+    const places = [...map.values()]
     if (!places.length) {
       setSnapshots([])
       return
@@ -51,47 +66,44 @@ export function useRainWatch(
       if (!enabled) return
 
       for (const s of snaps) {
-        if (!s.precipSoon || s.rainStartsInMin == null) continue
-        // Only alert if rain starts within 90 minutes
-        if (s.rainStartsInMin > 90) continue
-        const key = `${locationKey(s.location)}-${Math.floor(s.rainStartsInMin / 15)}`
-        if (notified.current.has(key)) continue
-        notified.current.add(key)
-        saveNotified(notified.current)
+        // Rain approaching
+        if (s.precipSoon && s.rainStartsInMin != null && s.rainStartsInMin <= 90) {
+          const key = `rain-${locationKey(s.location)}-${Math.floor(s.rainStartsInMin / 15)}`
+          if (!notified.current.has(key)) {
+            notified.current.add(key)
+            const msg =
+              s.rainStartsInMin <= 5
+                ? `Rain starting now near ${s.location.name}`
+                : `Rain in ~${s.rainStartsInMin} min near ${s.location.name}`
+            setBanner(msg)
+            window.setTimeout(() => setBanner(null), 8000)
+            notify('Atmos rain watch', msg, key)
+          }
+        }
 
-        const msg =
-          s.rainStartsInMin <= 5
-            ? `Rain starting now near ${s.location.name}`
-            : `Rain in ~${s.rainStartsInMin} min near ${s.location.name}`
-
-        setBanner(msg)
-        window.setTimeout(() => setBanner(null), 8000)
-
-        if (
-          'Notification' in window &&
-          Notification.permission === 'granted'
-        ) {
-          try {
-            new Notification('Atmos rain watch', {
-              body: msg,
-              icon: '/icons/icon.svg',
-              tag: key,
-            })
-          } catch {
-            /* ignore */
+        // Alerts on favorites
+        if (s.hasAlert) {
+          const key = `fav-alert-${locationKey(s.location)}`
+          if (!notified.current.has(key)) {
+            notified.current.add(key)
+            const msg = `Weather alert active near ${s.location.name}`
+            setBanner(msg)
+            window.setTimeout(() => setBanner(null), 8000)
+            notify('Atmos alert', msg, key)
           }
         }
       }
+      saveNotified(notified.current)
     } finally {
       setLoading(false)
     }
-  }, [favorites, enabled])
+  }, [favorites, enabled, currentLoc])
 
   useEffect(() => {
     void refresh()
-    if (!favorites.length) return
+    if (!favorites.length && !currentLoc) return
     const id = window.setInterval(() => void refresh(), 8 * 60 * 1000)
-    return () => clearInterval(id)
+    return () => window.clearInterval(id)
   }, [refresh, favorites.length, currentLoc?.latitude, currentLoc?.longitude])
 
   return { snapshots, loading, banner, refresh }

@@ -25,9 +25,11 @@ import type {
 import type { Units } from '../utils/format'
 import { useAuth } from './useAuth'
 import { getCurrentPosition } from '../lib/native'
+import { loadOfflineBundle, saveOfflineBundle } from '../utils/offlineCache'
 
 const STORAGE_KEY = 'atmos-weather-prefs-v2'
 const NOTIFIED_KEY = 'atmos-notified-alerts'
+const AQI_NOTIFIED_KEY = 'atmos-notified-aqi'
 
 export interface Prefs {
   units: Units
@@ -176,6 +178,7 @@ export function useWeather() {
   const [cloudSynced, setCloudSynced] = useState(false)
   const [cloudStatus, setCloudStatus] = useState<string | null>(null)
   const [updatedAt, setUpdatedAt] = useState<number | null>(null)
+  const [offline, setOffline] = useState(false)
 
   const prefsRef = useRef(prefs)
   prefsRef.current = prefs
@@ -348,6 +351,14 @@ export function useWeather() {
         setProfile(pr)
         setStorms(st)
         setUpdatedAt(Date.now())
+        setOffline(false)
+        saveOfflineBundle({
+          location: loc,
+          weather: w,
+          air: a,
+          alerts: al,
+          savedAt: Date.now(),
+        })
 
         const severe = al.some((x) =>
           ['Extreme', 'Severe', 'Moderate'].includes(x.severity),
@@ -357,11 +368,11 @@ export function useWeather() {
         const notify = prefsRef.current.notifyAlerts
         if (
           notify &&
-          severe &&
           'Notification' in window &&
           Notification.permission === 'granted'
         ) {
           for (const top of al.slice(0, 3)) {
+            if (!['Extreme', 'Severe', 'Moderate'].includes(top.severity)) continue
             if (notifiedRef.current.has(top.id)) continue
             notifiedRef.current.add(top.id)
             try {
@@ -375,10 +386,49 @@ export function useWeather() {
             }
           }
           saveNotified(notifiedRef.current)
+
+          // AQI jump notify
+          const aqi = a?.current?.us_aqi
+          if (aqi != null && aqi >= 100) {
+            const aqiKey = `aqi-${locationKey(loc)}-${Math.floor(aqi / 25)}`
+            try {
+              const raw = sessionStorage.getItem(AQI_NOTIFIED_KEY)
+              const set = new Set(raw ? (JSON.parse(raw) as string[]) : [])
+              if (!set.has(aqiKey)) {
+                set.add(aqiKey)
+                sessionStorage.setItem(
+                  AQI_NOTIFIED_KEY,
+                  JSON.stringify([...set].slice(-30)),
+                )
+                new Notification('Atmos air quality', {
+                  body: `AQI ${aqi} near ${loc.name} — limit outdoor time if sensitive`,
+                  icon: '/icons/icon.svg',
+                  tag: aqiKey,
+                })
+              }
+            } catch {
+              /* ignore */
+            }
+          }
         }
       } catch (e) {
         if (gen !== fetchGen.current) return
-        setError(e instanceof Error ? e.message : 'Failed to load weather')
+        // Offline fallback: last good snapshot
+        const cached = loadOfflineBundle()
+        if (cached?.weather) {
+          setLocation(cached.location)
+          setWeather(cached.weather)
+          setAir(cached.air)
+          setAlerts(cached.alerts)
+          setUpdatedAt(cached.savedAt)
+          setOffline(true)
+          setError(null)
+          showStatus(
+            `Offline · showing last weather from ${new Date(cached.savedAt).toLocaleTimeString()}`,
+          )
+        } else {
+          setError(e instanceof Error ? e.message : 'Failed to load weather')
+        }
       } finally {
         if (gen === fetchGen.current) {
           setLoading(false)
@@ -386,7 +436,7 @@ export function useWeather() {
         }
       }
     },
-    [commitPrefs],
+    [commitPrefs, showStatus],
   )
 
   loadForLocationRef.current = loadForLocation
@@ -524,6 +574,7 @@ export function useWeather() {
     cloudSynced,
     cloudStatus,
     updatedAt,
+    offline,
     setUnits,
     setTheme,
     setDensity,
