@@ -1,14 +1,16 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { WeatherAlert } from '../api/types'
 import { alertActionTips } from '../utils/alertTips'
 import { filterActiveAlerts } from '../utils/activeAlerts'
+
+const MINI_KEY = 'atmos-alerts-minimized'
 
 interface Props {
   alerts: WeatherAlert[]
   placeName?: string
   onJumpDetails?: () => void
-  onHideAlert?: (id: string) => void
-  onHideAll?: () => void
+  /** Fired when minimize state changes (so parent can hide the big panel) */
+  onMinimizedChange?: (minimized: boolean) => void
 }
 
 function severityColor(sev: string): string {
@@ -26,20 +28,48 @@ function severityColor(sev: string): string {
   }
 }
 
+function loadMinimized(): boolean {
+  try {
+    return localStorage.getItem(MINI_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function saveMinimized(v: boolean) {
+  try {
+    if (v) localStorage.setItem(MINI_KEY, '1')
+    else localStorage.removeItem(MINI_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
 /**
- * Compact sticky alert strip — collapsed by default so it never eats the screen.
- * Prominent Hide control always visible.
+ * Sticky alerts: compact strip, or a red pill when hidden so you can reopen anytime.
  */
 export function AlertTopBar({
   alerts,
   placeName,
   onJumpDetails,
-  onHideAlert,
-  onHideAll,
+  onMinimizedChange,
 }: Props) {
+  const [minimized, setMinimized] = useState(loadMinimized)
   const [expanded, setExpanded] = useState(false)
   const [openId, setOpenId] = useState<string | null>(null)
   const active = useMemo(() => filterActiveAlerts(alerts), [alerts])
+
+  useEffect(() => {
+    onMinimizedChange?.(minimized)
+  }, [minimized, onMinimizedChange])
+
+  // If all alerts clear, reset minimize so a new alert shows open
+  useEffect(() => {
+    if (!active.length && minimized) {
+      setMinimized(false)
+      saveMinimized(false)
+    }
+  }, [active.length, minimized])
 
   if (!active.length) return null
 
@@ -52,10 +82,52 @@ export function AlertTopBar({
   const top = sorted[0]
   const topColor = severityColor(top.severity)
 
+  const minimize = () => {
+    setMinimized(true)
+    setExpanded(false)
+    setOpenId(null)
+    saveMinimized(true)
+  }
+
+  const openFromPill = () => {
+    setMinimized(false)
+    setExpanded(true)
+    saveMinimized(false)
+  }
+
+  // —— Minimized: red button only ——
+  if (minimized) {
+    return (
+      <div className="alert-top-bar alert-top-bar-mini" role="region" aria-label="Hidden weather alerts">
+        <div className="alert-top-inner alert-top-inner-mini">
+          <button
+            type="button"
+            className="alert-mini-btn"
+            onClick={openFromPill}
+            title="Show weather alerts"
+            aria-expanded={false}
+          >
+            <span className="alert-mini-icon" aria-hidden>
+              ⚠️
+            </span>
+            <span className="alert-mini-count">{active.length}</span>
+            <span className="alert-mini-label">
+              alert{active.length > 1 ? 's' : ''}
+            </span>
+            <span className="alert-mini-peek">{top.event}</span>
+            <span className="alert-mini-open" aria-hidden>
+              Open
+            </span>
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // —— Full compact strip ——
   return (
     <div className="alert-top-bar" role="region" aria-label="Weather alerts for this location">
       <div className="alert-top-inner">
-        {/* Always-visible compact strip */}
         <div className="alert-top-compact">
           <span className="alert-top-pulse" aria-hidden />
           <button
@@ -94,24 +166,21 @@ export function AlertTopBar({
                 Details
               </button>
             )}
-            {onHideAll && (
-              <button
-                type="button"
-                className="chip-btn alert-top-hide"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  e.preventDefault()
-                  onHideAll()
-                }}
-                title="Hide alerts bar"
-              >
-                Hide
-              </button>
-            )}
+            <button
+              type="button"
+              className="chip-btn alert-top-hide"
+              onClick={(e) => {
+                e.stopPropagation()
+                e.preventDefault()
+                minimize()
+              }}
+              title="Collapse alerts to a red button"
+            >
+              Hide
+            </button>
           </div>
         </div>
 
-        {/* Expanded list — capped height, scrollable */}
         {expanded && (
           <ul className="alert-top-list">
             {sorted.map((a) => {
@@ -134,17 +203,6 @@ export function AlertTopBar({
                       <span className="alert-top-headline">{a.headline}</span>
                       <span className="alert-top-chev">{isOpen ? '▾' : '▸'}</span>
                     </button>
-                    {onHideAlert && (
-                      <button
-                        type="button"
-                        className="alert-hide-one"
-                        onClick={() => onHideAlert(a.id)}
-                        title="Hide this alert"
-                        aria-label={`Hide ${a.event}`}
-                      >
-                        ✕
-                      </button>
-                    )}
                   </div>
                   {isOpen && (
                     <div className="alert-top-body">
@@ -154,6 +212,13 @@ export function AlertTopBar({
                         ))}
                       </ul>
                       {a.areas && <p className="alert-top-areas">{a.areas}</p>}
+                      <button
+                        type="button"
+                        className="chip-btn alert-top-hide-inline"
+                        onClick={minimize}
+                      >
+                        Hide alerts bar
+                      </button>
                     </div>
                   )}
                 </li>

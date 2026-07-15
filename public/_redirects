@@ -1,2 +1,6 @@
-# Cloudflare Pages / Netlify SPA: serve index.html for client routes
-/*    /index.html   200
+# Cloudflare Static Assets / Workers: do NOT use `/* /index.html 200`
+# (causes infinite loop error 100324 when HTML extension stripping is on).
+# SPA fallback is handled by wrangler.toml:
+#   [assets] not_found_handling = "single-page-application"
+#
+# Optional host redirects only (no catch-all to index.html):

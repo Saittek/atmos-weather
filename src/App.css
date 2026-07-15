@@ -579,18 +579,93 @@ a:hover {
 .alert-hide-btn {
   margin-top: 0.65rem;
 }
-.hidden-alerts-bar {
+/* Minimized alerts = red pill in sticky top bar */
+.alert-top-bar-mini {
+  background: transparent !important;
+  border-bottom: none !important;
+  box-shadow: none !important;
+  padding: 0.35rem 0.75rem 0;
+  pointer-events: none;
+}
+.alert-top-inner-mini {
   display: flex;
+  justify-content: flex-end;
+  padding: 0 !important;
+  pointer-events: none;
+}
+.alert-mini-btn {
+  pointer-events: auto;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin: 0 0 0.85rem;
-  padding: 0.55rem 0.85rem;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.04);
-  font-size: 0.85rem;
-  color: var(--text-mute);
+  gap: 0.4rem;
+  max-width: min(100%, 22rem);
+  padding: 0.45rem 0.75rem 0.45rem 0.65rem;
+  border: 1px solid rgba(248, 113, 113, 0.55);
+  border-radius: 999px;
+  background: linear-gradient(135deg, #b91c1c, #7f1d1d);
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(127, 29, 29, 0.45);
+  font-size: 0.82rem;
+  font-weight: 650;
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+.alert-mini-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(185, 28, 28, 0.55);
+}
+.alert-mini-icon {
+  font-size: 0.95rem;
+  line-height: 1;
+}
+.alert-mini-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.35);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+.alert-mini-label {
+  font-weight: 700;
+}
+.alert-mini-peek {
+  flex: 1;
+  min-width: 0;
+  font-weight: 500;
+  font-size: 0.75rem;
+  opacity: 0.9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 9rem;
+}
+.alert-mini-open {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  opacity: 0.9;
+  padding-left: 0.25rem;
+  border-left: 1px solid rgba(255, 255, 255, 0.25);
+  margin-left: 0.1rem;
+}
+.alert-top-hide-inline {
+  margin-top: 0.5rem;
+  background: rgba(0, 0, 0, 0.35) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  color: #fff !important;
+}
+@media (max-width: 560px) {
+  .alert-mini-peek {
+    display: none;
+  }
+  .alert-top-bar-mini {
+    padding-right: 0.5rem;
+  }
 }
 .alert-top-list {
   list-style: none;

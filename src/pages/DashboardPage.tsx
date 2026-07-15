@@ -55,12 +55,6 @@ import { getWeatherInfo } from '../utils/weatherCodes'
 import { locationKey, shareUrl } from '../api/weather'
 import type { LocationResult } from '../api/types'
 import { filterActiveAlerts } from '../utils/activeAlerts'
-import {
-  clearDismissedAlertIds,
-  dismissAlertId,
-  dismissAllAlertIds,
-  loadDismissedAlertIds,
-} from '../utils/dismissedAlerts'
 
 export default function DashboardPage() {
   const {
@@ -107,40 +101,16 @@ export default function DashboardPage() {
   const rainWatch = useRainWatch(favorites, notifyAlerts, location)
 
   const [shareMsg, setShareMsg] = useState<string | null>(null)
-  const [dismissedIds, setDismissedIds] = useState<Set<string>>(() =>
-    loadDismissedAlertIds(),
-  )
-  /** Instant hide of the whole alerts UI (survives refresh via dismissed ids) */
-  const [alertsBarHidden, setAlertsBarHidden] = useState(false)
+  /** When true, alert strip is the red pill; panel list stays hidden until opened */
+  const [alertsMinimized, setAlertsMinimized] = useState(() => {
+    try {
+      return localStorage.getItem('atmos-alerts-minimized') === '1'
+    } catch {
+      return false
+    }
+  })
 
   const activeAlerts = useMemo(() => filterActiveAlerts(alerts), [alerts])
-  const visibleAlerts = useMemo(() => {
-    if (alertsBarHidden) return []
-    return activeAlerts.filter((a) => !dismissedIds.has(a.id))
-  }, [activeAlerts, dismissedIds, alertsBarHidden])
-  const hiddenAlertCount = alertsBarHidden
-    ? activeAlerts.length
-    : activeAlerts.length - visibleAlerts.length
-
-  const hideAlert = useCallback((id: string) => {
-    setDismissedIds((prev) => dismissAlertId(id, prev))
-  }, [])
-
-  const hideAllAlerts = useCallback(() => {
-    // Hide immediately, then persist per-id so they stay gone after refresh
-    setAlertsBarHidden(true)
-    setDismissedIds((prev) =>
-      dismissAllAlertIds(
-        filterActiveAlerts(alerts).map((a) => a.id),
-        prev,
-      ),
-    )
-  }, [alerts])
-
-  const showHiddenAlerts = useCallback(() => {
-    setAlertsBarHidden(false)
-    setDismissedIds(clearDismissedAlertIds())
-  }, [])
 
   const bg =
     weather != null && resolvedTheme === 'dark'
@@ -238,7 +208,7 @@ export default function DashboardPage() {
 
   return (
     <div
-      className={`app ${severe ? 'app-severe' : ''} ${stormMode ? 'app-storm' : ''} ${refreshing ? 'is-refreshing' : ''} ${visibleAlerts.length ? 'has-alerts' : ''}`}
+      className={`app ${severe ? 'app-severe' : ''} ${stormMode ? 'app-storm' : ''} ${refreshing ? 'is-refreshing' : ''} ${activeAlerts.length ? 'has-alerts' : ''} ${alertsMinimized ? 'alerts-minimized' : ''}`}
       style={bg ? { background: bg } : undefined}
       data-theme-active={theme}
       data-density={density}
@@ -248,11 +218,10 @@ export default function DashboardPage() {
       <AmbientOrbs />
 
       <AlertTopBar
-        alerts={visibleAlerts}
+        alerts={activeAlerts}
         placeName={location?.name}
         onJumpDetails={jumpAlerts}
-        onHideAlert={hideAlert}
-        onHideAll={hideAllAlerts}
+        onMinimizedChange={setAlertsMinimized}
       />
 
       <div className="app-shell">
@@ -316,17 +285,6 @@ export default function DashboardPage() {
         <p className="brand-promise">
           Weather that tells you if you&apos;ll get wet — radar, alerts, and your places.
         </p>
-
-        {hiddenAlertCount > 0 && (
-          <div className="hidden-alerts-bar" role="status">
-            <span>
-              {hiddenAlertCount} weather alert{hiddenAlertCount > 1 ? 's' : ''} hidden
-            </span>
-            <button type="button" className="chip-btn" onClick={showHiddenAlerts}>
-              Show alerts
-            </button>
-          </div>
-        )}
 
         {stormMode && (
           <div className="storm-mode-banner" role="status">
@@ -407,14 +365,14 @@ export default function DashboardPage() {
                   onToggleFavorite={() => toggleFavorite(location)}
                   updatedAt={updatedAt}
                   refreshing={refreshing}
-                  alertCount={visibleAlerts.length}
+                  alertCount={alertsMinimized ? 0 : activeAlerts.length}
                   offline={offline}
                 />
                 <WillIGetWet weather={weather} />
                 <SevereTimeline
                   weather={weather}
                   units={units}
-                  alerts={visibleAlerts}
+                  alerts={alertsMinimized ? [] : activeAlerts}
                   air={air}
                   profile={profile}
                 />
@@ -439,11 +397,7 @@ export default function DashboardPage() {
               />
 
               <div id="alerts-panel">
-                <Alerts
-                  alerts={visibleAlerts}
-                  onHideAlert={hideAlert}
-                  onHideAll={hideAllAlerts}
-                />
+                {!alertsMinimized && <Alerts alerts={activeAlerts} />}
               </div>
 
               {!stormMode && radarBlock}

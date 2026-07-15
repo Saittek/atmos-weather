@@ -15,21 +15,36 @@ Open **http://localhost:5173/**
 
 ## Deploy on Cloudflare Pages
 
-The UI is a static Vite build (output: `dist/`). SPA routes are covered by `public/_redirects`.
+The UI is a static Vite build (output: `dist/`).  
+SPA routes (`/radar`, `/widget`) are handled by **`wrangler.toml`** →  
+`[assets] not_found_handling = "single-page-application"`.
 
-1. Push this repo to GitHub (already set up as `Saittek/atmos-weather`).
-2. In [Cloudflare Dashboard](https://dash.cloudflare.com/) → **Workers & Pages** → **Create** → **Pages** → **Connect to Git**.
-3. Select **Saittek/atmos-weather**.
-4. Build settings:
+> **Do not** use `/* /index.html 200` in `_redirects` — Cloudflare returns  
+> error **100324** (infinite loop) when HTML extension stripping is enabled.
+
+### Option A — Connect Git (Pages)
+
+1. [Cloudflare Dashboard](https://dash.cloudflare.com/) → **Workers & Pages** → **Create** → **Pages** → **Connect to Git**.
+2. Select **Saittek/atmos-weather**.
+3. Build settings:
 
 | Setting | Value |
 |--------|--------|
 | **Framework preset** | Vite (or None) |
 | **Build command** | `npm run build` |
 | **Build output directory** | `dist` |
-| **Root directory** | `/` (or `weather-app` if the repo root is above the app) |
+| **Root directory** | blank (app is repo root) |
 
-5. **Save and Deploy**.
+4. **Save and Deploy**.
+
+### Option B — Wrangler CLI
+
+```bash
+npm run build
+npx wrangler pages deploy dist --project-name=atmos-weather
+# or (Workers static assets using wrangler.toml):
+npx wrangler deploy
+```
 
 ### What works on Cloudflare (static)
 
