@@ -26,6 +26,7 @@ import type { Units } from '../utils/format'
 import { useAuth } from './useAuth'
 import { getCurrentPosition } from '../lib/native'
 import { loadOfflineBundle, saveOfflineBundle } from '../utils/offlineCache'
+import { filterActiveAlerts } from '../utils/activeAlerts'
 
 const STORAGE_KEY = 'atmos-weather-prefs-v2'
 const NOTIFIED_KEY = 'atmos-notified-alerts'
@@ -344,9 +345,10 @@ export function useWeather() {
 
         if (gen !== fetchGen.current) return
 
+        const activeAlerts = filterActiveAlerts(al)
         setWeather(w)
         setAir(a)
-        setAlerts(al)
+        setAlerts(activeAlerts)
         setModels(m)
         setProfile(pr)
         setStorms(st)
@@ -356,11 +358,11 @@ export function useWeather() {
           location: loc,
           weather: w,
           air: a,
-          alerts: al,
+          alerts: activeAlerts,
           savedAt: Date.now(),
         })
 
-        const severe = al.some((x) =>
+        const severe = activeAlerts.some((x) =>
           ['Extreme', 'Severe', 'Moderate'].includes(x.severity),
         )
         setSevereActive(severe)
@@ -371,7 +373,7 @@ export function useWeather() {
           'Notification' in window &&
           Notification.permission === 'granted'
         ) {
-          for (const top of al.slice(0, 3)) {
+          for (const top of activeAlerts.slice(0, 3)) {
             if (!['Extreme', 'Severe', 'Moderate'].includes(top.severity)) continue
             if (notifiedRef.current.has(top.id)) continue
             notifiedRef.current.add(top.id)
@@ -416,12 +418,18 @@ export function useWeather() {
         // Offline fallback: last good snapshot
         const cached = loadOfflineBundle()
         if (cached?.weather) {
+          const cachedAlerts = filterActiveAlerts(cached.alerts ?? [])
           setLocation(cached.location)
           setWeather(cached.weather)
           setAir(cached.air)
-          setAlerts(cached.alerts)
+          setAlerts(cachedAlerts)
           setUpdatedAt(cached.savedAt)
           setOffline(true)
+          setSevereActive(
+            cachedAlerts.some((x) =>
+              ['Extreme', 'Severe', 'Moderate'].includes(x.severity),
+            ),
+          )
           setError(null)
           showStatus(
             `Offline · showing last weather from ${new Date(cached.savedAt).toLocaleTimeString()}`,
@@ -549,6 +557,25 @@ export function useWeather() {
     }, 10 * 60 * 1000)
     return () => clearInterval(id)
   }, [location])
+
+  // Drop alerts the moment they expire (without waiting for next fetch)
+  useEffect(() => {
+    if (!alerts.length) return
+    const tick = () => {
+      setAlerts((prev) => {
+        const next = filterActiveAlerts(prev)
+        if (next.length === prev.length) return prev
+        setSevereActive(
+          next.some((x) =>
+            ['Extreme', 'Severe', 'Moderate'].includes(x.severity),
+          ),
+        )
+        return next
+      })
+    }
+    const id = window.setInterval(tick, 60 * 1000)
+    return () => window.clearInterval(id)
+  }, [alerts.length])
 
   return {
     location,

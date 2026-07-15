@@ -99,12 +99,15 @@ export function useRainWatch(
     }
   }, [favorites, enabled, currentLoc])
 
+  const currentLat = currentLoc?.latitude
+  const currentLon = currentLoc?.longitude
+
   useEffect(() => {
     void refresh()
-    if (!favorites.length && !currentLoc) return
+    if (!favorites.length && currentLat == null) return
     const id = window.setInterval(() => void refresh(), 8 * 60 * 1000)
     return () => window.clearInterval(id)
-  }, [refresh, favorites.length, currentLoc?.latitude, currentLoc?.longitude])
+  }, [refresh, favorites.length, currentLat, currentLon])
 
   return { snapshots, loading, banner, refresh }
 }

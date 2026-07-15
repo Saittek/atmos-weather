@@ -10,6 +10,7 @@ import type {
   WeatherAlert,
   WeatherData,
 } from './types'
+import { filterActiveAlerts } from '../utils/activeAlerts'
 
 const GEOCODE = 'https://geocoding-api.open-meteo.com/v1/search'
 const FORECAST = 'https://api.open-meteo.com/v1/forecast'
@@ -303,7 +304,7 @@ export async function fetchLocationSnapshot(
       high: w.daily.temperature_2m_max[0],
       low: w.daily.temperature_2m_min[0],
       aqi,
-      hasAlert: alRes.length > 0,
+      hasAlert: filterActiveAlerts(alRes).length > 0,
     }
   } catch {
     return null
@@ -412,9 +413,23 @@ async function fetchUsAlerts(lat: number, lon: number): Promise<WeatherAlert[]> 
     })
     if (!res.ok) return []
     const data = await res.json()
-    return (data.features ?? []).map(
-      (f: { id: string; properties: Record<string, unknown> }) => mapNwsAlert(f),
-    )
+    const now = Date.now()
+    return (data.features ?? [])
+      .filter((f: { properties?: Record<string, unknown> }) => {
+        const p = f.properties ?? {}
+        const status = String(p.status ?? '').toLowerCase()
+        const messageType = String(p.messageType ?? '').toLowerCase()
+        // Drop non-public / cancelled traffic even if still in a feed
+        if (status === 'test' || status === 'draft' || status === 'exercise') return false
+        if (messageType === 'cancel') return false
+        const ends = p.ends ?? p.expires
+        if (ends != null) {
+          const t = Date.parse(String(ends))
+          if (Number.isFinite(t) && t <= now) return false
+        }
+        return true
+      })
+      .map((f: { id: string; properties: Record<string, unknown> }) => mapNwsAlert(f))
   } catch {
     return []
   }
@@ -450,7 +465,20 @@ async function fetchCanadaAlerts(lat: number, lon: number): Promise<WeatherAlert
       seen.add(mapped.id)
       // Skip cancelled/expired if status present
       const status = String(f.properties.status_en ?? '').toLowerCase()
-      if (status === 'ended' || status === 'cancelled' || status === 'canceled') continue
+      if (
+        status === 'ended' ||
+        status === 'cancelled' ||
+        status === 'canceled' ||
+        status === 'expired'
+      )
+        continue
+      // Drop by event end / expiration datetime
+      const endRaw =
+        f.properties.event_end_datetime ?? f.properties.expiration_datetime
+      if (endRaw != null) {
+        const t = Date.parse(String(endRaw))
+        if (Number.isFinite(t) && t <= Date.now()) continue
+      }
       alerts.push(mapped)
     }
     return alerts
@@ -463,7 +491,7 @@ async function fetchCanadaAlerts(lat: number, lon: number): Promise<WeatherAlert
 export async function fetchAlerts(lat: number, lon: number): Promise<WeatherAlert[]> {
   const [us, ca] = await Promise.all([fetchUsAlerts(lat, lon), fetchCanadaAlerts(lat, lon)])
   // Canada first if both (border cases rare); severity sort happens in UI
-  return [...ca, ...us]
+  return filterActiveAlerts([...ca, ...us])
 }
 
 const MODEL_META: { id: ModelId; label: string; param?: string }[] = [

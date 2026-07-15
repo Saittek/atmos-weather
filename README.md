@@ -13,6 +13,42 @@ npm run dev
 This starts the **API** (`:8787` — auth, area chat, NASA FIRMS fires) and the **web app** together.  
 Open **http://localhost:5173/**
 
+## Deploy on Cloudflare Pages
+
+The UI is a static Vite build (output: `dist/`). SPA routes are covered by `public/_redirects`.
+
+1. Push this repo to GitHub (already set up as `Saittek/atmos-weather`).
+2. In [Cloudflare Dashboard](https://dash.cloudflare.com/) → **Workers & Pages** → **Create** → **Pages** → **Connect to Git**.
+3. Select **Saittek/atmos-weather**.
+4. Build settings:
+
+| Setting | Value |
+|--------|--------|
+| **Framework preset** | Vite (or None) |
+| **Build command** | `npm run build` |
+| **Build output directory** | `dist` |
+| **Root directory** | `/` (or `weather-app` if the repo root is above the app) |
+
+5. **Save and Deploy**.
+
+### What works on Cloudflare (static)
+
+Forecasts, radar, alerts (US/CA), most maps, PWA, local favorites — all call public APIs from the browser.
+
+### What needs a hosted API (optional)
+
+Accounts/sync, area chat, and NASA FIRMS fire hotspots use `server/` (`/api/*`).  
+On static Pages alone those features degrade gracefully (or show “server offline”).
+
+To enable them later:
+
+1. Host `server/` somewhere with HTTPS (Railway, Fly, Render, or a Cloudflare Worker+D1 later).
+2. Set a Pages env var **before build**:  
+   `VITE_API_BASE=https://your-api.example.com`  
+3. Redeploy.
+
+Local prefs still save in the browser without an API.
+
 ### Highlights
 
 - **Radar products** — precip, rain-only, snow, classic, NEXRAD, storm, satellite IR (RainViewer + NASA GIBS fallback), radar+sat

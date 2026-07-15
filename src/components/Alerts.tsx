@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { WeatherAlert } from '../api/types'
 import { alertActionTips } from '../utils/alertTips'
+import { filterActiveAlerts } from '../utils/activeAlerts'
 
 interface Props {
   alerts: WeatherAlert[]
+  onHideAlert?: (id: string) => void
+  onHideAll?: () => void
 }
 
 function severityColor(sev: string): string {
@@ -21,47 +24,72 @@ function severityColor(sev: string): string {
   }
 }
 
-export function Alerts({ alerts }: Props) {
-  const [expanded, setExpanded] = useState<string | null>(() => alerts[0]?.id ?? null)
+export function Alerts({ alerts, onHideAlert, onHideAll }: Props) {
+  const active = useMemo(() => filterActiveAlerts(alerts), [alerts])
+  const [expanded, setExpanded] = useState<string | null>(() => active[0]?.id ?? null)
 
   useEffect(() => {
-    if (!alerts.length) {
+    if (!active.length) {
       setExpanded(null)
       return
     }
-    // Keep expansion if still valid; otherwise open first
     setExpanded((cur) =>
-      cur && alerts.some((a) => a.id === cur) ? cur : alerts[0].id,
+      cur && active.some((a) => a.id === cur) ? cur : active[0].id,
     )
-  }, [alerts])
+  }, [active])
 
-  if (!alerts.length) return null
+  if (!active.length) return null
 
   return (
     <section className="panel alerts-panel">
       <div className="panel-header">
         <h2>⚠️ Active Alerts</h2>
-        <span className="alert-count">{alerts.length}</span>
+        <div className="alerts-header-actions">
+          <span className="alert-count">{active.length}</span>
+          {onHideAll && (
+            <button
+              type="button"
+              className="chip-btn"
+              onClick={onHideAll}
+              title="Hide all alerts"
+            >
+              Hide all
+            </button>
+          )}
+        </div>
       </div>
       <ul className="alerts-list">
-        {alerts.map((a) => {
+        {active.map((a) => {
           const isOpen = expanded === a.id
           const color = severityColor(a.severity)
           const tips = alertActionTips(a.event)
           return (
             <li key={a.id} className="alert-item" style={{ borderLeftColor: color }}>
-              <button
-                type="button"
-                className="alert-toggle"
-                onClick={() => setExpanded(isOpen ? null : a.id)}
-                aria-expanded={isOpen}
-              >
-                <span className="alert-event" style={{ color }}>
-                  {a.event}
-                </span>
-                <span className="alert-headline">{a.headline}</span>
-                <span className="alert-chevron">{isOpen ? '▾' : '▸'}</span>
-              </button>
+              <div className="alert-item-row">
+                <button
+                  type="button"
+                  className="alert-toggle"
+                  onClick={() => setExpanded(isOpen ? null : a.id)}
+                  aria-expanded={isOpen}
+                >
+                  <span className="alert-event" style={{ color }}>
+                    {a.event}
+                  </span>
+                  <span className="alert-headline">{a.headline}</span>
+                  <span className="alert-chevron">{isOpen ? '▾' : '▸'}</span>
+                </button>
+                {onHideAlert && (
+                  <button
+                    type="button"
+                    className="alert-hide-one"
+                    onClick={() => onHideAlert(a.id)}
+                    title="Hide this alert"
+                    aria-label={`Hide ${a.event}`}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
               {isOpen && (
                 <div className="alert-body">
                   <p className="alert-meta">
@@ -91,6 +119,15 @@ export function Alerts({ alerts }: Props) {
                     </details>
                   )}
                   <p className="alert-sender">{a.sender}</p>
+                  {onHideAlert && (
+                    <button
+                      type="button"
+                      className="chip-btn alert-hide-btn"
+                      onClick={() => onHideAlert(a.id)}
+                    >
+                      Hide this alert
+                    </button>
+                  )}
                 </div>
               )}
             </li>

@@ -9,6 +9,7 @@ import {
   parseWeatherLocal,
 } from './format'
 import { todayDailyIndex } from './weatherStory'
+import { filterActiveAlerts } from './activeAlerts'
 
 export type RiskLevel = 'info' | 'watch' | 'warn'
 
@@ -36,8 +37,8 @@ export function buildSevereTimeline(
   const h = weather.hourly
   const ti = todayDailyIndex(weather)
 
-  // Active / upcoming official alerts
-  for (const a of alerts.slice(0, 4)) {
+  // Active / upcoming official alerts only
+  for (const a of filterActiveAlerts(alerts).slice(0, 4)) {
     const sev = a.severity.toLowerCase()
     const level: RiskLevel =
       sev === 'extreme' || sev === 'severe' ? 'warn' : sev === 'moderate' ? 'watch' : 'info'

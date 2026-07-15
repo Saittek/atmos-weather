@@ -1,0 +1,6 @@
+# Security + caching for Cloudflare Pages static assets
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/index.html
+  Cache-Control: public, max-age=0, must-revalidate
