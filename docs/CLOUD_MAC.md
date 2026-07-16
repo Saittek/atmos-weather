@@ -1,6 +1,6 @@
-# Build Atmos on a **cloud Mac** (no personal Mac)
+# Build Solara on a **cloud Mac** (no personal Mac)
 
-You need **macOS + Xcode** to put Atmos on the App Store. On Windows, use a **cloud Mac**.
+You need **macOS + Xcode** to put Solara on the App Store. On Windows, use a **cloud Mac**.
 
 There are two paths:
 
@@ -18,7 +18,7 @@ Codemagic gives you a Mac in the cloud that builds your app when you push Git.
 ### 1. Prerequisites
 
 1. **Apple Developer Program** ($99/year) → [developer.apple.com](https://developer.apple.com/programs/)
-2. Create an app in **App Store Connect** (name: Atmos, bundle id: `com.atmos.weather`)
+2. Create an app in **App Store Connect** (name: Solara, bundle id: `com.solara.weather`)
 3. Create an **App Store Connect API key**  
    Users and Access → Integrations → App Store Connect API → Generate  
    Download the `.p8` file (once!) and note **Issuer ID** + **Key ID**
@@ -27,7 +27,7 @@ Codemagic gives you a Mac in the cloud that builds your app when you push Git.
 ### 2. Connect Codemagic
 
 1. Sign up: [codemagic.io](https://codemagic.io)
-2. **Add application** → select your Atmos repo
+2. **Add application** → select your Solara repo
 3. Project type: **Other** (or leave default for Capacitor)
 4. Open **codemagic.yaml** in the repo (already included)
 
@@ -36,13 +36,13 @@ Codemagic gives you a Mac in the cloud that builds your app when you push Git.
 In Codemagic → **Teams** → **Code signing identities** / **Integrations**:
 
 - Add **App Store Connect API key** (Issuer ID, Key ID, upload `.p8`)
-- Enable **automatic code signing** for bundle id `com.atmos.weather`
+- Enable **automatic code signing** for bundle id `com.solara.weather`
 
 Update `codemagic.yaml` if needed:
 
 ```yaml
 integrations:
-  app_store_connect: Atmos   # name of YOUR integration in Codemagic UI
+  app_store_connect: Solara   # name of YOUR integration in Codemagic UI
 ```
 
 ```yaml
@@ -62,7 +62,7 @@ publishing:
 
 1. Open [App Store Connect](https://appstoreconnect.apple.com) → **TestFlight**
 2. Wait for processing (often 5–30 min)
-3. Install TestFlight on your iPhone → accept invite → install Atmos
+3. Install TestFlight on your iPhone → accept invite → install Solara
 4. When happy: submit the build for **App Review**
 
 ### Common Codemagic fixes
@@ -70,7 +70,7 @@ publishing:
 | Problem | Fix |
 |---------|-----|
 | Scheme / project not found | Confirm paths `ios/App/App.xcodeproj` and scheme `App` in Xcode on a Mac once, or open Codemagic logs |
-| Signing failed | Re-create API key; ensure Bundle ID matches `com.atmos.weather` |
+| Signing failed | Re-create API key; ensure Bundle ID matches `com.solara.weather` |
 | Capacitor out of date | Ensure `npm run build` and `npx cap sync ios` run before `xcodebuild` (yaml already does this) |
 | Free minutes exhausted | Upgrade Codemagic plan or use Path B |
 
@@ -139,8 +139,8 @@ You never need to touch Xcode if Codemagic signing is set up correctly.
 
 Before review, put these on a public HTTPS URL (GitHub Pages, Netlify, Cloudflare, etc.):
 
-- `public/privacy.html` → e.g. `https://yourname.github.io/atmos/privacy.html`
-- `public/support.html` → e.g. `https://yourname.github.io/atmos/support.html`
+- `public/privacy.html` → e.g. `https://yourname.github.io/solara/privacy.html`
+- `public/support.html` → e.g. `https://yourname.github.io/solara/support.html`
 
 Paste those URLs into App Store Connect.
 
@@ -151,7 +151,7 @@ Paste those URLs into App Store Connect.
 Default in this project:
 
 ```
-com.atmos.weather
+com.solara.weather
 ```
 
 If Apple says it’s taken, change in:
@@ -171,14 +171,14 @@ If Apple says it’s taken, change in:
 | Codemagic free tier | Limited Mac minutes / month |
 | Codemagic paid | Pay as you go after free minutes |
 | MacinCloud-style rental | Often ~$20–40 / month |
-| Your Atmos app binary | Free (Capacitor + this repo) |
+| Your Solara app binary | Free (Capacitor + this repo) |
 
 ---
 
 ## What I recommend for you (Windows)
 
 1. Enroll in **Apple Developer**  
-2. Push Atmos to **GitHub**  
+2. Push Solara to **GitHub**  
 3. Use **Codemagic** + the included `codemagic.yaml`  
 4. Ship to **TestFlight** first, then App Store  
 

@@ -44,7 +44,7 @@ export function HourlyForecast({ weather, units }: Props) {
   return (
     <section className="panel hourly-panel">
       <div className="panel-header">
-        <h2>48-Hour Forecast</h2>
+        <h2>Hourly</h2>
         <span className="panel-hint">
           {endIso
             ? `${hourLabel(hourly.time[idx], timezone, true)} → ${hourLabel(endIso, timezone, false)}`

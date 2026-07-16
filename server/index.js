@@ -62,7 +62,7 @@ function validatePassword(password) {
 app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
-    service: 'atmos-api',
+    service: 'solara-api',
     features: ['auth', 'chat', 'fires'],
   })
 })
@@ -253,5 +253,5 @@ app.put('/api/user/data', authMiddleware, (req, res) => {
 })
 
 app.listen(PORT, () => {
-  console.log(`Atmos API (auth + area chat) → http://localhost:${PORT}`)
+  console.log(`Solara API (auth + area chat) → http://localhost:${PORT}`)
 })

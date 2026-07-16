@@ -1,4 +1,4 @@
-# Codemagic cloud Mac CI — build Atmos for TestFlight / App Store
+# Codemagic cloud Mac CI — build Solara for TestFlight / App Store
 # Docs: https://docs.codemagic.io/
 #
 # Setup:
@@ -13,20 +13,20 @@
 
 workflows:
   ios-app-store:
-    name: Atmos iOS → TestFlight
+    name: Solara iOS → TestFlight
     max_build_duration: 60
     instance_type: mac_mini_m2
     integrations:
-      app_store_connect: Atmos # rename to your Codemagic integration name
+      app_store_connect: Solara # rename to your Codemagic integration name
     environment:
       ios_signing:
         distribution_type: app_store
-        bundle_identifier: com.atmos.weather
+        bundle_identifier: com.solara.weather
       vars:
         XCODE_WORKSPACE: "ios/App/App.xcodeproj"
         # If Codemagic expects .xcworkspace after CocoaPods, switch to that path
         XCODE_SCHEME: "App"
-        BUNDLE_ID: "com.atmos.weather"
+        BUNDLE_ID: "com.solara.weather"
         APP_STORE_APPLE_ID: "" # numeric App Store Connect app id after first create
       node: v22.14.0
       xcode: latest
@@ -68,7 +68,7 @@ workflows:
 
   # Quick compile check (no upload) — free-tier friendly
   ios-simulator-check:
-    name: Atmos iOS compile check
+    name: Solara iOS compile check
     max_build_duration: 45
     instance_type: mac_mini_m2
     environment:

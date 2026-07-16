@@ -17,7 +17,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error('Atmos UI error:', error, info.componentStack)
+    console.error('Solara UI error:', error, info.componentStack)
   }
 
   render() {
@@ -34,7 +34,7 @@ export class ErrorBoundary extends Component<Props, State> {
               window.location.href = '/'
             }}
           >
-            Reload Atmos
+            Reload Solara
           </button>
         </div>
       )

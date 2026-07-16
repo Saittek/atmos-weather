@@ -1,12 +1,12 @@
 import type { CapacitorConfig } from '@capacitor/cli'
 
 /**
- * Atmos iOS / native shell config.
+ * Solara iOS / native shell config.
  * App Store bundle ID — change before shipping if you own a different domain/org.
  */
 const config: CapacitorConfig = {
-  appId: 'com.atmos.weather',
-  appName: 'Atmos',
+  appId: 'com.solara.weather',
+  appName: 'Solara',
   webDir: 'dist',
   server: {
     // Production: app loads from bundled dist/
@@ -43,7 +43,7 @@ const config: CapacitorConfig = {
     contentInset: 'automatic',
     preferredContentMode: 'mobile',
     backgroundColor: '#0b1220',
-    scheme: 'Atmos',
+    scheme: 'Solara',
   },
 }
 

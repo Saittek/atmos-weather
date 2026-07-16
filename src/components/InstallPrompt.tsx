@@ -65,9 +65,9 @@ export function InstallPrompt({ compact }: Props) {
   }
 
   return (
-    <div className={`install-prompt ${compact ? 'compact' : ''}`} role="dialog" aria-label="Install Atmos">
+    <div className={`install-prompt ${compact ? 'compact' : ''}`} role="dialog" aria-label="Install Solara">
       <div className="install-prompt-text">
-        <strong>Install Atmos</strong>
+        <strong>Install Solara</strong>
         <span>
           {compact
             ? 'Add Rain Widget to your home screen for one-tap checks.'

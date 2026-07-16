@@ -10,7 +10,7 @@ function RouteFallback() {
   return (
     <div className="route-fallback" role="status" aria-live="polite">
       <div className="spinner large" />
-      <p>Loading Atmos…</p>
+      <p>Loading Solara…</p>
     </div>
   )
 }

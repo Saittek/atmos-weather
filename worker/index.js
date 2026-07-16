@@ -1,5 +1,5 @@
 /**
- * Atmos API — Cloudflare Worker (auth, prefs sync, area chat, FIRMS fires)
+ * Solara API — Cloudflare Worker (auth, prefs sync, area chat, FIRMS fires)
  * Serves /api/*; static SPA assets handled by Workers Static Assets.
  */
 
@@ -477,7 +477,7 @@ export default {
       if (path === '/api/health' && method === 'GET') {
         return json({
           ok: true,
-          service: 'atmos-api',
+          service: 'solara-api',
           features: ['auth', 'chat', 'fires'],
           runtime: 'cloudflare-worker',
         })

@@ -257,7 +257,7 @@ export default function DashboardPage() {
               ⚡
             </span>
             <div>
-              <strong>Atmos</strong>
+              <strong>Solara</strong>
               <span className="brand-tag">
                 {stormMode ? 'Storm mode' : 'Will you get wet?'}
               </span>
@@ -353,7 +353,7 @@ export default function DashboardPage() {
             </div>
             <h1>Where should we look?</h1>
             <p className="empty-lead">
-              Atmos answers one thing first: <strong>will you get wet?</strong>
+              Solara answers one thing first: <strong>will you get wet?</strong>
               <br />
               Then radar, alerts (US + Canada), and your pinned places.
             </p>

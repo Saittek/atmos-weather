@@ -41,7 +41,7 @@ export function Alerts({ alerts }: Props) {
   return (
     <section className="panel alerts-panel">
       <div className="panel-header">
-        <h2>⚠️ Active Alerts</h2>
+        <h2>⚠️ Alerts</h2>
         <span className="alert-count">{active.length}</span>
       </div>
       <ul className="alerts-list">

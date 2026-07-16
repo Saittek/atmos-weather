@@ -1,5 +1,5 @@
-/* Atmos PWA service worker — fast shell + immutable asset cache */
-const CACHE = 'atmos-v4'
+/* Solara PWA service worker — fast shell + immutable asset cache */
+const CACHE = 'solara-v1'
 const PRECACHE = ['/', '/index.html', '/manifest.webmanifest', '/icons/icon.svg']
 
 self.addEventListener('install', (event) => {

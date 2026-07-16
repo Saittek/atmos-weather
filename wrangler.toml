@@ -1,4 +1,4 @@
-# Atmos — SPA + API on one Worker (static assets + /api/*)
+# Solara — SPA + API on one Worker (static assets + /api/*)
 # SPA routes use not_found_handling (do NOT use /* → index.html in _redirects).
 
 name = "atmos-weather"

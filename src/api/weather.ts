@@ -432,7 +432,7 @@ async function fetchUsAlerts(lat: number, lon: number): Promise<WeatherAlert[]> 
     const res = await fetch(`${NWS}/alerts/active?point=${lat},${lon}`, {
       headers: {
         Accept: 'application/geo+json',
-        'User-Agent': 'AtmosWeather/1.0 (personal weather dashboard)',
+        'User-Agent': 'SolaraWeather/1.0 (personal weather dashboard)',
       },
     })
     if (!res.ok) return []
@@ -710,7 +710,7 @@ export async function fetchTropicalStorms(): Promise<TropicalStorm[]> {
       {
         headers: {
           Accept: 'application/geo+json',
-          'User-Agent': 'AtmosWeather/1.0 (personal weather dashboard)',
+          'User-Agent': 'SolaraWeather/1.0 (personal weather dashboard)',
         },
       },
     )

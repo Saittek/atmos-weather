@@ -61,7 +61,7 @@ export default function WidgetPage() {
         <Link to="/" className="chip-btn">
           ← Full app
         </Link>
-        <strong className="widget-brand">☔ Atmos Rain</strong>
+        <strong className="widget-brand">☔ Solara Rain</strong>
         <button
           type="button"
           className="chip-btn"

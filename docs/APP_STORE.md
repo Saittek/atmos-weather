@@ -1,6 +1,6 @@
-# Ship Atmos on the iOS App Store
+# Ship Solara on the iOS App Store
 
-Atmos is a **Capacitor** iOS app: your React weather UI runs in a native shell with real location permissions, splash screen, and status bar — ready to archive in Xcode and upload to App Store Connect.
+Solara is a **Capacitor** iOS app: your React weather UI runs in a native shell with real location permissions, splash screen, and status bar — ready to archive in Xcode and upload to App Store Connect.
 
 > **You are on Windows.** Building and uploading an iOS app **requires a Mac** (or a cloud Mac CI service). The project is prepared here; final compile happens on macOS.
 
@@ -13,7 +13,7 @@ Atmos is a **Capacitor** iOS app: your React weather UI runs in a native shell w
 | **Mac** with macOS Sequoia/Sonoma (or similar) | Xcode only runs on Mac |
 | **Xcode** (latest stable from Mac App Store) | Includes iOS SDK + Simulator |
 | **Apple Developer Program** | [developer.apple.com](https://developer.apple.com) — **$99 USD/year** |
-| **Bundle ID** | Default: `com.atmos.weather` (change if taken) |
+| **Bundle ID** | Default: `com.solara.weather` (change if taken) |
 | **Privacy Policy URL** | Host `public/privacy.html` (required by Apple) |
 | **Support URL** | Host `public/support.html` |
 | **Icons** | 1024×1024 App Store icon + Xcode asset catalog |
@@ -23,7 +23,7 @@ Optional for **accounts/sync** on device:
 | Requirement | Notes |
 |-------------|--------|
 | Hosted API | Deploy `server/` to Railway, Fly.io, Render, etc. |
-| `VITE_API_BASE` | e.g. `https://atmos-api.yourdomain.com` when building |
+| `VITE_API_BASE` | e.g. `https://solara-api.yourdomain.com` when building |
 
 Without a hosted API, **favorites and prefs still work on-device** (local storage). Sign-in just won’t sync to a server.
 
@@ -46,8 +46,8 @@ On **Windows**, `cap add ios` usually works; you still open the project on a Mac
 Edit `capacitor.config.ts`:
 
 ```ts
-appId: 'com.yourname.atmos',  // must be unique
-appName: 'Atmos',
+appId: 'com.yourname.solara',  // must be unique
+appName: 'Solara',
 ```
 
 Then re-run `npx cap sync ios`.
@@ -81,9 +81,9 @@ npx cap open ios
 ```
 
 5. In Xcode:
-   - Select the **Atmos** target
+   - Select the **Solara** target
    - **Signing & Capabilities** → your Team
-   - Bundle Identifier = `com.atmos.weather` (or yours)
+   - Bundle Identifier = `com.solara.weather` (or yours)
    - Add **Location When In Use** (Capacitor Geolocation usually injects this)
    - Optional: **Push Notifications** if you add APNs later
 
@@ -94,7 +94,7 @@ npx cap open ios
 Xcode → Info (or `ios/App/App/Info.plist`):
 
 - `NSLocationWhenInUseUsageDescription`  
-  e.g. *“Atmos uses your location to show local weather, radar, and alerts.”*
+  e.g. *“Solara uses your location to show local weather, radar, and alerts.”*
 - `NSLocationAlwaysAndWhenInUseUsageDescription` (only if you request always — we don’t by default)
 
 ---

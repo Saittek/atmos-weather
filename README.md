@@ -1,4 +1,4 @@
-# Atmos — Weather Command
+# Solara — Weather Command
 
 Full-featured weather dashboard: **video-smooth HQ radar**, multi-model forecasts, air quality, severe alerts (US + Canada), fire/smoke maps, area chat, tropical storms, and PWA install.
 
@@ -15,7 +15,7 @@ Open **http://localhost:5173/**
 
 ## Deploy on Cloudflare (SPA + accounts API)
 
-Atmos ships as **one Worker**: static Vite assets (`dist/`) plus a Worker that handles  
+Solara ships as **one Worker**: static Vite assets (`dist/`) plus a Worker that handles  
 **`/api/*`** (auth, prefs sync, area chat, NASA FIRMS fires) on **D1**.
 
 SPA routes (`/radar`, `/widget`) use **`wrangler.toml`** →  
@@ -69,7 +69,7 @@ local `server/data/users.json`.
 
 ## iOS App Store
 
-This project includes a **Capacitor iOS** shell (`ios/`) so you can ship Atmos on the App Store.
+This project includes a **Capacitor iOS** shell (`ios/`) so you can ship Solara on the App Store.
 
 ```bash
 npm run build:ios    # build web + sync into Xcode project
@@ -81,7 +81,7 @@ npx cap open ios     # open Xcode → Archive → App Store Connect
 No Mac? Use a **cloud Mac** — step-by-step: **[docs/CLOUD_MAC.md](docs/CLOUD_MAC.md)**  
 Store checklist: **[docs/APP_STORE.md](docs/APP_STORE.md)** · CI file: `codemagic.yaml`
 
-- Bundle ID: `com.atmos.weather` (change in `capacitor.config.ts`)
+- Bundle ID: `com.solara.weather` (change in `capacitor.config.ts`)
 - Privacy / support pages: `public/privacy.html`, `public/support.html` (host them publicly)
 - Optional cloud auth: set `VITE_API_BASE` when building (see `.env.example`)
 

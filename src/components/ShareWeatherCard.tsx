@@ -22,7 +22,7 @@ export function ShareWeatherCard({ weather, location, units }: Props) {
   const hi = weather.daily.temperature_2m_max[ti]
   const lo = weather.daily.temperature_2m_min[ti]
 
-  const text = `${location.name}: ${formatTemp(c.temperature_2m, units)} ${info.label}. ${wet.title} H ${formatTemp(hi, units)} / L ${formatTemp(lo, units)}. — via Atmos`
+  const text = `${location.name}: ${formatTemp(c.temperature_2m, units)} ${info.label}. ${wet.title} H ${formatTemp(hi, units)} / L ${formatTemp(lo, units)}. — via Solara`
   const url = shareUrl(location)
 
   const copy = useCallback(async () => {
@@ -68,7 +68,7 @@ export function ShareWeatherCard({ weather, location, units }: Props) {
 
     ctx.fillStyle = '#f1f5f9'
     ctx.font = '700 28px system-ui,sans-serif'
-    ctx.fillText('Atmos', 40, 56)
+    ctx.fillText('Solara', 40, 56)
     ctx.font = '600 22px system-ui,sans-serif'
     ctx.fillStyle = '#94a3b8'
     ctx.fillText(location.name.slice(0, 36), 40, 96)
@@ -101,7 +101,7 @@ export function ShareWeatherCard({ weather, location, units }: Props) {
       if (!blob) return
       const a = document.createElement('a')
       a.href = URL.createObjectURL(blob)
-      a.download = `atmos-${location.name.replace(/\s+/g, '-').toLowerCase()}.png`
+      a.download = `solara-${location.name.replace(/\s+/g, '-').toLowerCase()}.png`
       a.click()
       URL.revokeObjectURL(a.href)
       setMsg('Card image downloaded')
@@ -116,7 +116,7 @@ export function ShareWeatherCard({ weather, location, units }: Props) {
       </div>
       <div className="share-card-preview" aria-hidden>
         <div className="share-card-inner">
-          <span className="share-brand">Atmos</span>
+          <span className="share-brand">Solara</span>
           <strong className="share-place">{location.name}</strong>
           <span className="share-temp">{formatTemp(c.temperature_2m, units)}</span>
           <span className="share-cond">{info.label}</span>

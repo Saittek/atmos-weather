@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-        <string>Atmos</string>
+        <string>Solara</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -48,9 +48,9 @@
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Atmos uses your location to show local weather, radar, and severe weather alerts for your area.</string>
+	<string>Solara uses your location to show local weather, radar, and severe weather alerts for your area.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Atmos uses your location to show local weather, radar, and severe weather alerts for your area.</string>
+	<string>Solara uses your location to show local weather, radar, and severe weather alerts for your area.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 </dict>

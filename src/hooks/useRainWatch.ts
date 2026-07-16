@@ -77,7 +77,7 @@ export function useRainWatch(
                 : `Rain in ~${s.rainStartsInMin} min near ${s.location.name}`
             setBanner(msg)
             window.setTimeout(() => setBanner(null), 8000)
-            notify('Atmos rain watch', msg, key)
+            notify('Solara rain watch', msg, key)
           }
         }
 
@@ -89,7 +89,7 @@ export function useRainWatch(
             const msg = `Weather alert active near ${s.location.name}`
             setBanner(msg)
             window.setTimeout(() => setBanner(null), 8000)
-            notify('Atmos alert', msg, key)
+            notify('Solara alert', msg, key)
           }
         }
       }

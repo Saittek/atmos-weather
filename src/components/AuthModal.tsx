@@ -67,7 +67,7 @@ export function AuthModal({ open, onClose, onSuccess }: Props) {
           </button>
         </div>
         <p className="auth-sub">
-          Save favorites, last location, units, and theme to your Atmos account.
+          Save favorites, last location, units, and theme to your Solara account.
         </p>
 
         <div className="auth-tabs">
@@ -142,7 +142,7 @@ export function AuthModal({ open, onClose, onSuccess }: Props) {
         </form>
 
         <p className="auth-foot">
-          Accounts are stored on your Atmos server (local). Passwords are hashed — never stored
+          Accounts are stored on your Solara server. Passwords are hashed — never stored
           plain text.
         </p>
       </div>

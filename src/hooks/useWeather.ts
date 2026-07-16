@@ -375,7 +375,7 @@ export function useWeather() {
             if (notifiedRef.current.has(top.id)) continue
             notifiedRef.current.add(top.id)
             try {
-              new Notification(`Atmos: ${top.event}`, {
+              new Notification(`Solara: ${top.event}`, {
                 body: top.headline,
                 icon: '/icons/icon.svg',
                 tag: top.id,
@@ -399,7 +399,7 @@ export function useWeather() {
                   AQI_NOTIFIED_KEY,
                   JSON.stringify([...set].slice(-30)),
                 )
-                new Notification('Atmos air quality', {
+                new Notification('Solara air quality', {
                   body: `AQI ${aqi} near ${loc.name} — limit outdoor time if sensitive`,
                   icon: '/icons/icon.svg',
                   tag: aqiKey,

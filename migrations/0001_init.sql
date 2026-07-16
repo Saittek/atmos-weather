@@ -1,4 +1,4 @@
--- Atmos production schema (Cloudflare D1)
+-- Solara production schema (Cloudflare D1)
 
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY NOT NULL,

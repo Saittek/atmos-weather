@@ -1,6 +1,6 @@
 {
-  "name": "Atmos Weather Command",
-  "short_name": "Atmos",
+  "name": "Solara Weather Command",
+  "short_name": "Solara",
   "description": "Full weather dashboard with HQ radar, rain widget, forecasts, and severe alerts.",
   "start_url": "/",
   "scope": "/",
@@ -48,7 +48,7 @@
     {
       "name": "Dashboard",
       "short_name": "Home",
-      "description": "Full Atmos weather dashboard",
+      "description": "Full Solara weather dashboard",
       "url": "/",
       "icons": [{ "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
     }
