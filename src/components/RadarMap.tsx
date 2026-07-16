@@ -118,6 +118,16 @@ function MapSizeFix() {
  * 2. Preloads viewport tiles for all frames
  * 3. Crossfades with requestAnimationFrame (no layer teardown)
  */
+function isConstrainedDevice() {
+  if (typeof window === 'undefined') return false
+  const narrow = window.matchMedia('(max-width: 720px)').matches
+  const saveData =
+    'connection' in navigator &&
+    Boolean((navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData)
+  const cores = navigator.hardwareConcurrency ?? 8
+  return narrow || saveData || cores <= 4
+}
+
 function RadarEngine({
   host,
   frames,
@@ -128,6 +138,7 @@ function RadarEngine({
   snow,
   fadeDuration,
   onBuffer,
+  lite = false,
 }: {
   host: string
   frames: RadarFrame[]
@@ -138,6 +149,8 @@ function RadarEngine({
   snow: boolean
   fadeDuration: number
   onBuffer: (ready: boolean, progress: number) => void
+  /** Fewer/lighter tiles for phones */
+  lite?: boolean
 }) {
   const map = useMap()
   const layersRef = useRef<L.TileLayer[]>([])
@@ -145,7 +158,8 @@ function RadarEngine({
   const opacityRef = useRef(opacity)
   const fadeDurRef = useRef(fadeDuration)
   const rafRef = useRef<number | null>(null)
-  const configKey = `${host}|${color}|${smooth}|${snow}|${frames.map((f) => f.path).join(',')}`
+  const tileSize = lite ? 256 : 512
+  const configKey = `${host}|${color}|${smooth}|${snow}|${tileSize}|${frames.map((f) => f.path).join(',')}`
 
   opacityRef.current = opacity
   fadeDurRef.current = fadeDuration
@@ -222,16 +236,16 @@ function RadarEngine({
     onBuffer(false, 0)
 
     const layers = frames.map((frame) => {
-      const layer = L.tileLayer(tileUrl(host, frame.path, color, smooth, snow), {
+      const layer = L.tileLayer(tileUrl(host, frame.path, color, smooth, snow, tileSize), {
         opacity: 0,
         zIndex: 200,
         maxZoom: 12,
         maxNativeZoom: 7,
         tileSize: 256,
         className: 'radar-tiles',
-        keepBuffer: 3,
-        updateWhenIdle: false,
-        updateWhenZooming: true,
+        keepBuffer: lite ? 1 : 2,
+        updateWhenIdle: true,
+        updateWhenZooming: false,
         errorTileUrl:
           'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
       })
@@ -254,26 +268,45 @@ function RadarEngine({
     }
 
     const handlers: Array<{ layer: L.TileLayer; fn: () => void }> = []
-    layers.forEach((layer) => {
+    // Warm active + neighbors first so playback can start sooner
+    const warmOrder = layers
+      .map((layer, i) => ({ layer, i, dist: Math.abs(i - initial) }))
+      .sort((a, b) => a.dist - b.dist)
+
+    warmOrder.forEach(({ layer }, order) => {
       const fn = () => {
         layer.off('load', fn)
         onLayerReady()
       }
       layer.on('load', fn)
       handlers.push({ layer, fn })
-      requestAnimationFrame(() => layer.redraw())
+      // Stagger redraw so we don't spike main thread
+      window.setTimeout(() => {
+        try {
+          layer.redraw()
+        } catch {
+          /* torn down */
+        }
+      }, lite ? order * 40 : order * 16)
     })
 
     // Don't block playback forever on a bad tile
-    const safety = window.setTimeout(() => onBuffer(true, 1), 5000)
+    const safety = window.setTimeout(() => onBuffer(true, 1), lite ? 3500 : 5000)
 
-    // Keep tile cache warm when panning / zooming
+    // Warm only nearby frames when panning (not the whole stack)
     let panTimer: number | null = null
     const warm = () => {
       if (panTimer) window.clearTimeout(panTimer)
       panTimer = window.setTimeout(() => {
-        layers.forEach((l) => l.redraw())
-      }, 120)
+        const active = activeRef.current
+        for (let i = Math.max(0, active - 1); i <= Math.min(layers.length - 1, active + 1); i++) {
+          try {
+            layers[i]?.redraw()
+          } catch {
+            /* ignore */
+          }
+        }
+      }, lite ? 200 : 120)
     }
     map.on('moveend', warm)
     map.on('zoomend', warm)
@@ -290,7 +323,7 @@ function RadarEngine({
     }
     // Only rebuild when stack config changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [configKey, map, frames, host, color, smooth, snow, cancelFade, showOnly, onBuffer])
+  }, [configKey, map, frames, host, color, smooth, snow, lite, tileSize, cancelFade, showOnly, onBuffer])
 
   useEffect(() => {
     const layers = layersRef.current
@@ -424,7 +457,11 @@ export function RadarMap({
     return () => mq.removeEventListener('change', apply)
   }, [])
 
-  const radarFrames = useMemo(() => (maps ? getAllFrames(maps) : []), [maps])
+  const lite = useMemo(() => isConstrainedDevice(), [])
+  const radarFrames = useMemo(
+    () => (maps ? getAllFrames(maps, lite ? 10 : 16) : []),
+    [maps, lite],
+  )
   const satFrames = useMemo(() => (maps ? getSatelliteFrames(maps) : []), [maps])
   const host = maps?.host ?? 'https://tilecache.rainviewer.com'
   const pastCount = maps?.radar?.past?.length ?? 0
@@ -635,6 +672,7 @@ export function RadarMap({
               snow={snow}
               fadeDuration={fadeDuration}
               onBuffer={onBuffer}
+              lite={lite}
             />
           )}
           <FireSmokeLayers

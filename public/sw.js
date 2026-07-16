@@ -1,5 +1,5 @@
-/* Atmos PWA service worker — offline shell + SPA routes */
-const CACHE = 'atmos-v3'
+/* Atmos PWA service worker — fast shell + immutable asset cache */
+const CACHE = 'atmos-v4'
 const PRECACHE = ['/', '/index.html', '/manifest.webmanifest', '/icons/icon.svg']
 
 self.addEventListener('install', (event) => {
@@ -20,24 +20,32 @@ self.addEventListener('activate', (event) => {
   )
 })
 
+function isLiveHost(hostname) {
+  return (
+    hostname.includes('open-meteo') ||
+    hostname.includes('rainviewer') ||
+    hostname.includes('weather.gov') ||
+    hostname.includes('weather.gc.ca') ||
+    hostname.includes('nhc.noaa.gov') ||
+    hostname.includes('nominatim') ||
+    hostname.includes('tile') ||
+    hostname.includes('basemaps') ||
+    hostname.includes('arcgisonline') ||
+    hostname.includes('cartocdn') ||
+    hostname.includes('firms.modaps') ||
+    hostname.includes('googleapis') ||
+    hostname.includes('gstatic')
+  )
+}
+
 self.addEventListener('fetch', (event) => {
   const { request } = event
   if (request.method !== 'GET') return
 
   const url = new URL(request.url)
 
-  // Never cache live weather / map tiles
-  if (
-    url.hostname.includes('open-meteo') ||
-    url.hostname.includes('rainviewer') ||
-    url.hostname.includes('weather.gov') ||
-    url.hostname.includes('nhc.noaa.gov') ||
-    url.hostname.includes('nominatim') ||
-    url.hostname.includes('tile') ||
-    url.hostname.includes('basemaps') ||
-    url.hostname.includes('arcgisonline') ||
-    url.hostname.includes('cartocdn')
-  ) {
+  // Never intercept API or live weather / map tiles
+  if (url.pathname.startsWith('/api') || isLiveHost(url.hostname)) {
     return
   }
 
@@ -57,15 +65,38 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  if (url.origin === self.location.origin) {
+  if (url.origin !== self.location.origin) return
+
+  // Hashed build assets: cache-first (immutable filenames)
+  if (url.pathname.includes('/assets/')) {
     event.respondWith(
-      fetch(request)
-        .then((res) => {
-          const copy = res.clone()
-          caches.open(CACHE).then((c) => c.put(request, copy))
+      caches.match(request).then((cached) => {
+        if (cached) return cached
+        return fetch(request).then((res) => {
+          if (res.ok) {
+            const copy = res.clone()
+            caches.open(CACHE).then((c) => c.put(request, copy))
+          }
           return res
         })
-        .catch(() => caches.match(request).then((r) => r || caches.match('/index.html'))),
+      }),
     )
+    return
   }
+
+  // Other same-origin: stale-while-revalidate
+  event.respondWith(
+    caches.match(request).then((cached) => {
+      const network = fetch(request)
+        .then((res) => {
+          if (res.ok) {
+            const copy = res.clone()
+            caches.open(CACHE).then((c) => c.put(request, copy))
+          }
+          return res
+        })
+        .catch(() => cached || caches.match('/index.html'))
+      return cached || network
+    }),
+  )
 })

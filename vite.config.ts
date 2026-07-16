@@ -16,5 +16,27 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    target: 'es2022',
+    cssCodeSplit: true,
+    // Smaller runtime polyfill surface; modern browsers only
+    modulePreload: { polyfill: false },
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return
+          if (id.includes('leaflet') || id.includes('react-leaflet')) return 'map-vendor'
+          if (id.includes('@capacitor')) return 'cap-vendor'
+          if (
+            id.includes('react-dom') ||
+            id.includes('react-router') ||
+            id.includes('/react/') ||
+            id.endsWith('/react/index.js') ||
+            id.includes('\\react\\')
+          ) {
+            return 'react-vendor'
+          }
+        },
+      },
+    },
   },
 })

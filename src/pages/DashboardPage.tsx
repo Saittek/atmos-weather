@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { SearchBar } from '../components/SearchBar'
 import { CurrentWeather } from '../components/CurrentWeather'
@@ -9,7 +9,6 @@ import { AirQuality } from '../components/AirQuality'
 import { Alerts } from '../components/Alerts'
 import { SunMoon } from '../components/SunMoon'
 import { PrecipChart } from '../components/PrecipChart'
-import { RadarMap } from '../components/RadarMap'
 import { Favorites } from '../components/Favorites'
 import { RainNextHour } from '../components/RainNextHour'
 import { HourlyCharts } from '../components/HourlyCharts'
@@ -41,13 +40,13 @@ import { PrecipTotals } from '../components/PrecipTotals'
 import { AreaChat } from '../components/AreaChat'
 import { UvWindPanel } from '../components/UvWindPanel'
 import { VisibilityPanel } from '../components/VisibilityPanel'
-import { FireMapPanel } from '../components/FireMapPanel'
 import { SevereTimeline } from '../components/SevereTimeline'
 import { ActivityModes } from '../components/ActivityModes'
 import { ShareWeatherCard } from '../components/ShareWeatherCard'
 import { OutdoorAirStrip } from '../components/OutdoorAirStrip'
 import { StormRisk } from '../components/StormRisk'
 import { DayLastYear } from '../components/DayLastYear'
+import { Deferred } from '../components/Deferred'
 import { useWeather } from '../hooks/useWeather'
 import { useAuth } from '../hooks/useAuth'
 import { useRainWatch } from '../hooks/useRainWatch'
@@ -55,6 +54,23 @@ import { getWeatherInfo } from '../utils/weatherCodes'
 import { locationKey, shareUrl } from '../api/weather'
 import type { LocationResult } from '../api/types'
 import { filterActiveAlerts } from '../utils/activeAlerts'
+
+/** Leaflet + radar engine — large; load only when needed */
+const RadarMap = lazy(() =>
+  import('../components/RadarMap').then((m) => ({ default: m.RadarMap })),
+)
+const FireMapPanel = lazy(() =>
+  import('../components/FireMapPanel').then((m) => ({ default: m.FireMapPanel })),
+)
+
+function MapChunkFallback({ label }: { label: string }) {
+  return (
+    <div className="map-chunk-fallback" role="status" aria-live="polite">
+      <div className="spinner" />
+      <span>{label}</span>
+    </div>
+  )
+}
 
 export default function DashboardPage() {
   const {
@@ -181,7 +197,14 @@ export default function DashboardPage() {
   }
 
   const radarBlock = location && weather && (
-    <div className="priority-radar" id="radar-map-wrap">
+    <Deferred
+      className="priority-radar"
+      id="radar-map-wrap"
+      force={stormMode}
+      rootMargin="360px 0px"
+      minHeight={420}
+      placeholder={<MapChunkFallback label="Radar ready when you scroll…" />}
+    >
       <div className="radar-jump-row">
         <Link to={radarPath} className="primary-btn radar-open-btn">
           📡 Full-page radar
@@ -195,15 +218,17 @@ export default function DashboardPage() {
           </button>
         )}
       </div>
-      <RadarMap
-        lat={location.latitude}
-        lon={location.longitude}
-        placeName={location.name}
-        units={units}
-        severeMode={severe}
-        mapId="radar-map"
-      />
-    </div>
+      <Suspense fallback={<MapChunkFallback label="Loading live radar…" />}>
+        <RadarMap
+          lat={location.latitude}
+          lon={location.longitude}
+          placeName={location.name}
+          units={units}
+          severeMode={severe}
+          mapId="radar-map"
+        />
+      </Suspense>
+    </Deferred>
   )
 
   return (
@@ -408,13 +433,21 @@ export default function DashboardPage() {
               <PrecipTotals weather={weather} units={units} />
               <VisibilityPanel weather={weather} units={units} />
               <StormRisk weather={weather} profile={profile} />
-              <FireMapPanel
-                lat={location.latitude}
-                lon={location.longitude}
-                placeName={location.name}
-                weather={weather}
-                air={air}
-              />
+              <Deferred
+                rootMargin="240px 0px"
+                minHeight={360}
+                placeholder={<MapChunkFallback label="Fire map loads near view…" />}
+              >
+                <Suspense fallback={<MapChunkFallback label="Loading fire map…" />}>
+                  <FireMapPanel
+                    lat={location.latitude}
+                    lon={location.longitude}
+                    placeName={location.name}
+                    weather={weather}
+                    air={air}
+                  />
+                </Suspense>
+              </Deferred>
               <ShareWeatherCard
                 weather={weather}
                 location={location}

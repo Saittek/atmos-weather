@@ -334,13 +334,11 @@ export function useWeather() {
       }
 
       try {
-        const [w, a, al, m, pr, st] = await Promise.all([
+        // Phase 1 — paint the core dashboard ASAP (forecast, air, alerts)
+        const [w, a, al] = await Promise.all([
           fetchWeather(loc.latitude, loc.longitude),
           fetchAirQuality(loc.latitude, loc.longitude),
           fetchAlerts(loc.latitude, loc.longitude),
-          fetchMultiModel(loc.latitude, loc.longitude),
-          fetchPressureProfile(loc.latitude, loc.longitude),
-          fetchTropicalStorms(),
         ])
 
         if (gen !== fetchGen.current) return
@@ -349,11 +347,10 @@ export function useWeather() {
         setWeather(w)
         setAir(a)
         setAlerts(activeAlerts)
-        setModels(m)
-        setProfile(pr)
-        setStorms(st)
         setUpdatedAt(Date.now())
         setOffline(false)
+        setLoading(false)
+        setRefreshing(false)
         saveOfflineBundle({
           location: loc,
           weather: w,
@@ -412,6 +409,34 @@ export function useWeather() {
               /* ignore */
             }
           }
+        }
+
+        // Phase 2 — models / sounding / tropics after first paint (idle)
+        const loadSecondary = async () => {
+          if (gen !== fetchGen.current) return
+          try {
+            const [m, pr, st] = await Promise.all([
+              fetchMultiModel(loc.latitude, loc.longitude),
+              fetchPressureProfile(loc.latitude, loc.longitude),
+              fetchTropicalStorms(),
+            ])
+            if (gen !== fetchGen.current) return
+            setModels(m)
+            setProfile(pr)
+            setStorms(st)
+          } catch {
+            /* secondary is optional — keep primary UI */
+          }
+        }
+        const ric = (
+          window as Window & {
+            requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number
+          }
+        ).requestIdleCallback
+        if (typeof ric === 'function') {
+          ric(() => void loadSecondary(), { timeout: 2200 })
+        } else {
+          window.setTimeout(() => void loadSecondary(), 120)
         }
       } catch (e) {
         if (gen !== fetchGen.current) return

@@ -103,10 +103,16 @@ export function useRainWatch(
   const currentLon = currentLoc?.longitude
 
   useEffect(() => {
-    void refresh()
-    if (!favorites.length && currentLat == null) return
+    // Defer so main forecast/alerts win the network on first paint
+    const start = window.setTimeout(() => void refresh(), 1800)
+    if (!favorites.length && currentLat == null) {
+      return () => window.clearTimeout(start)
+    }
     const id = window.setInterval(() => void refresh(), 8 * 60 * 1000)
-    return () => window.clearInterval(id)
+    return () => {
+      window.clearTimeout(start)
+      window.clearInterval(id)
+    }
   }, [refresh, favorites.length, currentLat, currentLon])
 
   return { snapshots, loading, banner, refresh }

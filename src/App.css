@@ -151,11 +151,13 @@ a:hover {
   background: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(255, 255, 255, 0.35) 0%, transparent 70%);
 }
 
-/* Floating ambient orbs (depth) */
+/* Floating ambient orbs (depth) — lighter on mobile / reduced motion */
 .ambient-orbs {
   pointer-events: none;
   position: fixed;
   inset: 0;
+  contain: strict;
+  content-visibility: auto;
   z-index: 0;
   overflow: hidden;
 }
@@ -1687,6 +1689,44 @@ select:focus-visible {
     transform: none !important;
     animation: none !important;
   }
+  .ambient-orbs {
+    display: none;
+  }
+}
+
+/* Phones: skip continuous blurred animations (main scroll jank source) */
+@media (max-width: 720px) {
+  .ambient-orbs {
+    display: none;
+  }
+}
+
+/* Below-fold panels: skip layout/paint work until near viewport */
+.dashboard .col > .panel,
+.dashboard .advanced-section,
+.priority-radar,
+.fire-map-panel {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 220px;
+}
+
+.priority-stack {
+  content-visibility: visible;
+}
+
+.map-chunk-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  min-height: 200px;
+  margin: 0.5rem 0;
+  padding: 1rem;
+  border-radius: 16px;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+  background: rgba(15, 23, 42, 0.45);
+  color: rgba(226, 232, 240, 0.75);
+  font-size: 0.9rem;
 }
 
 /* Hourly */

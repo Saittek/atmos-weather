@@ -56,7 +56,20 @@ export async function reverseGeocode(lat: number, lon: number): Promise<Location
   }
 }
 
+/** Short in-memory cache — soft refresh / StrictMode double-fetch */
+const forecastCache = new Map<string, { at: number; data: WeatherData }>()
+const airCache = new Map<string, { at: number; data: AirQualityData | null }>()
+const FORECAST_TTL_MS = 90_000
+
+function cacheKey(lat: number, lon: number) {
+  return `${lat.toFixed(3)},${lon.toFixed(3)}`
+}
+
 export async function fetchWeather(lat: number, lon: number): Promise<WeatherData> {
+  const key = cacheKey(lat, lon)
+  const hit = forecastCache.get(key)
+  if (hit && Date.now() - hit.at < FORECAST_TTL_MS) return hit.data
+
   const params = new URLSearchParams({
     latitude: String(lat),
     longitude: String(lon),
@@ -129,7 +142,9 @@ export async function fetchWeather(lat: number, lon: number): Promise<WeatherDat
 
   const res = await fetch(`${FORECAST}?${params}`)
   if (!res.ok) throw new Error('Weather forecast failed')
-  return res.json()
+  const data = (await res.json()) as WeatherData
+  forecastCache.set(key, { at: Date.now(), data })
+  return data
 }
 
 const climateCache = new Map<
@@ -192,6 +207,10 @@ export async function fetchClimateNormal(
 }
 
 export async function fetchAirQuality(lat: number, lon: number): Promise<AirQualityData | null> {
+  const key = cacheKey(lat, lon)
+  const hit = airCache.get(key)
+  if (hit && Date.now() - hit.at < FORECAST_TTL_MS) return hit.data
+
   try {
     const pollen = [
       'alder_pollen',
@@ -220,8 +239,13 @@ export async function fetchAirQuality(lat: number, lon: number): Promise<AirQual
       forecast_days: '3',
     })
     const res = await fetch(`${AIR}?${params}`)
-    if (!res.ok) return null
-    return res.json()
+    if (!res.ok) {
+      airCache.set(key, { at: Date.now(), data: null })
+      return null
+    }
+    const data = (await res.json()) as AirQualityData
+    airCache.set(key, { at: Date.now(), data })
+    return data
   } catch {
     return null
   }

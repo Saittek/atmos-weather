@@ -23,10 +23,10 @@ createRoot(document.getElementById('root')!).render(
 )
 
 // Service worker only for browser PWA — not needed inside Capacitor WebView
-if ('serviceWorker' in navigator && !isNativeApp()) {
+if ('serviceWorker' in navigator && !isNativeApp() && import.meta.env.PROD) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {
-      /* ignore SW errors in dev */
+    navigator.serviceWorker.register('./sw.js').catch(() => {
+      /* ignore SW errors */
     })
   })
 }

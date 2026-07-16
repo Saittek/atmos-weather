@@ -70,37 +70,52 @@ export function productSettings(product: RadarProduct): {
   }
 }
 
+let radarMapsCache: { at: number; data: RadarMaps } | null = null
+const RADAR_MAPS_TTL_MS = 60_000
+
 export async function fetchRadarMaps(): Promise<RadarMaps> {
+  if (radarMapsCache && Date.now() - radarMapsCache.at < RADAR_MAPS_TTL_MS) {
+    return radarMapsCache.data
+  }
   const res = await fetch(MAPS_URL)
   if (!res.ok) throw new Error('Radar data failed to load')
-  return res.json()
+  const data = (await res.json()) as RadarMaps
+  radarMapsCache = { at: Date.now(), data }
+  return data
 }
 
-export function getAllFrames(maps: RadarMaps): RadarFrame[] {
+/**
+ * Radar loop frames. Caps past frames so mobile doesn't stack 20+ tile layers.
+ * @param maxPast keep the most recent N past frames (null = all)
+ */
+export function getAllFrames(maps: RadarMaps, maxPast: number | null = null): RadarFrame[] {
   const past = maps.radar?.past ?? []
   const nowcast = maps.radar?.nowcast ?? []
-  return [...past, ...nowcast]
+  const pastSlice =
+    maxPast != null && past.length > maxPast ? past.slice(past.length - maxPast) : past
+  return [...pastSlice, ...nowcast]
 }
 
 export function getSatelliteFrames(maps: RadarMaps): RadarFrame[] {
   return maps.satellite?.infrared ?? []
 }
 
-/** High-quality 512px tiles */
+/** Radar tiles — 512 desktop quality, 256 on constrained devices */
 export function tileUrl(
   host: string,
   path: string,
   color: ColorScheme = 2,
   smooth = true,
   snow = true,
+  size: 256 | 512 = 512,
 ): string {
   const options = `${smooth ? 1 : 0}_${snow ? 1 : 0}`
-  return `${host}${path}/512/{z}/{x}/{y}/${color}/${options}.png`
+  return `${host}${path}/${size}/{z}/{x}/{y}/${color}/${options}.png`
 }
 
 /** Infrared satellite (RainViewer) */
-export function satelliteTileUrl(host: string, path: string): string {
-  return `${host}${path}/512/{z}/{x}/{y}/0/0_0.png`
+export function satelliteTileUrl(host: string, path: string, size: 256 | 512 = 512): string {
+  return `${host}${path}/${size}/{z}/{x}/{y}/0/0_0.png`
 }
 
 export function coverageTileUrl(host: string): string {

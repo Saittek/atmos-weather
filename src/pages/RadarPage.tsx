@@ -1,9 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { RadarMap } from '../components/RadarMap'
 import { reverseGeocode } from '../api/weather'
 import type { LocationResult } from '../api/types'
 import type { Units } from '../utils/format'
+
+const RadarMap = lazy(() =>
+  import('../components/RadarMap').then((m) => ({ default: m.RadarMap })),
+)
 
 function readStoredLocation(): LocationResult | null {
   try {
@@ -114,14 +117,23 @@ export default function RadarPage() {
         </div>
       </header>
       <div className="radar-page-map">
-        <RadarMap
-          lat={place.latitude}
-          lon={place.longitude}
-          placeName={place.name}
-          units={units}
-          mapId="radar-page-map"
-          pageMode
-        />
+        <Suspense
+          fallback={
+            <div className="map-chunk-fallback radar-page-fallback" role="status">
+              <div className="spinner large" />
+              <span>Loading radar…</span>
+            </div>
+          }
+        >
+          <RadarMap
+            lat={place.latitude}
+            lon={place.longitude}
+            placeName={place.name}
+            units={units}
+            mapId="radar-page-map"
+            pageMode
+          />
+        </Suspense>
       </div>
     </div>
   )
