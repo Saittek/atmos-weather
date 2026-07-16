@@ -1,143 +1,288 @@
-import type { RadarFrame, RadarMaps } from './types'
+/**
+ * Solara multi-source radar
+ * - US NEXRAD (Iowa Environmental Mesonet) — high-quality CONUS reflectivity
+ * - US precipitation Q2 (IEM)
+ * - GOES East/West IR & VIS (IEM)
+ * - Global precip loop (RainViewer)
+ * - Global IR (NASA GIBS)
+ */
 
-const MAPS_URL = 'https://api.rainviewer.com/public/weather-maps.json'
+export type RadarSourceId =
+  | 'us_nexrad_live'
+  | 'us_nexrad_loop'
+  | 'us_precip'
+  | 'global_loop'
+  | 'goes_east_ir'
+  | 'goes_west_ir'
+  | 'goes_east_vis'
+  | 'nasa_ir'
+  | 'us_combo'
 
-export type ColorScheme = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
-
-/** High-level radar / imagery products shown in the map UI */
-export type RadarProduct =
-  | 'precip'
-  | 'rain'
-  | 'snow'
-  | 'classic'
-  | 'nexrad'
-  | 'storm'
-  | 'satellite'
-  | 'combo'
-
-export const RADAR_PRODUCTS: {
-  id: RadarProduct
-  name: string
-  desc: string
-}[] = [
-  { id: 'precip', name: 'Precip radar', desc: 'Rain + snow, smoothed' },
-  { id: 'rain', name: 'Rain only', desc: 'Precipitation without snow tint' },
-  { id: 'snow', name: 'Snow mode', desc: 'Snow differentiation on' },
-  { id: 'classic', name: 'Classic radar', desc: 'Raw tiles, no smooth' },
-  { id: 'nexrad', name: 'NEXRAD colors', desc: 'US Level-III palette' },
-  { id: 'storm', name: 'Storm track', desc: 'High-contrast TITAN colors' },
-  { id: 'satellite', name: 'Satellite IR', desc: 'Cloud tops (RainViewer or NASA GIBS)' },
-  { id: 'combo', name: 'Radar + sat', desc: 'Precip over infrared clouds' },
-]
-
-export const COLOR_SCHEMES: { id: ColorScheme; name: string; desc: string }[] = [
-  { id: 2, name: 'Universal Blue', desc: 'Clear blues — great contrast' },
-  { id: 4, name: 'Weather Channel', desc: 'Classic TV radar look' },
-  { id: 6, name: 'NEXRAD III', desc: 'US NEXRAD Level-III colors' },
-  { id: 3, name: 'TITAN', desc: 'High-contrast storm tracking' },
-  { id: 7, name: 'Rainbow', desc: 'Full spectrum intensity' },
-  { id: 5, name: 'Meteored', desc: 'European style' },
-  { id: 8, name: 'Dark Sky', desc: 'Muted modern palette' },
-  { id: 1, name: 'Original', desc: 'RainViewer original' },
-  { id: 0, name: 'B&W', desc: 'Black & white' },
-]
-
-export function productSettings(product: RadarProduct): {
-  color: ColorScheme
-  smooth: boolean
-  snow: boolean
-  showRadar: boolean
-  showSatellite: boolean
-} {
-  switch (product) {
-    case 'rain':
-      return { color: 2, smooth: true, snow: false, showRadar: true, showSatellite: false }
-    case 'snow':
-      return { color: 6, smooth: true, snow: true, showRadar: true, showSatellite: false }
-    case 'classic':
-      return { color: 4, smooth: false, snow: true, showRadar: true, showSatellite: false }
-    case 'nexrad':
-      return { color: 6, smooth: true, snow: true, showRadar: true, showSatellite: false }
-    case 'storm':
-      return { color: 3, smooth: true, snow: true, showRadar: true, showSatellite: false }
-    case 'satellite':
-      return { color: 2, smooth: true, snow: true, showRadar: false, showSatellite: true }
-    case 'combo':
-      return { color: 2, smooth: true, snow: true, showRadar: true, showSatellite: true }
-    case 'precip':
-    default:
-      return { color: 6, smooth: true, snow: true, showRadar: true, showSatellite: false }
-  }
+export interface RadarFrame {
+  /** Unix seconds (UTC) when known */
+  time: number
+  /** Source-specific frame id / path segment */
+  key: string
+  label?: string
 }
 
-let radarMapsCache: { at: number; data: RadarMaps } | null = null
-const RADAR_MAPS_TTL_MS = 60_000
+export interface RadarSourceMeta {
+  id: RadarSourceId
+  name: string
+  desc: string
+  /** Rough coverage hint for the UI */
+  coverage: 'US' | 'Global' | 'GOES-E' | 'GOES-W'
+  animated: boolean
+  maxNativeZoom: number
+  attribution: string
+}
 
-export async function fetchRadarMaps(): Promise<RadarMaps> {
-  if (radarMapsCache && Date.now() - radarMapsCache.at < RADAR_MAPS_TTL_MS) {
-    return radarMapsCache.data
+export const RADAR_SOURCES: RadarSourceMeta[] = [
+  {
+    id: 'us_nexrad_live',
+    name: 'US NEXRAD (live)',
+    desc: 'CONUS base reflectivity — Iowa State IEM',
+    coverage: 'US',
+    animated: false,
+    maxNativeZoom: 8,
+    attribution: 'Radar © Iowa Environmental Mesonet / NWS NEXRAD',
+  },
+  {
+    id: 'us_nexrad_loop',
+    name: 'US NEXRAD (loop)',
+    desc: 'Animated national mosaic (~5 min steps)',
+    coverage: 'US',
+    animated: true,
+    maxNativeZoom: 8,
+    attribution: 'Radar © Iowa Environmental Mesonet / NWS NEXRAD',
+  },
+  {
+    id: 'us_precip',
+    name: 'US precip rate',
+    desc: 'MRMS/Q2 1-hour precip estimate',
+    coverage: 'US',
+    animated: false,
+    maxNativeZoom: 8,
+    attribution: 'Precip © Iowa Environmental Mesonet / NSSL MRMS',
+  },
+  {
+    id: 'global_loop',
+    name: 'Global radar (loop)',
+    desc: 'Worldwide precip mosaic with forecast frames',
+    coverage: 'Global',
+    animated: true,
+    maxNativeZoom: 7,
+    attribution: 'Radar © RainViewer',
+  },
+  {
+    id: 'goes_east_ir',
+    name: 'GOES-East IR',
+    desc: 'Infrared cloud tops (Americas east)',
+    coverage: 'GOES-E',
+    animated: false,
+    maxNativeZoom: 7,
+    attribution: 'Satellite © NOAA GOES / IEM',
+  },
+  {
+    id: 'goes_west_ir',
+    name: 'GOES-West IR',
+    desc: 'Infrared cloud tops (Pacific / west)',
+    coverage: 'GOES-W',
+    animated: false,
+    maxNativeZoom: 7,
+    attribution: 'Satellite © NOAA GOES / IEM',
+  },
+  {
+    id: 'goes_east_vis',
+    name: 'GOES-East visible',
+    desc: 'Daytime cloud detail (east)',
+    coverage: 'GOES-E',
+    animated: false,
+    maxNativeZoom: 8,
+    attribution: 'Satellite © NOAA GOES / IEM',
+  },
+  {
+    id: 'nasa_ir',
+    name: 'Global IR (NASA)',
+    desc: 'MODIS brightness temperature worldwide',
+    coverage: 'Global',
+    animated: false,
+    maxNativeZoom: 7,
+    attribution: 'Imagery © NASA GIBS / MODIS Aqua',
+  },
+  {
+    id: 'us_combo',
+    name: 'US radar + IR',
+    desc: 'NEXRAD over GOES-East infrared',
+    coverage: 'US',
+    animated: false,
+    maxNativeZoom: 8,
+    attribution: 'NEXRAD + GOES © IEM / NOAA',
+  },
+]
+
+export function getSourceMeta(id: RadarSourceId): RadarSourceMeta {
+  return RADAR_SOURCES.find((s) => s.id === id) ?? RADAR_SOURCES[0]
+}
+
+/** Pick a sensible default from coordinates */
+export function defaultSourceForLocation(lat: number, lon: number): RadarSourceId {
+  // CONUS-ish + nearshore
+  if (lat >= 20 && lat <= 55 && lon >= -130 && lon <= -60) return 'us_nexrad_loop'
+  // Alaska / Hawaii still benefit from GOES + global
+  if (lat >= 50 && lon >= -180 && lon <= -130) return 'goes_west_ir'
+  if (lat >= 15 && lat <= 30 && lon >= -180 && lon <= -140) return 'goes_west_ir'
+  return 'global_loop'
+}
+
+const IEM_TILE = 'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0'
+
+function floorToStep(ms: number, stepMin: number): number {
+  const step = stepMin * 60_000
+  return Math.floor(ms / step) * step
+}
+
+function utcStamp(ms: number): string {
+  const d = new Date(ms)
+  const y = d.getUTCFullYear()
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(d.getUTCDate()).padStart(2, '0')
+  const h = String(d.getUTCHours()).padStart(2, '0')
+  const mi = String(d.getUTCMinutes()).padStart(2, '0')
+  return `${y}${m}${day}${h}${mi}`
+}
+
+/** Build IEM ridge archive frames for national N0Q mosaic */
+export function buildIemNexradFrames(hoursBack = 1.5, stepMin = 5): RadarFrame[] {
+  const end = floorToStep(Date.now() - 10 * 60_000, stepMin) // avoid incomplete latest
+  const start = end - hoursBack * 3600_000
+  const frames: RadarFrame[] = []
+  for (let t = start; t <= end; t += stepMin * 60_000) {
+    const stamp = utcStamp(t)
+    frames.push({
+      time: Math.floor(t / 1000),
+      key: `ridge::USCOMP-N0Q-${stamp}`,
+      label: stamp,
+    })
   }
-  const res = await fetch(MAPS_URL)
-  if (!res.ok) throw new Error('Radar data failed to load')
-  const data = (await res.json()) as RadarMaps
-  radarMapsCache = { at: Date.now(), data }
+  return frames
+}
+
+// ── RainViewer (global animated) ─────────────────────────────────────
+
+interface RvMaps {
+  host: string
+  radar?: { past?: { time: number; path: string }[]; nowcast?: { time: number; path: string }[] }
+}
+
+let rvCache: { at: number; data: RvMaps } | null = null
+
+export async function fetchRainViewerMaps(): Promise<RvMaps> {
+  if (rvCache && Date.now() - rvCache.at < 60_000) return rvCache.data
+  const res = await fetch('https://api.rainviewer.com/public/weather-maps.json')
+  if (!res.ok) throw new Error('Global radar index failed')
+  const data = (await res.json()) as RvMaps
+  rvCache = { at: Date.now(), data }
   return data
 }
 
-/**
- * Radar loop frames. Caps past frames so mobile doesn't stack 20+ tile layers.
- * @param maxPast keep the most recent N past frames (null = all)
- */
-export function getAllFrames(maps: RadarMaps, maxPast: number | null = null): RadarFrame[] {
+export function rainViewerFrames(maps: RvMaps, maxPast = 12): RadarFrame[] {
   const past = maps.radar?.past ?? []
   const nowcast = maps.radar?.nowcast ?? []
-  const pastSlice =
-    maxPast != null && past.length > maxPast ? past.slice(past.length - maxPast) : past
-  return [...pastSlice, ...nowcast]
+  const slice = past.length > maxPast ? past.slice(past.length - maxPast) : past
+  return [...slice, ...nowcast].map((f) => ({
+    time: f.time,
+    key: f.path,
+    label: String(f.time),
+  }))
 }
 
-export function getSatelliteFrames(maps: RadarMaps): RadarFrame[] {
-  return maps.satellite?.infrared ?? []
-}
+// ── Frame loaders ────────────────────────────────────────────────────
 
-/** Radar tiles — 512 desktop quality, 256 on constrained devices */
-export function tileUrl(
-  host: string,
-  path: string,
-  color: ColorScheme = 2,
-  smooth = true,
-  snow = true,
-  size: 256 | 512 = 512,
-): string {
-  const options = `${smooth ? 1 : 0}_${snow ? 1 : 0}`
-  return `${host}${path}/${size}/{z}/{x}/{y}/${color}/${options}.png`
-}
-
-/** Infrared satellite (RainViewer) */
-export function satelliteTileUrl(host: string, path: string, size: 256 | 512 = 512): string {
-  return `${host}${path}/${size}/{z}/{x}/{y}/0/0_0.png`
-}
-
-export function coverageTileUrl(host: string): string {
-  return `${host}/v2/coverage/0/256/{z}/{x}/{y}/0/0_0.png`
+export async function loadFrames(
+  sourceId: RadarSourceId,
+  opts?: { lite?: boolean },
+): Promise<RadarFrame[]> {
+  const lite = Boolean(opts?.lite)
+  switch (sourceId) {
+    case 'us_nexrad_loop':
+      return buildIemNexradFrames(lite ? 1 : 1.5, 5)
+    case 'global_loop': {
+      const maps = await fetchRainViewerMaps()
+      return rainViewerFrames(maps, lite ? 8 : 14)
+    }
+    case 'us_nexrad_live':
+    case 'us_precip':
+    case 'goes_east_ir':
+    case 'goes_west_ir':
+    case 'goes_east_vis':
+    case 'nasa_ir':
+    case 'us_combo':
+      return [{ time: Math.floor(Date.now() / 1000), key: 'live' }]
+    default:
+      return []
+  }
 }
 
 /**
- * NASA GIBS IR brightness-temp tiles — used when RainViewer satellite frames
- * are empty (common). Date is YYYY-MM-DD UTC.
- * Layer verified: MODIS Aqua Band 31 Night.
+ * Leaflet tile URL template for the primary animated/live layer.
+ * Uses {z}/{x}/{y} placeholders.
  */
+export function primaryTileUrl(
+  sourceId: RadarSourceId,
+  frame: RadarFrame | null,
+  rvHost?: string,
+): string | null {
+  if (!frame) return null
+  switch (sourceId) {
+    case 'us_nexrad_live':
+      return `${IEM_TILE}/nexrad-n0q-900913/{z}/{x}/{y}.png`
+    case 'us_nexrad_loop':
+      return `${IEM_TILE}/${frame.key}/{z}/{x}/{y}.png`
+    case 'us_precip':
+      return `${IEM_TILE}/q2-n1p-900913/{z}/{x}/{y}.png`
+    case 'global_loop': {
+      const host = (rvHost ?? 'https://tilecache.rainviewer.com').replace(/\/$/, '')
+      // color 6 NEXRAD-ish, smooth+snow
+      return `${host}${frame.key}/256/{z}/{x}/{y}/6/1_1.png`
+    }
+    case 'goes_east_ir':
+      return `${IEM_TILE}/goes-east-ir-4km-900913/{z}/{x}/{y}.png`
+    case 'goes_west_ir':
+      return `${IEM_TILE}/goes-west-ir-4km-900913/{z}/{x}/{y}.png`
+    case 'goes_east_vis':
+      return `${IEM_TILE}/goes-east-vis-1km-900913/{z}/{x}/{y}.png`
+    case 'nasa_ir':
+      return gibsInfraredTileUrl()
+    case 'us_combo':
+      // Primary is NEXRAD; IR is secondary layer
+      return `${IEM_TILE}/nexrad-n0q-900913/{z}/{x}/{y}.png`
+    default:
+      return null
+  }
+}
+
+/** Optional secondary layer (e.g. IR under radar for combo) */
+export function secondaryTileUrl(sourceId: RadarSourceId): string | null {
+  if (sourceId === 'us_combo') {
+    return `${IEM_TILE}/goes-east-ir-4km-900913/{z}/{x}/{y}.png`
+  }
+  return null
+}
+
 export function gibsInfraredTileUrl(date = new Date()): string {
   const d = new Date(date)
-  // GIBS often lags ~1 day for some products; use yesterday for reliability
   d.setUTCDate(d.getUTCDate() - 1)
   const y = d.getUTCFullYear()
   const m = String(d.getUTCMonth() + 1).padStart(2, '0')
   const day = String(d.getUTCDate()).padStart(2, '0')
-  const time = `${y}-${m}-${day}`
-  return `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Aqua_Brightness_Temp_Band31_Night/default/${time}/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png`
+  return `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Aqua_Brightness_Temp_Band31_Night/default/${y}-${m}-${day}/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png`
 }
 
-export function gibsInfraredAttribution(): string {
-  return 'Imagery &copy; NASA GIBS / MODIS Aqua'
-}
+/** @deprecated kept for any leftover imports */
+export type RadarProduct = RadarSourceId
+export const RADAR_PRODUCTS = RADAR_SOURCES.map((s) => ({
+  id: s.id as string,
+  name: s.name,
+  desc: s.desc,
+}))

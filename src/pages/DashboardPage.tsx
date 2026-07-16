@@ -351,6 +351,18 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* Mobile: saved places first — pick a location, then scroll into weather */}
+        <div className="favorites-mobile-slot" id="favorites">
+          <Favorites
+            favorites={favorites}
+            current={location}
+            onSelect={loadForLocation}
+            onRemove={toggleFavorite}
+            signedIn={!!user}
+            accountSynced={cloudSynced}
+          />
+        </div>
+
         {!location && !loading && !error && (
           <div className="empty-state empty-state-rich">
             <div className="empty-icon" aria-hidden>
@@ -425,18 +437,6 @@ export default function DashboardPage() {
               {stormMode && radarBlock}
 
               <WeekStrip weather={weather} units={units} />
-
-              {/* Favorites near the top on phones (side column is far down when stacked) */}
-              <div className="favorites-mobile-slot" id="favorites">
-                <Favorites
-                  favorites={favorites}
-                  current={location}
-                  onSelect={loadForLocation}
-                  onRemove={toggleFavorite}
-                  signedIn={!!user}
-                  accountSynced={cloudSynced}
-                />
-              </div>
 
               <HomePins
                 snapshots={rainWatch.snapshots}
@@ -550,6 +550,10 @@ export default function DashboardPage() {
                     Open-Meteo
                   </a>
                   . Radar by{' '}
+                  <a href="https://mesonet.agron.iastate.edu/" target="_blank" rel="noreferrer">
+                    IEM NEXRAD
+                  </a>
+                  {' / '}
                   <a href="https://www.rainviewer.com/" target="_blank" rel="noreferrer">
                     RainViewer
                   </a>
