@@ -9,24 +9,50 @@ import { initNativeShell, isNativeApp } from './lib/native'
 
 void initNativeShell()
 
-// Vite base './' for Capacitor; keep router basename empty so routes stay /
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <ErrorBoundary>
-      <BrowserRouter>
-        <AuthProvider>
-          <App />
-        </AuthProvider>
-      </BrowserRouter>
-    </ErrorBoundary>
-  </StrictMode>,
-)
+const rootEl = document.getElementById('root')
+if (rootEl) {
+  createRoot(rootEl).render(
+    <StrictMode>
+      <ErrorBoundary>
+        <BrowserRouter>
+          <AuthProvider>
+            <App />
+          </AuthProvider>
+        </BrowserRouter>
+      </ErrorBoundary>
+    </StrictMode>,
+  )
+}
 
-// Service worker only for browser PWA — not needed inside Capacitor WebView
+// Service worker: production browser only. Force update so mobile leaves stale shells.
 if ('serviceWorker' in navigator && !isNativeApp() && import.meta.env.PROD) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch(() => {
-      /* ignore SW errors */
-    })
+    void navigator.serviceWorker
+      .register('/sw.js', { updateViaCache: 'none' })
+      .then((reg) => {
+        reg.update().catch(() => {})
+        // If a new worker is waiting, activate it
+        if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' })
+        reg.addEventListener('updatefound', () => {
+          const nw = reg.installing
+          if (!nw) return
+          nw.addEventListener('statechange', () => {
+            if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+              // Soft-reload once so mobile picks up the fixed shell
+              try {
+                if (!sessionStorage.getItem('solara-sw-reloaded')) {
+                  sessionStorage.setItem('solara-sw-reloaded', '1')
+                  window.location.reload()
+                }
+              } catch {
+                /* ignore */
+              }
+            }
+          })
+        })
+      })
+      .catch(() => {
+        /* ignore SW errors */
+      })
   })
 }

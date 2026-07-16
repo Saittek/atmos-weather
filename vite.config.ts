@@ -1,10 +1,13 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+// Absolute paths for the live web app (fixes mobile SPA routes like /radar).
+// Capacitor iOS builds set CAPACITOR=1 for relative paths in the app bundle.
+const isCapacitor = process.env.CAPACITOR === '1'
+
 export default defineConfig({
   plugins: [react()],
-  // Relative paths required so Capacitor can load assets from the app bundle
-  base: './',
+  base: isCapacitor ? './' : '/',
   server: {
     proxy: {
       '/api': {
@@ -16,10 +19,14 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
-    target: 'es2022',
+    target: 'es2020',
     cssCodeSplit: true,
-    // Smaller runtime polyfill surface; modern browsers only
-    modulePreload: { polyfill: false },
+    modulePreload: {
+      polyfill: false,
+      // Don't force-load Leaflet on first paint (mobile bandwidth / parse cost)
+      resolveDependencies: (_filename, deps) =>
+        deps.filter((d) => !d.includes('map-vendor')),
+    },
     rollupOptions: {
       output: {
         manualChunks(id) {

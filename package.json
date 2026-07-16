@@ -8,7 +8,7 @@
     "server": "node server/index.js",
     "dev:web": "vite",
     "build": "tsc -b && vite build",
-    "build:ios": "tsc -b && vite build && npx cap sync ios",
+    "build:ios": "tsc -b && vite build --base ./ && npx cap sync ios",
     "ios:open": "npx cap open ios",
     "ios:sync": "npx cap sync ios",
     "ios:prepare": "npm run build && npx cap sync ios",

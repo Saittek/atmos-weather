@@ -255,17 +255,15 @@ export default function DashboardPage() {
           <div className="brand">
             <img
               className="brand-mark"
-              src="./icons/solara-logo.png"
+              src="/icons/solara-logo.png"
               alt=""
-              width={36}
-              height={36}
+              width={48}
+              height={48}
               decoding="async"
             />
             <div>
               <strong>Solara</strong>
-              <span className="brand-tag">
-                {stormMode ? 'Storm mode' : 'Will you get wet?'}
-              </span>
+              {stormMode && <span className="brand-tag">Storm mode</span>}
             </div>
           </div>
           <SearchBar
@@ -354,7 +352,7 @@ export default function DashboardPage() {
         {!location && !loading && !error && (
           <div className="empty-state empty-state-rich">
             <div className="empty-icon" aria-hidden>
-              <img src="./icons/solara-logo.png" alt="" width={72} height={72} decoding="async" />
+              <img src="/icons/solara-logo.png" alt="" width={72} height={72} decoding="async" />
             </div>
             <h1>Where should we look?</h1>
             <p className="empty-lead">

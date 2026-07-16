@@ -1,21 +1,18 @@
-/* Solara PWA service worker — fast shell + immutable asset cache */
-const CACHE = 'solara-v1'
-const PRECACHE = ['/', '/index.html', '/manifest.webmanifest', '/icons/icon.svg']
+/* Solara PWA — network-first HTML, cache hashed assets only */
+const CACHE = 'solara-v3'
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches
-      .open(CACHE)
-      .then((cache) => cache.addAll(PRECACHE))
-      .then(() => self.skipWaiting()),
-  )
+  // Activate immediately so mobile clients leave broken old caches
+  event.waitUntil(self.skipWaiting())
 })
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) =>
+        Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))),
+      )
       .then(() => self.clients.claim()),
   )
 })
@@ -34,7 +31,8 @@ function isLiveHost(hostname) {
     hostname.includes('cartocdn') ||
     hostname.includes('firms.modaps') ||
     hostname.includes('googleapis') ||
-    hostname.includes('gstatic')
+    hostname.includes('gstatic') ||
+    hostname.includes('imagine-public')
   )
 }
 
@@ -42,20 +40,34 @@ self.addEventListener('fetch', (event) => {
   const { request } = event
   if (request.method !== 'GET') return
 
-  const url = new URL(request.url)
+  let url
+  try {
+    url = new URL(request.url)
+  } catch {
+    return
+  }
 
-  // Never intercept API or live weather / map tiles
+  // Never cache API / live weather / tiles
   if (url.pathname.startsWith('/api') || isLiveHost(url.hostname)) {
     return
   }
 
-  // SPA navigation: network first, fall back to app shell
-  if (request.mode === 'navigate' && url.origin === self.location.origin) {
+  // Navigations & HTML: always network-first (avoids white screen after deploys)
+  const accept = request.headers.get('accept') || ''
+  const isHtmlNav =
+    request.mode === 'navigate' ||
+    url.pathname === '/' ||
+    url.pathname.endsWith('.html') ||
+    accept.includes('text/html')
+
+  if (isHtmlNav && url.origin === self.location.origin) {
     event.respondWith(
       fetch(request)
         .then((res) => {
-          const copy = res.clone()
-          caches.open(CACHE).then((c) => c.put('/index.html', copy))
+          if (res.ok) {
+            const copy = res.clone()
+            caches.open(CACHE).then((c) => c.put('/index.html', copy)).catch(() => {})
+          }
           return res
         })
         .catch(() =>
@@ -67,15 +79,15 @@ self.addEventListener('fetch', (event) => {
 
   if (url.origin !== self.location.origin) return
 
-  // Hashed build assets: cache-first (immutable filenames)
-  if (url.pathname.includes('/assets/')) {
+  // Hashed JS/CSS: cache-first (filename changes every deploy)
+  if (url.pathname.startsWith('/assets/')) {
     event.respondWith(
       caches.match(request).then((cached) => {
         if (cached) return cached
         return fetch(request).then((res) => {
           if (res.ok) {
             const copy = res.clone()
-            caches.open(CACHE).then((c) => c.put(request, copy))
+            caches.open(CACHE).then((c) => c.put(request, copy)).catch(() => {})
           }
           return res
         })
@@ -84,18 +96,18 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // Other same-origin: stale-while-revalidate
+  // Icons / static: stale-while-revalidate
   event.respondWith(
     caches.match(request).then((cached) => {
       const network = fetch(request)
         .then((res) => {
           if (res.ok) {
             const copy = res.clone()
-            caches.open(CACHE).then((c) => c.put(request, copy))
+            caches.open(CACHE).then((c) => c.put(request, copy)).catch(() => {})
           }
           return res
         })
-        .catch(() => cached || caches.match('/index.html'))
+        .catch(() => cached)
       return cached || network
     }),
   )

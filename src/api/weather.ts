@@ -427,8 +427,69 @@ function mapEcAlert(f: {
   }
 }
 
+/** Ray-cast point-in-ring (GeoJSON [lon, lat] rings). */
+function pointInRing(lon: number, lat: number, ring: number[][]): boolean {
+  let inside = false
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i]?.[0]
+    const yi = ring[i]?.[1]
+    const xj = ring[j]?.[0]
+    const yj = ring[j]?.[1]
+    if (
+      xi == null ||
+      yi == null ||
+      xj == null ||
+      yj == null ||
+      !Number.isFinite(xi) ||
+      !Number.isFinite(yi) ||
+      !Number.isFinite(xj) ||
+      !Number.isFinite(yj)
+    ) {
+      continue
+    }
+    if (yi === yj) continue
+    const intersect = yi > lat !== yj > lat && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi
+    if (intersect) inside = !inside
+  }
+  return inside
+}
+
+/**
+ * True if lat/lon lies inside a GeoJSON Polygon / MultiPolygon.
+ * Returns null when geometry is missing or unsupported (caller decides).
+ */
+function pointInGeometry(
+  lon: number,
+  lat: number,
+  geometry: { type?: string; coordinates?: unknown } | null | undefined,
+): boolean | null {
+  if (!geometry?.type || geometry.coordinates == null) return null
+  const type = geometry.type
+
+  const inPolygon = (coords: number[][][]): boolean => {
+    if (!coords?.length || !coords[0]?.length) return false
+    // exterior
+    if (!pointInRing(lon, lat, coords[0])) return false
+    // holes
+    for (let h = 1; h < coords.length; h++) {
+      if (pointInRing(lon, lat, coords[h])) return false
+    }
+    return true
+  }
+
+  if (type === 'Polygon') {
+    return inPolygon(geometry.coordinates as number[][][])
+  }
+  if (type === 'MultiPolygon') {
+    const multi = geometry.coordinates as number[][][][]
+    return multi.some((poly) => inPolygon(poly))
+  }
+  return null
+}
+
 async function fetchUsAlerts(lat: number, lon: number): Promise<WeatherAlert[]> {
   try {
+    // NWS point endpoint only returns alerts whose footprint includes this location
     const res = await fetch(`${NWS}/alerts/active?point=${lat},${lon}`, {
       headers: {
         Accept: 'application/geo+json',
@@ -439,20 +500,29 @@ async function fetchUsAlerts(lat: number, lon: number): Promise<WeatherAlert[]> 
     const data = await res.json()
     const now = Date.now()
     return (data.features ?? [])
-      .filter((f: { properties?: Record<string, unknown> }) => {
-        const p = f.properties ?? {}
-        const status = String(p.status ?? '').toLowerCase()
-        const messageType = String(p.messageType ?? '').toLowerCase()
-        // Drop non-public / cancelled traffic even if still in a feed
-        if (status === 'test' || status === 'draft' || status === 'exercise') return false
-        if (messageType === 'cancel') return false
-        const ends = p.ends ?? p.expires
-        if (ends != null) {
-          const t = Date.parse(String(ends))
-          if (Number.isFinite(t) && t <= now) return false
-        }
-        return true
-      })
+      .filter(
+        (f: {
+          properties?: Record<string, unknown>
+          geometry?: { type?: string; coordinates?: unknown } | null
+        }) => {
+          const p = f.properties ?? {}
+          const status = String(p.status ?? '').toLowerCase()
+          const messageType = String(p.messageType ?? '').toLowerCase()
+          // Drop non-public / cancelled traffic even if still in a feed
+          if (status === 'test' || status === 'draft' || status === 'exercise') return false
+          if (messageType === 'cancel') return false
+          const ends = p.ends ?? p.expires
+          if (ends != null) {
+            const t = Date.parse(String(ends))
+            if (Number.isFinite(t) && t <= now) return false
+          }
+          // If geometry is present, require the exact point inside it
+          // (skips rare edge cases / oversized footprints with bad bbox only)
+          const inside = pointInGeometry(lon, lat, f.geometry)
+          if (inside === false) return false
+          return true
+        },
+      )
       .map((f: { id: string; properties: Record<string, unknown> }) => mapNwsAlert(f))
   } catch {
     return []
@@ -461,14 +531,15 @@ async function fetchUsAlerts(lat: number, lon: number): Promise<WeatherAlert[]> 
 
 /**
  * Canadian public weather alerts via MSC GeoMet OGC API (Environment Canada).
- * Uses a small bbox around the point — CORS-enabled, no API key.
+ * Fetches a tight bbox, then keeps only polygons that actually contain the point
+ * (not neighboring forecast regions).
  */
 async function fetchCanadaAlerts(lat: number, lon: number): Promise<WeatherAlert[]> {
   try {
-    // ~25–30 km box; enough to catch the local forecast region polygon
-    const d = 0.25
+    // Small fetch window only — final filter is point-in-polygon on each feature
+    const d = 0.08
     const bbox = [lon - d, lat - d, lon + d, lat + d].map((n) => n.toFixed(5)).join(',')
-    const url = `${EC_ALERTS}?f=json&limit=50&bbox=${bbox}`
+    const url = `${EC_ALERTS}?f=json&limit=80&bbox=${bbox}`
     const res = await fetch(url, {
       headers: { Accept: 'application/geo+json' },
     })
@@ -477,12 +548,19 @@ async function fetchCanadaAlerts(lat: number, lon: number): Promise<WeatherAlert
     const features = (data.features ?? []) as {
       id?: string
       properties: Record<string, unknown>
+      geometry?: { type?: string; coordinates?: unknown } | null
     }[]
 
     // De-dupe by alert id (same alert can appear for overlapping features)
     const seen = new Set<string>()
     const alerts: WeatherAlert[] = []
     for (const f of features) {
+      // Only alerts whose polygon covers this exact location
+      const inside = pointInGeometry(lon, lat, f.geometry)
+      if (inside === false) continue
+      // No geometry: do not guess — skip (avoids neighboring area noise)
+      if (inside === null) continue
+
       const mapped = mapEcAlert(f)
       // Prefer unique event+area; EC ids already include feature
       if (seen.has(mapped.id)) continue
