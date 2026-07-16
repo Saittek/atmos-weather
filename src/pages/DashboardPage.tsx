@@ -415,6 +415,18 @@ export default function DashboardPage() {
 
               <WeekStrip weather={weather} units={units} />
 
+              {/* Favorites near the top on phones (side column is far down when stacked) */}
+              <div className="favorites-mobile-slot" id="favorites">
+                <Favorites
+                  favorites={favorites}
+                  current={location}
+                  onSelect={loadForLocation}
+                  onRemove={toggleFavorite}
+                  signedIn={!!user}
+                  accountSynced={cloudSynced}
+                />
+              </div>
+
               <HomePins
                 snapshots={rainWatch.snapshots}
                 loading={rainWatch.loading}
@@ -482,14 +494,16 @@ export default function DashboardPage() {
             </div>
 
             <aside className="col side-col">
-              <Favorites
-                favorites={favorites}
-                current={location}
-                onSelect={loadForLocation}
-                onRemove={toggleFavorite}
-                signedIn={!!user}
-                accountSynced={cloudSynced}
-              />
+              <div className="favorites-desktop-slot">
+                <Favorites
+                  favorites={favorites}
+                  current={location}
+                  onSelect={loadForLocation}
+                  onRemove={toggleFavorite}
+                  signedIn={!!user}
+                  accountSynced={cloudSynced}
+                />
+              </div>
               <DailyForecast weather={weather} units={units} />
 
               <AdvancedSection title="Planning & environment" defaultOpen={false} id="advanced-side">

@@ -868,7 +868,10 @@ a:hover {
   top: calc(100% + 8px);
   right: 0;
   z-index: 80;
-  width: min(280px, calc(100vw - 1.5rem));
+  width: min(300px, calc(100vw - 1.5rem));
+  max-height: min(70vh, 520px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 0.75rem;
   display: flex;
   flex-direction: column;
@@ -878,6 +881,71 @@ a:hover {
   border-radius: 14px;
   box-shadow: var(--shadow);
   backdrop-filter: blur(16px);
+}
+
+/* Mobile settings sheet — full access to every option */
+.settings-sheet-root {
+  display: none;
+}
+.settings-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  border: 0;
+  background: rgba(2, 6, 23, 0.65);
+  z-index: 100000;
+  cursor: pointer;
+}
+.settings-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 100001;
+  max-height: min(88dvh, 640px);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-elevated, #0f172a);
+  border: 1px solid var(--border-strong);
+  border-bottom: 0;
+  border-radius: 18px 18px 0 0;
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.45);
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+}
+.settings-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.settings-sheet-head strong {
+  font-size: 1.05rem;
+}
+.settings-sheet-body {
+  padding: 0.85rem 1rem 1.25rem;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  overscroll-behavior: contain;
+}
+/* Always show every theme option inside settings (override mobile compact rule) */
+.settings-theme-all button,
+.settings-sheet .theme-toggle button,
+.settings-more-menu .theme-toggle button {
+  display: inline-flex !important;
+  flex: 1;
+}
+
+/* Favorites: early on mobile, sidebar on desktop */
+.favorites-mobile-slot {
+  display: none;
+}
+.favorites-desktop-slot {
+  display: block;
 }
 .settings-more-section {
   display: flex;
@@ -2746,7 +2814,7 @@ select:focus-visible {
   .quick-nav {
     display: none !important;
   }
-  /* Slim action strip: Account + Refresh + ⋯ only */
+  /* Slim action strip: Account + ★ + Refresh + ⚙ */
   .topbar-desktop-only {
     display: none !important;
   }
@@ -2760,6 +2828,25 @@ select:focus-visible {
   }
   .settings-bar .unit-toggle {
     width: 100%;
+  }
+  /* Desktop dropdown off; use bottom sheet on phones */
+  .settings-more-desktop {
+    display: none !important;
+  }
+  .settings-sheet-root {
+    display: block;
+  }
+  .favorites-mobile-slot {
+    display: block;
+  }
+  .favorites-desktop-slot {
+    display: none !important;
+  }
+  .favorites-panel {
+    margin-bottom: 0.15rem;
+  }
+  .favorites-list {
+    max-height: none;
   }
   .account-btn {
     max-width: none;
@@ -2831,14 +2918,21 @@ select:focus-visible {
   .settings-bar .chip-toggle {
     display: none !important;
   }
-  .theme-toggle button:not(.active) {
-    display: none;
-  }
+  /* Do NOT hide inactive theme buttons — users need all settings on mobile */
 }
 
 @media (min-width: 721px) {
   .topbar-mobile-only {
     display: none !important;
+  }
+  .settings-sheet-root {
+    display: none !important;
+  }
+  .favorites-mobile-slot {
+    display: none !important;
+  }
+  .favorites-desktop-slot {
+    display: block !important;
   }
 }
 
