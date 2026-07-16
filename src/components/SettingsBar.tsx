@@ -72,9 +72,10 @@ export function SettingsBar({
     <div className="settings-bar">
       <AccountMenu onCloudSync={onCloudSync} synced={cloudSynced} />
 
+      {/* Hidden on narrow screens — available in ⋯ menu */}
       <button
         type="button"
-        className={`chip-btn icon-chip storm-chip ${stormMode ? 'active storm-on' : ''}`}
+        className={`chip-btn icon-chip storm-chip topbar-desktop-only ${stormMode ? 'active storm-on' : ''}`}
         onClick={() => onStormMode(!stormMode)}
         title="Storm mode: radar-first layout"
         aria-label="Storm mode"
@@ -83,11 +84,13 @@ export function SettingsBar({
         🌩
       </button>
 
-      <UnitToggle units={units} onChange={onUnits} />
+      <div className="topbar-desktop-only">
+        <UnitToggle units={units} onChange={onUnits} />
+      </div>
 
       <button
         type="button"
-        className={`chip-btn icon-chip ${isFavorite ? 'active' : ''}`}
+        className={`chip-btn icon-chip topbar-desktop-only ${isFavorite ? 'active' : ''}`}
         onClick={onToggleFavorite}
         title={isFavorite ? 'Remove favorite' : 'Save favorite'}
         aria-label={isFavorite ? 'Remove favorite' : 'Save favorite'}
@@ -120,6 +123,36 @@ export function SettingsBar({
         </button>
         {moreOpen && (
           <div className="settings-more-menu" role="menu">
+            {/* Mobile-first essentials (also fine on desktop) */}
+            <div className="settings-more-section topbar-mobile-only">
+              <span className="settings-more-label">Units</span>
+              <UnitToggle units={units} onChange={onUnits} />
+            </div>
+
+            <div className="settings-more-toggles topbar-mobile-only">
+              <label className="settings-more-row">
+                <input
+                  type="checkbox"
+                  checked={stormMode}
+                  onChange={(e) => onStormMode(e.target.checked)}
+                />
+                <span>
+                  <strong>Storm mode</strong>
+                  <em>Radar-first layout</em>
+                </span>
+              </label>
+              <button
+                type="button"
+                className="chip-btn settings-more-action"
+                role="menuitem"
+                onClick={() => {
+                  onToggleFavorite()
+                }}
+              >
+                {isFavorite ? '★ Remove favorite' : '☆ Save favorite'}
+              </button>
+            </div>
+
             <div className="settings-more-section">
               <span className="settings-more-label">Theme</span>
               <div className="unit-toggle theme-toggle" role="group" aria-label="Theme">

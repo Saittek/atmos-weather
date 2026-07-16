@@ -94,7 +94,8 @@ export function SearchBar({ onSelect, onUseLocation, geoLoading }: Props) {
         <input
           type="search"
           className="search-input"
-          placeholder="Search city, region, or place…"
+          placeholder="Search city or place…"
+          data-placeholder-long="Search city, region, or place…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => (results.length || failed) && setOpen(true)}

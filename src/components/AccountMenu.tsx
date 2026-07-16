@@ -28,8 +28,13 @@ export function AccountMenu({ onCloudSync, synced }: Props) {
           type="button"
           className="chip-btn account-btn account-signin"
           onClick={() => setAuthOpen(true)}
+          title="Account"
+          aria-label="Account"
         >
-          Account
+          <span className="account-signin-icon" aria-hidden>
+            👤
+          </span>
+          <span className="account-label">Account</span>
         </button>
         <AuthModal
           open={authOpen}
