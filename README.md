@@ -13,56 +13,51 @@ npm run dev
 This starts the **API** (`:8787` — auth, area chat, NASA FIRMS fires) and the **web app** together.  
 Open **http://localhost:5173/**
 
-## Deploy on Cloudflare Pages
+## Deploy on Cloudflare (SPA + accounts API)
 
-The UI is a static Vite build (output: `dist/`).  
-SPA routes (`/radar`, `/widget`) are handled by **`wrangler.toml`** →  
+Atmos ships as **one Worker**: static Vite assets (`dist/`) plus a Worker that handles  
+**`/api/*`** (auth, prefs sync, area chat, NASA FIRMS fires) on **D1**.
+
+SPA routes (`/radar`, `/widget`) use **`wrangler.toml`** →  
 `[assets] not_found_handling = "single-page-application"`.
 
 > **Do not** use `/* /index.html 200` in `_redirects` — Cloudflare returns  
 > error **100324** (infinite loop) when HTML extension stripping is enabled.
 
-### Option A — Connect Git (Pages)
-
-1. [Cloudflare Dashboard](https://dash.cloudflare.com/) → **Workers & Pages** → **Create** → **Pages** → **Connect to Git**.
-2. Select **Saittek/atmos-weather**.
-3. Build settings:
-
-| Setting | Value |
-|--------|--------|
-| **Framework preset** | Vite (or None) |
-| **Build command** | `npm run build` |
-| **Build output directory** | `dist` |
-| **Root directory** | blank (app is repo root) |
-
-4. **Save and Deploy**.
-
-### Option B — Wrangler CLI
+### Deploy with Wrangler (recommended)
 
 ```bash
+npm install
 npm run build
-npx wrangler pages deploy dist --project-name=atmos-weather
-# or (Workers static assets using wrangler.toml):
+# First time only — apply D1 schema + set JWT secret:
+npx wrangler d1 migrations apply atmos-db --remote
+# Interactive secret (pick a long random string):
+npx wrangler secret put JWT_SECRET
 npx wrangler deploy
 ```
 
-### What works on Cloudflare (static)
+Or one-shot after secrets/migrations are set: `npm run deploy`.
 
-Forecasts, radar, alerts (US/CA), most maps, PWA, local favorites — all call public APIs from the browser.
+The site is served from the Worker URL (e.g. `https://atmos-weather.<account>.workers.dev`).  
+The frontend calls **same-origin** `/api/*` — no `VITE_API_BASE` needed for web.
 
-### What needs a hosted API (optional)
+### Git / CI deploy
 
-Accounts/sync, area chat, and NASA FIRMS fire hotspots use `server/` (`/api/*`).  
-On static Pages alone those features degrade gracefully (or show “server offline”).
+Connect the repo so pushes run `npm run build` then `wrangler deploy` (Workers Builds  
+or your CI). Ensure `JWT_SECRET` is set as a Worker secret and D1 migrations are applied.
 
-To enable them later:
+### What works online
 
-1. Host `server/` somewhere with HTTPS (Railway, Fly, Render, or a Cloudflare Worker+D1 later).
-2. Set a Pages env var **before build**:  
-   `VITE_API_BASE=https://your-api.example.com`  
-3. Redeploy.
+| Feature | How |
+|--------|-----|
+| Forecasts, radar, alerts, maps | Browser → public APIs |
+| Accounts / login / prefs sync | Worker `/api/auth/*`, `/api/user/*` → D1 |
+| Area chat | Worker `/api/chat/*` → D1 |
+| Fire hotspots | Worker `/api/fires` → NASA FIRMS (cached) |
 
-Local prefs still save in the browser without an API.
+**Local dev** still uses Express (`npm run dev` → API on `:8787` + Vite proxy).  
+Production uses the Worker + D1. New accounts on Cloudflare are separate from  
+local `server/data/users.json`.
 
 ### Highlights
 
@@ -111,7 +106,8 @@ Saved to your account (cloud on the local server):
 - Units, theme, density  
 - Severe mode & notify prefs  
 
-Passwords are bcrypt-hashed. User data lives in `server/data/users.json` (gitignored).  
+**Local:** passwords bcrypt-hashed; data in `server/data/users.json` (gitignored).  
+**Production (Cloudflare):** PBKDF2-hashed passwords + JWT in D1 (`atmos-db`).  
 JWT sessions last 30 days.
 
 ## Features

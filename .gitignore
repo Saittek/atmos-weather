@@ -17,6 +17,9 @@ dist-ssr
 
 # Local auth DB / secrets
 server/data/
+.dev.vars
+.wrangler/
+
 
 # Editor directories and files
 .vscode/*

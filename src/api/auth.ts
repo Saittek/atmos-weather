@@ -64,7 +64,9 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   try {
     res = await fetch(apiUrl(path), { ...init, headers })
   } catch {
-    throw new Error('Cannot reach Atmos server — run npm run dev (API + web)')
+    throw new Error(
+      'Cannot reach Atmos server. Online: check the site is fully deployed. Local: run npm run dev (API + web).',
+    )
   }
   const body = (await res.json().catch(() => ({}))) as { error?: string }
   if (!res.ok) {
