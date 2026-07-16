@@ -26,7 +26,7 @@ function saveNotified(s: Set<string>) {
 function notify(title: string, body: string, tag: string) {
   if (!('Notification' in window) || Notification.permission !== 'granted') return
   try {
-    new Notification(title, { body, icon: '/icons/icon.svg', tag })
+    new Notification(title, { body, icon: '/icons/icon-192.png', tag })
   } catch {
     /* ignore */
   }

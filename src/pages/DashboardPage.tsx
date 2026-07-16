@@ -253,9 +253,14 @@ export default function DashboardPage() {
         <InstallPrompt />
         <header className="topbar">
           <div className="brand">
-            <span className="brand-mark" aria-hidden>
-              ⚡
-            </span>
+            <img
+              className="brand-mark"
+              src="./icons/solara-logo.png"
+              alt=""
+              width={36}
+              height={36}
+              decoding="async"
+            />
             <div>
               <strong>Solara</strong>
               <span className="brand-tag">
@@ -349,7 +354,7 @@ export default function DashboardPage() {
         {!location && !loading && !error && (
           <div className="empty-state empty-state-rich">
             <div className="empty-icon" aria-hidden>
-              ⚡
+              <img src="./icons/solara-logo.png" alt="" width={72} height={72} decoding="async" />
             </div>
             <h1>Where should we look?</h1>
             <p className="empty-lead">

@@ -377,7 +377,7 @@ export function useWeather() {
             try {
               new Notification(`Solara: ${top.event}`, {
                 body: top.headline,
-                icon: '/icons/icon.svg',
+                icon: '/icons/icon-192.png',
                 tag: top.id,
               })
             } catch {
@@ -401,7 +401,7 @@ export function useWeather() {
                 )
                 new Notification('Solara air quality', {
                   body: `AQI ${aqi} near ${loc.name} — limit outdoor time if sensitive`,
-                  icon: '/icons/icon.svg',
+                  icon: '/icons/icon-192.png',
                   tag: aqiKey,
                 })
               }
