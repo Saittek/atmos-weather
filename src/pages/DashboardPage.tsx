@@ -32,6 +32,7 @@ import { SnowOutlook } from '../components/SnowOutlook'
 import { LifestyleScores } from '../components/LifestyleScores'
 import { AmbientOrbs } from '../components/AmbientOrbs'
 import { AdvancedSection } from '../components/AdvancedSection'
+import { isMobileViewport } from '../utils/device'
 import { DashboardSkeleton } from '../components/Skeleton'
 import { TodayTimeline } from '../components/TodayTimeline'
 import { WeekStrip } from '../components/WeekStrip'
@@ -73,6 +74,7 @@ function MapChunkFallback({ label }: { label: string }) {
 }
 
 export default function DashboardPage() {
+  const [isMobile] = useState(() => isMobileViewport())
   const {
     location,
     weather,
@@ -238,9 +240,9 @@ export default function DashboardPage() {
       data-theme-active={theme}
       data-density={density}
     >
-      <div className="bg-noise" aria-hidden />
+      {!isMobile && <div className="bg-noise" aria-hidden />}
       <div className="bg-scrim" aria-hidden />
-      <AmbientOrbs />
+      {!isMobile && <AmbientOrbs />}
 
       <AlertTopBar
         alerts={activeAlerts}
@@ -378,7 +380,9 @@ export default function DashboardPage() {
 
         {loading && !weather && <DashboardSkeleton />}
 
-        <AreaChat location={location} />
+        <Deferred rootMargin="200px 0px" minHeight={isMobile ? 48 : 0}>
+          <AreaChat location={location} />
+        </Deferred>
 
         {weather && location && (
           <main className={`dashboard ${stormMode ? 'dashboard-storm' : ''}`}>
@@ -405,9 +409,16 @@ export default function DashboardPage() {
                   profile={profile}
                 />
                 <RainNextHour weather={weather} units={units} />
-                <ActivityModes weather={weather} units={units} air={air} />
-                <HazardBadges weather={weather} units={units} />
-                <TodayTimeline weather={weather} units={units} />
+                {/* Defer secondary panels on mobile so first paint stays light */}
+                <Deferred
+                  force={!isMobile}
+                  rootMargin="120px 0px"
+                  minHeight={isMobile ? 80 : undefined}
+                >
+                  <ActivityModes weather={weather} units={units} air={air} />
+                  <HazardBadges weather={weather} units={units} />
+                  <TodayTimeline weather={weather} units={units} />
+                </Deferred>
               </div>
 
               {/* Storm: radar immediately after priority */}
@@ -443,13 +454,19 @@ export default function DashboardPage() {
               {!stormMode && radarBlock}
 
               <HourlyForecast weather={weather} units={units} />
-              <OutdoorAirStrip weather={weather} air={air} />
-              <UvWindPanel weather={weather} units={units} />
-              <PrecipTotals weather={weather} units={units} />
-              <VisibilityPanel weather={weather} units={units} />
-              <StormRisk weather={weather} profile={profile} />
               <Deferred
-                rootMargin="240px 0px"
+                force={!isMobile}
+                rootMargin="160px 0px"
+                minHeight={isMobile ? 100 : undefined}
+              >
+                <OutdoorAirStrip weather={weather} air={air} />
+                <UvWindPanel weather={weather} units={units} />
+                <PrecipTotals weather={weather} units={units} />
+                <VisibilityPanel weather={weather} units={units} />
+                <StormRisk weather={weather} profile={profile} />
+              </Deferred>
+              <Deferred
+                rootMargin={isMobile ? '80px 0px' : '240px 0px'}
                 minHeight={360}
                 placeholder={<MapChunkFallback label="Fire map loads near view…" />}
               >

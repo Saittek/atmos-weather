@@ -6,6 +6,12 @@ import App from './App.tsx'
 import { AuthProvider } from './hooks/useAuth'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { initNativeShell, isNativeApp } from './lib/native'
+import { applyMobilePerfClass } from './utils/device'
+
+applyMobilePerfClass()
+if (typeof window !== 'undefined') {
+  window.addEventListener('resize', () => applyMobilePerfClass(), { passive: true })
+}
 
 void initNativeShell()
 

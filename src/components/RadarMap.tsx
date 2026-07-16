@@ -28,6 +28,7 @@ import { formatRadarTime } from '../utils/format'
 import type { Units } from '../utils/format'
 import { MapOverlays, type OverlayMode } from './MapOverlays'
 import { FireSmokeLayers } from './FireSmokeLayers'
+import { isConstrainedDevice as detectConstrained } from '../utils/device'
 
 interface Props {
   lat: number
@@ -76,7 +77,9 @@ const LOOP_HOLD_MS = 750
 function MapRecenter({ lat, lon }: { lat: number; lon: number }) {
   const map = useMap()
   useEffect(() => {
-    map.setView([lat, lon], map.getZoom(), { animate: true })
+    // Instant recenter on mobile — animate:true janks the main thread
+    const animate = !isConstrainedDevice()
+    map.setView([lat, lon], map.getZoom(), { animate })
   }, [lat, lon, map])
   return null
 }
@@ -119,13 +122,7 @@ function MapSizeFix() {
  * 3. Crossfades with requestAnimationFrame (no layer teardown)
  */
 function isConstrainedDevice() {
-  if (typeof window === 'undefined') return false
-  const narrow = window.matchMedia('(max-width: 720px)').matches
-  const saveData =
-    'connection' in navigator &&
-    Boolean((navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData)
-  const cores = navigator.hardwareConcurrency ?? 8
-  return narrow || saveData || cores <= 4
+  return detectConstrained()
 }
 
 function RadarEngine({
@@ -428,8 +425,11 @@ export function RadarMap({
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [frameIdx, setFrameIdx] = useState(0)
-  const [playing, setPlaying] = useState(true)
-  const [speed, setSpeed] = useState<SpeedKey>('normal')
+  // Don't autoplay radar on mobile — user taps play (saves CPU on first paint)
+  const [playing, setPlaying] = useState(() => !isConstrainedDevice())
+  const [speed, setSpeed] = useState<SpeedKey>(() =>
+    isConstrainedDevice() ? 'slow' : 'normal',
+  )
   const [opacity, setOpacity] = useState(0.78)
   const [product, setProduct] = useState<RadarProduct>('precip')
   const [color, setColor] = useState<ColorScheme>(6)
@@ -459,7 +459,7 @@ export function RadarMap({
 
   const lite = useMemo(() => isConstrainedDevice(), [])
   const radarFrames = useMemo(
-    () => (maps ? getAllFrames(maps, lite ? 10 : 16) : []),
+    () => (maps ? getAllFrames(maps, lite ? 8 : 16) : []),
     [maps, lite],
   )
   const satFrames = useMemo(() => (maps ? getSatelliteFrames(maps) : []), [maps])
@@ -470,7 +470,8 @@ export function RadarMap({
     ? satFrames[Math.min(frameIdx, satFrames.length - 1)]
     : null
   const useGibsSat = showSatellite && !satFrame
-  const fadeDuration = fadeMs(speed)
+  // Instant frame swaps on mobile — crossfade is expensive with many tile layers
+  const fadeDuration = lite ? 0 : fadeMs(speed)
 
   // Satellite-only with no RainViewer frames: still allow “ready” playback UI
   useEffect(() => {
@@ -493,8 +494,9 @@ export function RadarMap({
       setBufferProgress(0)
       const data = await fetchRadarMaps()
       setMaps(data)
-      const all = getAllFrames(data)
-      const pastLen = data.radar?.past?.length ?? all.length
+      const maxPast = isConstrainedDevice() ? 8 : 16
+      const past = data.radar?.past ?? []
+      const pastLen = Math.min(past.length, maxPast)
       setFrameIdx(Math.max(0, pastLen - 1))
       setError(null)
     } catch {
@@ -506,19 +508,34 @@ export function RadarMap({
 
   useEffect(() => {
     void load()
-    const id = window.setInterval(() => void load(), 5 * 60 * 1000)
+    const mins = isConstrainedDevice() ? 8 : 5
+    const id = window.setInterval(() => {
+      if (document.hidden) return
+      void load()
+    }, mins * 60 * 1000)
     return () => clearInterval(id)
   }, [load])
+
+  // Pause animation when tab is hidden (saves mobile battery/CPU)
+  useEffect(() => {
+    const onVis = () => {
+      if (document.hidden) setPlaying(false)
+    }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+  }, [])
 
   // Video-style loop: hold each frame, longer hold on last, then restart
   useEffect(() => {
     const canLoopRadar = showRadar && radarFrames.length >= 2 && bufferReady
     const canLoopSat = !showRadar && showSatellite && satFrames.length >= 2
-    if (!playing || (!canLoopRadar && !canLoopSat)) return
+    if (!playing || document.hidden || (!canLoopRadar && !canLoopSat)) return
 
     const len = canLoopRadar ? radarFrames.length : satFrames.length
     const isLast = frameIdx >= len - 1
-    const wait = isLast ? SPEED_MS[speed] + LOOP_HOLD_MS : SPEED_MS[speed]
+    // Slower loop on lite devices = less main-thread work
+    const base = lite ? SPEED_MS.slow : SPEED_MS[speed]
+    const wait = isLast ? base + LOOP_HOLD_MS : base
     const timer = window.setTimeout(() => {
       setFrameIdx((i) => (i + 1) % len)
     }, wait)
@@ -533,6 +550,7 @@ export function RadarMap({
     frameIdx,
     showRadar,
     showSatellite,
+    lite,
   ])
 
   // Apply radar product presets (color / snow / sat combo)

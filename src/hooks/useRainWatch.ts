@@ -48,7 +48,11 @@ export function useRainWatch(
 
   const refresh = useCallback(async () => {
     const map = new Map<string, LocationResult>()
-    for (const p of favorites.slice(0, 6)) {
+    const mobile =
+      typeof window !== 'undefined' && window.matchMedia('(max-width: 720px)').matches
+    // Cap network fan-out on mobile
+    const favCap = mobile ? 3 : 6
+    for (const p of favorites.slice(0, favCap)) {
       map.set(locationKey(p), p)
     }
     if (currentLoc) map.set(locationKey(currentLoc), currentLoc)
@@ -103,12 +107,15 @@ export function useRainWatch(
   const currentLon = currentLoc?.longitude
 
   useEffect(() => {
+    const mobile =
+      typeof window !== 'undefined' && window.matchMedia('(max-width: 720px)').matches
     // Defer so main forecast/alerts win the network on first paint
-    const start = window.setTimeout(() => void refresh(), 1800)
+    const start = window.setTimeout(() => void refresh(), mobile ? 4500 : 1800)
     if (!favorites.length && currentLat == null) {
       return () => window.clearTimeout(start)
     }
-    const id = window.setInterval(() => void refresh(), 8 * 60 * 1000)
+    // Poll less often on mobile to free CPU/network for scrolling
+    const id = window.setInterval(() => void refresh(), (mobile ? 15 : 8) * 60 * 1000)
     return () => {
       window.clearTimeout(start)
       window.clearInterval(id)

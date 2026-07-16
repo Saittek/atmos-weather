@@ -574,12 +574,16 @@ export function useWeather() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Soft auto-refresh every 10 minutes
+  // Soft auto-refresh — less often on mobile / when tab is hidden
   useEffect(() => {
     if (!location) return
+    const mobile =
+      typeof window !== 'undefined' && window.matchMedia('(max-width: 720px)').matches
+    const ms = (mobile ? 15 : 10) * 60 * 1000
     const id = window.setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return
       void loadForLocationRef.current?.(location, { soft: true })
-    }, 10 * 60 * 1000)
+    }, ms)
     return () => clearInterval(id)
   }, [location])
 

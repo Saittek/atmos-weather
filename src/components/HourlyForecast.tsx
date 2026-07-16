@@ -29,7 +29,10 @@ export function HourlyForecast({ weather, units }: Props) {
     (t) => parseWeatherLocal(t, timezone) >= now - 30 * 60 * 1000,
   )
   const idx = start < 0 ? 0 : start
-  const count = 48
+  // Fewer DOM cards on phones → smoother scroll
+  const mobile =
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 720px)').matches
+  const count = mobile ? 24 : 48
   const items = Array.from({ length: count }, (_, i) => i + idx).filter(
     (i) => i < hourly.time.length,
   )

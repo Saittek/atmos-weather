@@ -2936,6 +2936,64 @@ select:focus-visible {
   }
 }
 
+/* ===== Mobile performance mode (class set in main.tsx) ===== */
+html.mobile-perf .bg-noise,
+html.mobile-perf .ambient-orbs {
+  display: none !important;
+}
+
+html.mobile-perf .topbar,
+html.mobile-perf .panel,
+html.mobile-perf .settings-more-menu,
+html.mobile-perf .settings-sheet,
+html.mobile-perf .alert-top-bar,
+html.mobile-perf .chip-btn,
+html.mobile-perf .search-input-wrap {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html.mobile-perf .topbar {
+  background: rgba(11, 18, 32, 0.97);
+}
+
+html.mobile-perf[data-theme='light'] .topbar {
+  background: rgba(248, 250, 252, 0.97);
+}
+
+html.mobile-perf .panel {
+  animation: none !important;
+  transition: none !important;
+  box-shadow: none !important;
+  background: rgba(15, 23, 42, 0.92);
+}
+
+html.mobile-perf[data-theme='light'] .panel {
+  background: rgba(255, 255, 255, 0.94);
+}
+
+html.mobile-perf .app {
+  transition: none !important;
+}
+
+html.mobile-perf .hourly-scroll,
+html.mobile-perf .home-pins-scroll {
+  scroll-behavior: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Reduce paint cost while scrolling lists */
+html.mobile-perf .hourly-card,
+html.mobile-perf .pin-card {
+  box-shadow: none !important;
+  transition: none !important;
+}
+
+html.mobile-perf .radar-tiles {
+  /* Leaflet tile fade can thrash GPU on phones */
+  transition: none !important;
+}
+
 /* ===== New feature panels ===== */
 .severe-banner {
   display: flex;
