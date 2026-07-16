@@ -334,109 +334,128 @@ export function useWeather() {
       }
 
       try {
-        // Phase 1 — paint the core dashboard ASAP (forecast, air, alerts)
-        const [w, a, al] = await Promise.all([
-          fetchWeather(loc.latitude, loc.longitude),
-          fetchAirQuality(loc.latitude, loc.longitude),
-          fetchAlerts(loc.latitude, loc.longitude),
-        ])
+        const mobile =
+          typeof window !== 'undefined' &&
+          window.matchMedia('(max-width: 720px)').matches
 
+        // Phase 1 — forecast only (fastest paint; biggest mobile win)
+        const w = await fetchWeather(loc.latitude, loc.longitude)
         if (gen !== fetchGen.current) return
-
-        const activeAlerts = filterActiveAlerts(al)
         setWeather(w)
-        setAir(a)
-        setAlerts(activeAlerts)
         setUpdatedAt(Date.now())
         setOffline(false)
         setLoading(false)
         setRefreshing(false)
-        saveOfflineBundle({
-          location: loc,
-          weather: w,
-          air: a,
-          alerts: activeAlerts,
-          savedAt: Date.now(),
-        })
 
-        const severe = activeAlerts.some((x) =>
-          ['Extreme', 'Severe', 'Moderate'].includes(x.severity),
-        )
-        setSevereActive(severe)
-
-        const notify = prefsRef.current.notifyAlerts
-        if (
-          notify &&
-          'Notification' in window &&
-          Notification.permission === 'granted'
-        ) {
-          for (const top of activeAlerts.slice(0, 3)) {
-            if (!['Extreme', 'Severe', 'Moderate'].includes(top.severity)) continue
-            if (notifiedRef.current.has(top.id)) continue
-            notifiedRef.current.add(top.id)
-            try {
-              new Notification(`Solara: ${top.event}`, {
-                body: top.headline,
-                icon: '/icons/icon-192.png',
-                tag: top.id,
-              })
-            } catch {
-              /* ignore */
-            }
-          }
-          saveNotified(notifiedRef.current)
-
-          // AQI jump notify
-          const aqi = a?.current?.us_aqi
-          if (aqi != null && aqi >= 100) {
-            const aqiKey = `aqi-${locationKey(loc)}-${Math.floor(aqi / 25)}`
-            try {
-              const raw = sessionStorage.getItem(AQI_NOTIFIED_KEY)
-              const set = new Set(raw ? (JSON.parse(raw) as string[]) : [])
-              if (!set.has(aqiKey)) {
-                set.add(aqiKey)
-                sessionStorage.setItem(
-                  AQI_NOTIFIED_KEY,
-                  JSON.stringify([...set].slice(-30)),
-                )
-                new Notification('Solara air quality', {
-                  body: `AQI ${aqi} near ${loc.name} — limit outdoor time if sensitive`,
-                  icon: '/icons/icon-192.png',
-                  tag: aqiKey,
-                })
-              }
-            } catch {
-              /* ignore */
-            }
-          }
-        }
-
-        // Phase 2 — models / sounding / tropics after first paint (idle)
-        const loadSecondary = async () => {
+        // Phase 1b — air + alerts (don't block the first paint)
+        const loadAirAlerts = async () => {
           if (gen !== fetchGen.current) return
-          try {
-            const [m, pr, st] = await Promise.all([
-              fetchMultiModel(loc.latitude, loc.longitude),
-              fetchPressureProfile(loc.latitude, loc.longitude),
-              fetchTropicalStorms(),
-            ])
-            if (gen !== fetchGen.current) return
-            setModels(m)
-            setProfile(pr)
-            setStorms(st)
-          } catch {
-            /* secondary is optional — keep primary UI */
+          const [a, al] = await Promise.all([
+            fetchAirQuality(loc.latitude, loc.longitude),
+            fetchAlerts(loc.latitude, loc.longitude),
+          ])
+          if (gen !== fetchGen.current) return
+          const activeAlerts = filterActiveAlerts(al)
+          setAir(a)
+          setAlerts(activeAlerts)
+          saveOfflineBundle({
+            location: loc,
+            weather: w,
+            air: a,
+            alerts: activeAlerts,
+            savedAt: Date.now(),
+          })
+          const severe = activeAlerts.some((x) =>
+            ['Extreme', 'Severe', 'Moderate'].includes(x.severity),
+          )
+          setSevereActive(severe)
+
+          const notify = prefsRef.current.notifyAlerts
+          if (
+            notify &&
+            'Notification' in window &&
+            Notification.permission === 'granted'
+          ) {
+            for (const top of activeAlerts.slice(0, 3)) {
+              if (!['Extreme', 'Severe', 'Moderate'].includes(top.severity)) continue
+              if (notifiedRef.current.has(top.id)) continue
+              notifiedRef.current.add(top.id)
+              try {
+                new Notification(`Solara: ${top.event}`, {
+                  body: top.headline,
+                  icon: '/icons/icon-192.png',
+                  tag: top.id,
+                })
+              } catch {
+                /* ignore */
+              }
+            }
+            saveNotified(notifiedRef.current)
+            const aqi = a?.current?.us_aqi
+            if (aqi != null && aqi >= 100) {
+              const aqiKey = `aqi-${locationKey(loc)}-${Math.floor(aqi / 25)}`
+              try {
+                const raw = sessionStorage.getItem(AQI_NOTIFIED_KEY)
+                const set = new Set(raw ? (JSON.parse(raw) as string[]) : [])
+                if (!set.has(aqiKey)) {
+                  set.add(aqiKey)
+                  sessionStorage.setItem(
+                    AQI_NOTIFIED_KEY,
+                    JSON.stringify([...set].slice(-30)),
+                  )
+                  new Notification('Solara air quality', {
+                    body: `AQI ${aqi} near ${loc.name} — limit outdoor time if sensitive`,
+                    icon: '/icons/icon-192.png',
+                    tag: aqiKey,
+                  })
+                }
+              } catch {
+                /* ignore */
+              }
+            }
           }
         }
-        const ric = (
-          window as Window & {
-            requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number
-          }
-        ).requestIdleCallback
-        if (typeof ric === 'function') {
-          ric(() => void loadSecondary(), { timeout: 2200 })
+
+        if (mobile) {
+          window.setTimeout(() => void loadAirAlerts(), soft ? 80 : 280)
         } else {
-          window.setTimeout(() => void loadSecondary(), 120)
+          void loadAirAlerts()
+        }
+
+        // Phase 2 — heavy secondary (skip entirely on mobile to save radio/CPU)
+        if (!mobile) {
+          const loadSecondary = async () => {
+            if (gen !== fetchGen.current) return
+            if (typeof document !== 'undefined' && document.hidden) return
+            try {
+              const [m, pr, st] = await Promise.all([
+                fetchMultiModel(loc.latitude, loc.longitude),
+                fetchPressureProfile(loc.latitude, loc.longitude),
+                fetchTropicalStorms(),
+              ])
+              if (gen !== fetchGen.current) return
+              setModels(m)
+              setProfile(pr)
+              setStorms(st)
+            } catch {
+              /* optional */
+            }
+          }
+          const ric = (
+            window as Window & {
+              requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number
+            }
+          ).requestIdleCallback
+          if (typeof ric === 'function') {
+            ric(() => void loadSecondary(), { timeout: 4000 })
+          } else {
+            window.setTimeout(() => void loadSecondary(), 1500)
+          }
+        } else {
+          // Clear stale secondary from previous location
+          setModels([])
+          setProfile(null)
+          setStorms([])
         }
       } catch (e) {
         if (gen !== fetchGen.current) return
@@ -574,12 +593,12 @@ export function useWeather() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Soft auto-refresh — less often on mobile / when tab is hidden
+  // Soft auto-refresh — rare on mobile; never when tab is hidden
   useEffect(() => {
     if (!location) return
     const mobile =
       typeof window !== 'undefined' && window.matchMedia('(max-width: 720px)').matches
-    const ms = (mobile ? 15 : 10) * 60 * 1000
+    const ms = (mobile ? 20 : 12) * 60 * 1000
     const id = window.setInterval(() => {
       if (typeof document !== 'undefined' && document.hidden) return
       void loadForLocationRef.current?.(location, { soft: true })

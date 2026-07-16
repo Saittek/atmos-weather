@@ -1,5 +1,7 @@
 # Solara — Weather Command
 
+**Live site:** [https://solaraweather.com](https://solaraweather.com)
+
 Full-featured weather dashboard: **video-smooth HQ radar**, multi-model forecasts, air quality, severe alerts (US + Canada), fire/smoke maps, area chat, tropical storms, and PWA install.
 
 ## Run (web)
@@ -38,7 +40,8 @@ npx wrangler deploy
 
 Or one-shot after secrets/migrations are set: `npm run deploy`.
 
-The site is served from the Worker URL (e.g. `https://atmos-weather.<account>.workers.dev`).  
+**Production:** [https://solaraweather.com](https://solaraweather.com) (Cloudflare Worker + custom domain).  
+Also available on the Worker URL if configured.  
 The frontend calls **same-origin** `/api/*` — no `VITE_API_BASE` needed for web.
 
 ### Git / CI deploy

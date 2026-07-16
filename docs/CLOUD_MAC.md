@@ -139,8 +139,8 @@ You never need to touch Xcode if Codemagic signing is set up correctly.
 
 Before review, put these on a public HTTPS URL (GitHub Pages, Netlify, Cloudflare, etc.):
 
-- `public/privacy.html` → e.g. `https://yourname.github.io/solara/privacy.html`
-- `public/support.html` → e.g. `https://yourname.github.io/solara/support.html`
+- `public/privacy.html` → https://solaraweather.com/privacy.html
+- `public/support.html` → https://solaraweather.com/support.html
 
 Paste those URLs into App Store Connect.
 

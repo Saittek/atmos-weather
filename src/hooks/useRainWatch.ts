@@ -47,15 +47,27 @@ export function useRainWatch(
   const notified = useRef(loadNotified())
 
   const refresh = useCallback(async () => {
-    const map = new Map<string, LocationResult>()
     const mobile =
       typeof window !== 'undefined' && window.matchMedia('(max-width: 720px)').matches
+    // Mobile: only poll when notifications are on (big network savings)
+    if (mobile && !enabled) {
+      setSnapshots([])
+      setLoading(false)
+      return
+    }
+    if (typeof document !== 'undefined' && document.hidden) return
+
+    const map = new Map<string, LocationResult>()
     // Cap network fan-out on mobile
-    const favCap = mobile ? 3 : 6
+    const favCap = mobile ? 2 : 6
     for (const p of favorites.slice(0, favCap)) {
       map.set(locationKey(p), p)
     }
-    if (currentLoc) map.set(locationKey(currentLoc), currentLoc)
+    // Skip re-fetching current location on mobile — main weather already covers it
+    if (currentLoc && !mobile) map.set(locationKey(currentLoc), currentLoc)
+    else if (currentLoc && mobile && !favorites.length) {
+      map.set(locationKey(currentLoc), currentLoc)
+    }
     const places = [...map.values()]
     if (!places.length) {
       setSnapshots([])
@@ -109,18 +121,21 @@ export function useRainWatch(
   useEffect(() => {
     const mobile =
       typeof window !== 'undefined' && window.matchMedia('(max-width: 720px)').matches
-    // Defer so main forecast/alerts win the network on first paint
-    const start = window.setTimeout(() => void refresh(), mobile ? 4500 : 1800)
+    // Mobile without notify: never start the rain-watch network loop
+    if (mobile && !enabled) {
+      setSnapshots([])
+      return
+    }
+    const start = window.setTimeout(() => void refresh(), mobile ? 8000 : 2000)
     if (!favorites.length && currentLat == null) {
       return () => window.clearTimeout(start)
     }
-    // Poll less often on mobile to free CPU/network for scrolling
-    const id = window.setInterval(() => void refresh(), (mobile ? 15 : 8) * 60 * 1000)
+    const id = window.setInterval(() => void refresh(), (mobile ? 20 : 10) * 60 * 1000)
     return () => {
       window.clearTimeout(start)
       window.clearInterval(id)
     }
-  }, [refresh, favorites.length, currentLat, currentLon])
+  }, [refresh, favorites.length, currentLat, currentLon, enabled])
 
   return { snapshots, loading, banner, refresh }
 }

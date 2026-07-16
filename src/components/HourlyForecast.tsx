@@ -32,7 +32,7 @@ export function HourlyForecast({ weather, units }: Props) {
   // Fewer DOM cards on phones → smoother scroll
   const mobile =
     typeof window !== 'undefined' && window.matchMedia('(max-width: 720px)').matches
-  const count = mobile ? 24 : 48
+  const count = mobile ? 16 : 48
   const items = Array.from({ length: count }, (_, i) => i + idx).filter(
     (i) => i < hourly.time.length,
   )

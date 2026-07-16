@@ -75,6 +75,8 @@ function MapChunkFallback({ label }: { label: string }) {
 
 export default function DashboardPage() {
   const [isMobile] = useState(() => isMobileViewport())
+  /** Mobile: radar is opt-in — Leaflet + tile loops are the #1 resource hog */
+  const [radarOpen, setRadarOpen] = useState(false)
   const {
     location,
     weather,
@@ -198,15 +200,10 @@ export default function DashboardPage() {
     document.getElementById('alerts-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
+  const wantRadar = stormMode || radarOpen || !isMobile
+
   const radarBlock = location && weather && (
-    <Deferred
-      className="priority-radar"
-      id="radar-map-wrap"
-      force={stormMode}
-      rootMargin="360px 0px"
-      minHeight={420}
-      placeholder={<MapChunkFallback label="Radar ready when you scroll…" />}
-    >
+    <div className="priority-radar" id="radar-map-wrap">
       <div className="radar-jump-row">
         <Link to={radarPath} className="primary-btn radar-open-btn">
           📡 Full-page radar
@@ -214,23 +211,46 @@ export default function DashboardPage() {
         <Link to="/widget" className="chip-btn">
           ☔ Rain widget
         </Link>
+        {isMobile && !wantRadar && (
+          <button type="button" className="chip-btn" onClick={() => setRadarOpen(true)}>
+            Show inline radar
+          </button>
+        )}
+        {isMobile && wantRadar && !stormMode && (
+          <button type="button" className="chip-btn" onClick={() => setRadarOpen(false)}>
+            Hide radar
+          </button>
+        )}
         {!stormMode && (
           <button type="button" className="chip-btn" onClick={() => setStormMode(true)}>
-            🌩 Enter storm mode
+            🌩 Storm mode
           </button>
         )}
       </div>
-      <Suspense fallback={<MapChunkFallback label="Loading live radar…" />}>
-        <RadarMap
-          lat={location.latitude}
-          lon={location.longitude}
-          placeName={location.name}
-          units={units}
-          severeMode={severe}
-          mapId="radar-map"
-        />
-      </Suspense>
-    </Deferred>
+      {wantRadar ? (
+        <Deferred
+          force={stormMode || !isMobile}
+          rootMargin="200px 0px"
+          minHeight={isMobile ? 320 : 420}
+          placeholder={<MapChunkFallback label="Loading radar when visible…" />}
+        >
+          <Suspense fallback={<MapChunkFallback label="Loading live radar…" />}>
+            <RadarMap
+              lat={location.latitude}
+              lon={location.longitude}
+              placeName={location.name}
+              units={units}
+              severeMode={severe}
+              mapId="radar-map"
+            />
+          </Suspense>
+        </Deferred>
+      ) : (
+        <p className="radar-collapsed-hint muted-center">
+          Radar stays off to save battery — open full-page radar or tap Show inline radar.
+        </p>
+      )}
+    </div>
   )
 
   return (
@@ -252,7 +272,10 @@ export default function DashboardPage() {
       />
 
       <div className="app-shell">
-        <InstallPrompt />
+        {/* Install prompt is non-critical — skip on first mobile paint via Deferred */}
+        <Deferred force={!isMobile} rootMargin="0px" minHeight={0}>
+          <InstallPrompt />
+        </Deferred>
         <header className="topbar">
           <div className="brand">
             <img
@@ -438,14 +461,17 @@ export default function DashboardPage() {
 
               <WeekStrip weather={weather} units={units} />
 
-              <HomePins
-                snapshots={rainWatch.snapshots}
-                loading={rainWatch.loading}
-                units={units}
-                currentKey={currentKey}
-                onSelect={openPin}
-                onRefresh={() => void rainWatch.refresh()}
-              />
+              {/* Home pins need rain-watch network — skip empty shell on mobile */}
+              {(!isMobile || rainWatch.snapshots.length > 0 || rainWatch.loading) && (
+                <HomePins
+                  snapshots={rainWatch.snapshots}
+                  loading={rainWatch.loading}
+                  units={units}
+                  currentKey={currentKey}
+                  onSelect={openPin}
+                  onRefresh={() => void rainWatch.refresh()}
+                />
+              )}
 
               <div id="alerts-panel">
                 {!alertsMinimized && <Alerts alerts={activeAlerts} />}
@@ -456,19 +482,27 @@ export default function DashboardPage() {
               <HourlyForecast weather={weather} units={units} />
               <Deferred
                 force={!isMobile}
-                rootMargin="160px 0px"
-                minHeight={isMobile ? 100 : undefined}
+                rootMargin="180px 0px"
+                minHeight={isMobile ? 80 : undefined}
               >
                 <OutdoorAirStrip weather={weather} air={air} />
                 <UvWindPanel weather={weather} units={units} />
                 <PrecipTotals weather={weather} units={units} />
                 <VisibilityPanel weather={weather} units={units} />
-                <StormRisk weather={weather} profile={profile} />
+                {!isMobile && <StormRisk weather={weather} profile={profile} />}
               </Deferred>
+              {/* Fire map is heavy (Leaflet) — never auto on mobile unless scrolled deep */}
               <Deferred
-                rootMargin={isMobile ? '80px 0px' : '240px 0px'}
-                minHeight={360}
-                placeholder={<MapChunkFallback label="Fire map loads near view…" />}
+                force={false}
+                rootMargin={isMobile ? '40px 0px' : '200px 0px'}
+                minHeight={isMobile ? 120 : 360}
+                placeholder={
+                  isMobile ? (
+                    <p className="muted-center">Scroll for fire map…</p>
+                  ) : (
+                    <MapChunkFallback label="Fire map loads near view…" />
+                  )
+                }
               >
                 <Suspense fallback={<MapChunkFallback label="Loading fire map…" />}>
                   <FireMapPanel
@@ -480,16 +514,10 @@ export default function DashboardPage() {
                   />
                 </Suspense>
               </Deferred>
-              <ShareWeatherCard
-                weather={weather}
-                location={location}
-                units={units}
-              />
-              <WeatherStory
-                weather={weather}
-                units={units}
-                placeName={location.name}
-              />
+              <Deferred force={!isMobile} rootMargin="100px 0px">
+                <ShareWeatherCard weather={weather} location={location} units={units} />
+                <WeatherStory weather={weather} units={units} placeName={location.name} />
+              </Deferred>
 
               <AdvancedSection title="More details" defaultOpen={false}>
                 <div className="advanced-grid">
@@ -498,14 +526,20 @@ export default function DashboardPage() {
                   <ComfortPanel weather={weather} units={units} />
                   <LifestyleScores weather={weather} units={units} />
                   <WeatherDetails weather={weather} units={units} />
-                  <DayLastYear
-                    weather={weather}
-                    units={units}
-                    lat={location.latitude}
-                    lon={location.longitude}
-                  />
-                  <ModelCompare models={models} units={units} timezone={weather.timezone} />
-                  <CityCompare units={units} home={location} homeWeather={weather} />
+                  {!isMobile && (
+                    <DayLastYear
+                      weather={weather}
+                      units={units}
+                      lat={location.latitude}
+                      lon={location.longitude}
+                    />
+                  )}
+                  {!isMobile && (
+                    <ModelCompare models={models} units={units} timezone={weather.timezone} />
+                  )}
+                  {!isMobile && (
+                    <CityCompare units={units} home={location} homeWeather={weather} />
+                  )}
                 </div>
               </AdvancedSection>
             </div>

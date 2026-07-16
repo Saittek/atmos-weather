@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
+import { getRememberedEmail } from '../api/auth'
 import { useAuth } from '../hooks/useAuth'
 
 interface Props {
@@ -14,10 +15,17 @@ export function AuthModal({ open, onClose, onSuccess }: Props) {
   const { login, register } = useAuth()
   const [mode, setMode] = useState<Mode>('login')
   const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
+  const [email, setEmail] = useState(() => getRememberedEmail() ?? '')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Prefill remembered email each time the modal opens
+  useEffect(() => {
+    if (!open) return
+    const remembered = getRememberedEmail()
+    if (remembered) setEmail(remembered)
+  }, [open])
 
   // Lock body scroll + Esc to close while open
   useEffect(() => {

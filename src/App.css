@@ -2368,6 +2368,120 @@ select:focus-visible {
   background: #0a0e18;
 }
 
+/* Quick layer chips above the map */
+.ventusky-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0 0 0.55rem;
+  align-items: center;
+}
+.ventusky-quick .chip-btn {
+  font-size: 0.78rem;
+  padding: 0.35rem 0.6rem;
+}
+
+/* Ventusky model embed — fills radar stage (small panel + mobile) */
+.radar-panel.has-ventusky .radar-stage {
+  height: min(640px, 72vh);
+  min-height: 360px;
+}
+.radar-panel.radar-compact.has-ventusky .radar-stage {
+  height: min(560px, 68vh);
+  min-height: 340px;
+}
+.radar-panel.is-fullscreen.has-ventusky .radar-stage {
+  height: 100%;
+  min-height: 0;
+  flex: 1;
+}
+
+.ventusky-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  background: #0b1220;
+  /* Allow iframe to receive touch on iOS */
+  touch-action: manipulation;
+}
+.ventusky-frame-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 280px;
+  width: 100%;
+  overflow: hidden;
+  background: #0b1220;
+}
+.ventusky-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #0b1220;
+  /* Critical for touch panning inside iframe */
+  touch-action: auto;
+  pointer-events: auto;
+}
+.ventusky-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.45rem 0.65rem;
+  padding-bottom: max(0.45rem, env(safe-area-inset-bottom, 0px));
+  background: rgba(11, 18, 32, 0.97);
+  border-top: 1px solid var(--border);
+  font-size: 0.78rem;
+  z-index: 2;
+}
+.ventusky-credit {
+  color: var(--text-mute);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ventusky-credit strong {
+  color: var(--text);
+  font-weight: 650;
+}
+.ventusky-by {
+  color: var(--text-mute);
+}
+.ventusky-bar-actions {
+  display: flex;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+.ventusky-open {
+  text-decoration: none;
+  font-size: 0.75rem;
+  padding: 0.3rem 0.6rem !important;
+}
+
+@media (max-width: 720px) {
+  .radar-panel.has-ventusky .radar-stage,
+  .radar-panel.radar-compact.has-ventusky .radar-stage {
+    height: min(70dvh, 560px);
+    min-height: 320px;
+  }
+  .ventusky-frame-wrap {
+    min-height: 260px;
+  }
+  .ventusky-quick {
+    gap: 0.3rem;
+  }
+  .ventusky-quick .chip-btn {
+    flex: 1 1 auto;
+    justify-content: center;
+    min-width: calc(20% - 0.3rem);
+  }
+}
+
 .radar-map {
   width: 100%;
   height: 100%;
@@ -2838,15 +2952,46 @@ select:focus-visible {
   }
   .favorites-mobile-slot {
     display: block;
+    margin: 0 0 0.75rem;
   }
   .favorites-desktop-slot {
     display: none !important;
   }
-  .favorites-panel {
-    margin-bottom: 0.15rem;
+  .favorites-mobile-slot .favorites-panel {
+    margin-bottom: 0;
   }
   .favorites-list {
     max-height: none;
+  }
+  /* Horizontal chip-style picks — faster than tall list on phones */
+  .favorites-mobile-slot .favorites-list {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 0.45rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 0.15rem;
+    scrollbar-width: thin;
+  }
+  .favorites-mobile-slot .favorites-list li {
+    flex: 0 0 auto;
+    min-width: 9.5rem;
+    max-width: 12rem;
+    border-radius: 12px;
+    margin: 0;
+  }
+  .favorites-mobile-slot .fav-main {
+    padding: 0.55rem 0.65rem;
+  }
+  .favorites-mobile-slot .fav-meta {
+    font-size: 0.68rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .favorites-mobile-slot .panel-header h2 {
+    font-size: 0.95rem;
   }
   .account-btn {
     max-width: none;
@@ -2938,8 +3083,18 @@ select:focus-visible {
 
 /* ===== Mobile performance mode (class set in main.tsx) ===== */
 html.mobile-perf .bg-noise,
-html.mobile-perf .ambient-orbs {
+html.mobile-perf .ambient-orbs,
+html.mobile-perf .bg-scrim {
   display: none !important;
+}
+
+.radar-collapsed-hint {
+  margin: 0.35rem 0 0.75rem;
+  padding: 0.75rem;
+  font-size: 0.88rem;
+  border-radius: 12px;
+  border: 1px dashed var(--border);
+  background: rgba(15, 23, 42, 0.4);
 }
 
 html.mobile-perf .topbar,
@@ -2989,8 +3144,33 @@ html.mobile-perf .pin-card {
   transition: none !important;
 }
 
-html.mobile-perf .radar-tiles {
-  /* Leaflet tile fade can thrash GPU on phones */
+/* Kill continuous CSS animations that burn battery */
+html.mobile-perf .pulse,
+html.mobile-perf .pulse.on,
+html.mobile-perf .spinner:not(.large) {
+  animation: none !important;
+}
+
+html.mobile-perf .app {
+  /* Solid bg is cheaper than animated gradients */
+  background-attachment: scroll !important;
+}
+
+/* Reduce compositing layers while scrolling */
+html.mobile-perf .topbar {
+  will-change: auto;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background: #0b1220 !important;
+}
+
+html.mobile-perf[data-theme='light'] .topbar {
+  background: #f1f5f9 !important;
+}
+
+/* Radar crossfade layers — no CSS transition (opacity driven by rAF) */
+.radar-tiles.radar-fade-a,
+.radar-tiles.radar-fade-b {
   transition: none !important;
 }
 

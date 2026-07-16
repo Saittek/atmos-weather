@@ -125,13 +125,8 @@ export function getSourceMeta(id: RadarSourceId): RadarSourceMeta {
   return RADAR_SOURCES.find((s) => s.id === id) ?? RADAR_SOURCES[0]
 }
 
-/** Pick a sensible default from coordinates */
-export function defaultSourceForLocation(lat: number, lon: number): RadarSourceId {
-  // CONUS-ish + nearshore
-  if (lat >= 20 && lat <= 55 && lon >= -130 && lon <= -60) return 'us_nexrad_loop'
-  // Alaska / Hawaii still benefit from GOES + global
-  if (lat >= 50 && lon >= -180 && lon <= -130) return 'goes_west_ir'
-  if (lat >= 15 && lat <= 30 && lon >= -180 && lon <= -140) return 'goes_west_ir'
+/** Default map source — global loop for everyone */
+export function defaultSourceForLocation(_lat?: number, _lon?: number): RadarSourceId {
   return 'global_loop'
 }
 
@@ -186,9 +181,10 @@ export async function fetchRainViewerMaps(): Promise<RvMaps> {
   return data
 }
 
-export function rainViewerFrames(maps: RvMaps, maxPast = 12): RadarFrame[] {
+export function rainViewerFrames(maps: RvMaps, maxPast = 16): RadarFrame[] {
   const past = maps.radar?.past ?? []
   const nowcast = maps.radar?.nowcast ?? []
+  // Keep enough past frames for a smooth continuous loop
   const slice = past.length > maxPast ? past.slice(past.length - maxPast) : past
   return [...slice, ...nowcast].map((f) => ({
     time: f.time,
@@ -209,6 +205,7 @@ export async function loadFrames(
       return buildIemNexradFrames(lite ? 1 : 1.5, 5)
     case 'global_loop': {
       const maps = await fetchRainViewerMaps()
+      // Fewer frames on constrained devices = less tile RAM / GPU
       return rainViewerFrames(maps, lite ? 8 : 14)
     }
     case 'us_nexrad_live':

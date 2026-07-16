@@ -23,7 +23,7 @@ Optional for **accounts/sync** on device:
 | Requirement | Notes |
 |-------------|--------|
 | Hosted API | Deploy `server/` to Railway, Fly.io, Render, etc. |
-| `VITE_API_BASE` | e.g. `https://solara-api.yourdomain.com` when building |
+| `VITE_API_BASE` | `https://solaraweather.com` when building for device/cloud auth |
 
 Without a hosted API, **favorites and prefs still work on-device** (local storage). Sign-in just won’t sync to a server.
 
@@ -55,15 +55,15 @@ Then re-run `npx cap sync ios`.
 ### Production API (optional)
 
 ```bash
-# .env.production
-VITE_API_BASE=https://your-api.example.com
+# .env.production  (or export before build)
+VITE_API_BASE=https://solaraweather.com
 ```
 
 ```bash
 npm run build:ios
 ```
 
-Deploy the Node server (`server/index.js`) with HTTPS and set `JWT_SECRET` in the host env.
+Auth/API already runs on Cloudflare at **https://solaraweather.com/api** (same Worker as the site).
 
 ---
 

@@ -9,7 +9,6 @@ import {
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import {
-  defaultSourceForLocation,
   getSourceMeta,
   loadFrames,
   primaryTileUrl,
@@ -21,7 +20,7 @@ import {
 } from '../api/radar'
 import { formatRadarTime } from '../utils/format'
 import type { Units } from '../utils/format'
-import { MapOverlays, type OverlayMode } from './MapOverlays'
+import { MapOverlays, OVERLAY_OPTIONS, type OverlayMode } from './MapOverlays'
 import { FireSmokeLayers } from './FireSmokeLayers'
 import { isConstrainedDevice as detectConstrained } from '../utils/device'
 
@@ -55,11 +54,18 @@ const BASEMAPS: Record<Basemap, { url: string; attr: string; name: string }> = {
   },
 }
 
-const SPEED_MS = { slow: 900, normal: 550, fast: 300 } as const
-type SpeedKey = keyof typeof SPEED_MS
+/** Hold time after a crossfade finishes (ms) */
+const SPEED_HOLD_MS = { slow: 700, normal: 380, fast: 160 } as const
+/** Crossfade duration between frames (ms) */
+const SPEED_FADE_MS = { slow: 420, normal: 280, fast: 160 } as const
+type SpeedKey = keyof typeof SPEED_HOLD_MS
 
 function isConstrainedDevice() {
   return detectConstrained()
+}
+
+function easeInOut(t: number): number {
+  return t * t * (3 - 2 * t)
 }
 
 function MapRecenter({ lat, lon }: { lat: number; lon: number }) {
@@ -98,8 +104,35 @@ function MapSizeFix() {
   return null
 }
 
+const EMPTY_TILE =
+  'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
+
+function makeTileLayer(
+  url: string,
+  opts: {
+    opacity: number
+    maxNativeZoom: number
+    zIndex: number
+    attribution?: string
+    className?: string
+  },
+): L.TileLayer {
+  return L.tileLayer(url, {
+    opacity: opts.opacity,
+    zIndex: opts.zIndex,
+    maxZoom: 12,
+    maxNativeZoom: opts.maxNativeZoom,
+    className: opts.className ?? 'radar-tiles',
+    attribution: opts.attribution,
+    updateWhenIdle: true,
+    updateWhenZooming: false,
+    keepBuffer: 2,
+    errorTileUrl: EMPTY_TILE,
+  })
+}
+
 /**
- * Single TileLayer that swaps URL templates per frame (much cheaper than stacking).
+ * Static (non-animated) weather tiles — single layer.
  */
 function WeatherTileLayer({
   urlTemplate,
@@ -129,18 +162,12 @@ function WeatherTileLayer({
     }
 
     if (!layerRef.current) {
-      const layer = L.tileLayer(urlTemplate, {
+      const layer = makeTileLayer(urlTemplate, {
         opacity,
-        zIndex,
-        maxZoom: 12,
         maxNativeZoom,
-        className: className ?? 'radar-tiles',
+        zIndex,
         attribution,
-        updateWhenIdle: true,
-        updateWhenZooming: false,
-        keepBuffer: 1,
-        errorTileUrl:
-          'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
+        className,
       })
       layer.addTo(map)
       layerRef.current = layer
@@ -171,27 +198,207 @@ function WeatherTileLayer({
   return null
 }
 
+/**
+ * Smooth radar loop: dual tile layers with opacity crossfade (not hard cuts).
+ * Preloads the next frame, then blends for a continuous video-like feel.
+ */
+function SmoothRadarLoop({
+  frames,
+  frameIdx,
+  frameUrl,
+  opacity,
+  maxNativeZoom,
+  attribution,
+  fadeMs,
+}: {
+  frames: RadarFrame[]
+  frameIdx: number
+  frameUrl: (frame: RadarFrame) => string | null
+  opacity: number
+  maxNativeZoom: number
+  attribution: string
+  fadeMs: number
+}) {
+  const map = useMap()
+  const aRef = useRef<L.TileLayer | null>(null)
+  const bRef = useRef<L.TileLayer | null>(null)
+  const activeIsA = useRef(true)
+  const opacityRef = useRef(opacity)
+  const rafRef = useRef<number | null>(null)
+  const lastIdx = useRef(-1)
+  opacityRef.current = opacity
+
+  const cancelRaf = () => {
+    if (rafRef.current != null) {
+      cancelAnimationFrame(rafRef.current)
+      rafRef.current = null
+    }
+  }
+
+  // Create / destroy pair of layers
+  useEffect(() => {
+    const a = makeTileLayer(EMPTY_TILE, {
+      opacity: 0,
+      maxNativeZoom,
+      zIndex: 200,
+      attribution,
+      className: 'radar-tiles radar-fade-a',
+    })
+    const b = makeTileLayer(EMPTY_TILE, {
+      opacity: 0,
+      maxNativeZoom,
+      zIndex: 201,
+      attribution,
+      className: 'radar-tiles radar-fade-b',
+    })
+    a.addTo(map)
+    b.addTo(map)
+    aRef.current = a
+    bRef.current = b
+    activeIsA.current = true
+    lastIdx.current = -1
+
+    return () => {
+      cancelRaf()
+      try {
+        map.removeLayer(a)
+        map.removeLayer(b)
+      } catch {
+        /* ignore */
+      }
+      aRef.current = null
+      bRef.current = null
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, maxNativeZoom, attribution])
+
+  // Crossfade when frame index changes
+  useEffect(() => {
+    const a = aRef.current
+    const b = bRef.current
+    if (!a || !b || !frames.length) return
+    const frame = frames[frameIdx]
+    if (!frame) return
+    const url = frameUrl(frame)
+    if (!url) return
+
+    const targetOp = opacityRef.current
+
+    // First frame — show on A immediately, no fade
+    if (lastIdx.current < 0) {
+      cancelRaf()
+      a.setUrl(url)
+      a.setOpacity(targetOp)
+      a.setZIndex(210)
+      b.setOpacity(0)
+      b.setZIndex(200)
+      activeIsA.current = true
+      lastIdx.current = frameIdx
+      return
+    }
+
+    if (lastIdx.current === frameIdx) {
+      // Opacity slider only
+      const active = activeIsA.current ? a : b
+      active.setOpacity(targetOp)
+      return
+    }
+
+    lastIdx.current = frameIdx
+    cancelRaf()
+
+    // from = current visible, to = next frame layer
+    const fromLayer = activeIsA.current ? a : b
+    const toLayer = activeIsA.current ? b : a
+    toLayer.setZIndex(210)
+    fromLayer.setZIndex(200)
+    toLayer.setOpacity(0)
+    toLayer.setUrl(url)
+
+    let started = false
+    const startFade = () => {
+      if (started) return
+      started = true
+      const duration = Math.max(80, fadeMs)
+      const t0 = performance.now()
+      fromLayer.setOpacity(targetOp)
+      toLayer.setOpacity(0)
+
+      const tick = (now: number) => {
+        const t = Math.min(1, (now - t0) / duration)
+        const e = easeInOut(t)
+        fromLayer.setOpacity(targetOp * (1 - e))
+        toLayer.setOpacity(targetOp * e)
+        if (t < 1) {
+          rafRef.current = requestAnimationFrame(tick)
+        } else {
+          fromLayer.setOpacity(0)
+          toLayer.setOpacity(targetOp)
+          activeIsA.current = !activeIsA.current
+          rafRef.current = null
+        }
+      }
+      rafRef.current = requestAnimationFrame(tick)
+    }
+
+    // Prefer waiting for tiles, but don't stall the loop forever
+    const onLoad = () => {
+      toLayer.off('load', onLoad)
+      startFade()
+    }
+    toLayer.on('load', onLoad)
+    requestAnimationFrame(() => {
+      try {
+        toLayer.redraw()
+      } catch {
+        /* ignore */
+      }
+    })
+    const safety = window.setTimeout(() => {
+      toLayer.off('load', onLoad)
+      startFade()
+    }, Math.min(900, fadeMs + 500))
+
+    return () => {
+      window.clearTimeout(safety)
+      toLayer.off('load', onLoad)
+    }
+  }, [frameIdx, frames, frameUrl, fadeMs])
+
+  // Live opacity updates while not mid-index-change
+  useEffect(() => {
+    const a = aRef.current
+    const b = bRef.current
+    if (!a || !b || rafRef.current != null) return
+    const active = activeIsA.current ? a : b
+    active.setOpacity(opacity)
+  }, [opacity])
+
+  return null
+}
+
 export function RadarMap({
   lat,
   lon,
   placeName,
-  units,
+  units: _units,
   severeMode,
   mapId = 'radar-map',
   pageMode = false,
 }: Props) {
+  void _units
   const lite = useMemo(() => isConstrainedDevice(), [])
-  const [sourceId, setSourceId] = useState<RadarSourceId>(() =>
-    defaultSourceForLocation(lat, lon),
-  )
+  const [sourceId, setSourceId] = useState<RadarSourceId>('global_loop')
   const [frames, setFrames] = useState<RadarFrame[]>([])
   const [frameIdx, setFrameIdx] = useState(0)
-  const [playing, setPlaying] = useState(() => !lite)
-  const [speed, setSpeed] = useState<SpeedKey>(() => (lite ? 'slow' : 'normal'))
+  // Don't autoplay on constrained devices — user taps play
+  const [playing, setPlaying] = useState(() => !isConstrainedDevice())
+  const [speed, setSpeed] = useState<SpeedKey>(() =>
+    isConstrainedDevice() ? 'slow' : 'normal',
+  )
   const [opacity, setOpacity] = useState(0.78)
   const [basemap, setBasemap] = useState<Basemap>('dark')
   const [showFires, setShowFires] = useState(false)
-  const [showSmoke, setShowSmoke] = useState(false)
   const [overlay, setOverlay] = useState<OverlayMode>('none')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -202,6 +409,13 @@ export function RadarMap({
   const meta = getSourceMeta(sourceId)
   const base = BASEMAPS[basemap]
   const frame = frames[frameIdx] ?? null
+  const fadeMs = lite ? Math.min(SPEED_FADE_MS[speed], 180) : SPEED_FADE_MS[speed]
+  const holdMs = SPEED_HOLD_MS[speed]
+
+  const frameUrl = useCallback(
+    (f: RadarFrame) => primaryTileUrl(sourceId, f, rvHost),
+    [sourceId, rvHost],
+  )
 
   const primaryUrl = useMemo(
     () => primaryTileUrl(sourceId, frame, rvHost),
@@ -217,10 +431,13 @@ export function RadarMap({
         const maps = await fetchRainViewerMaps()
         setRvHost(maps.host || 'https://tilecache.rainviewer.com')
       }
-      const next = await loadFrames(sourceId, { lite })
+      // Prefer fuller loop for global radar smoothness
+      const next = await loadFrames(sourceId, {
+        lite: lite && sourceId !== 'global_loop',
+      })
       if (!next.length) throw new Error('No frames available for this source')
       setFrames(next)
-      setFrameIdx(Math.max(0, next.length - 1))
+      setFrameIdx(0) // start loop from oldest → newest for natural motion
     } catch (e) {
       setFrames([])
       setError(e instanceof Error ? e.message : 'Radar failed to load')
@@ -238,26 +455,15 @@ export function RadarMap({
     return () => window.clearInterval(id)
   }, [reload, lite])
 
-  // Auto-pick better source when location jumps continents
-  useEffect(() => {
-    setSourceId((cur) => {
-      const next = defaultSourceForLocation(lat, lon)
-      // Don't override user if they already chose something compatible
-      const us = lat >= 20 && lat <= 55 && lon >= -130 && lon <= -60
-      if (us && (cur.startsWith('us_') || cur === 'global_loop')) return cur
-      if (!us && (cur === 'global_loop' || cur === 'nasa_ir' || cur.startsWith('goes')))
-        return cur
-      return next
-    })
-  }, [lat, lon])
+  // Keep global loop as the default; only auto-switch away if user never touched source
+  // (no auto continent override — always open on global_loop)
 
   useEffect(() => {
-    if (severeMode && !lite) {
-      setSourceId('us_nexrad_loop')
+    if (severeMode) {
       setPlaying(true)
       setOpacity((o) => Math.max(o, 0.8))
     }
-  }, [severeMode, lite])
+  }, [severeMode])
 
   useEffect(() => {
     const onVis = () => {
@@ -267,16 +473,21 @@ export function RadarMap({
     return () => document.removeEventListener('visibilitychange', onVis)
   }, [])
 
-  // Playback
+  // Pause tile radar while Ventusky model map is open (saves bandwidth)
   useEffect(() => {
+    if (overlay !== 'none') setPlaying(false)
+  }, [overlay])
+
+  // Playback: hold + crossfade timing (advance after fade+hold)
+  useEffect(() => {
+    if (overlay !== 'none') return
     if (!playing || document.hidden || !meta.animated || frames.length < 2) return
-    const wait = SPEED_MS[speed]
-    const hold = frameIdx >= frames.length - 1 ? wait + 700 : wait
+    const hold = frameIdx >= frames.length - 1 ? holdMs + 650 : holdMs
     const t = window.setTimeout(() => {
       setFrameIdx((i) => (i + 1) % frames.length)
-    }, hold)
+    }, hold + fadeMs)
     return () => window.clearTimeout(t)
-  }, [playing, speed, frameIdx, frames.length, meta.animated])
+  }, [playing, holdMs, fadeMs, frameIdx, frames.length, meta.animated, overlay])
 
   const toggleFullscreen = async () => {
     const el = wrapRef.current
@@ -302,122 +513,181 @@ export function RadarMap({
       ? 'Loading…'
       : '—'
 
+  const ventuskyOn = overlay !== 'none'
+  const compact = !pageMode
+
   return (
     <section
       id={mapId}
       ref={wrapRef as React.RefObject<HTMLElement>}
-      className={`panel radar-panel ${fullscreen ? 'is-fullscreen' : ''} ${pageMode ? 'radar-page-mode' : ''} ${severeMode ? 'severe-radar' : ''}`}
+      className={`panel radar-panel ${fullscreen ? 'is-fullscreen' : ''} ${pageMode ? 'radar-page-mode' : ''} ${severeMode ? 'severe-radar' : ''} ${ventuskyOn ? 'has-ventusky' : ''} ${compact ? 'radar-compact' : ''}`}
     >
       <div className="panel-header radar-header">
-        <h2>📡 Live radar</h2>
+        <h2>{ventuskyOn ? '🌡 Model map' : '📡 Live radar'}</h2>
         <div className="radar-header-actions">
-          <span className="panel-hint">{meta.coverage}</span>
-          <button type="button" className="chip-btn" onClick={() => void reload()} disabled={loading}>
-            ↻
-          </button>
+          <span className="panel-hint">{ventuskyOn ? 'Ventusky' : meta.coverage}</span>
+          {!ventuskyOn && (
+            <button type="button" className="chip-btn" onClick={() => void reload()} disabled={loading}>
+              ↻
+            </button>
+          )}
           <button type="button" className="chip-btn" onClick={() => void toggleFullscreen()}>
             {fullscreen ? '✕' : '⛶'}
           </button>
         </div>
       </div>
 
-      <div className="radar-stage">
-        {loading && (
-          <div className="radar-overlay-msg" role="status">
-            Loading {meta.name}…
-          </div>
-        )}
-        {error && (
-          <div className="radar-overlay-msg error" role="alert">
-            {error}
-          </div>
-        )}
-
-        <MapContainer
-          key={`${mapId}-${lat.toFixed(2)}-${lon.toFixed(2)}`}
-          center={[lat, lon]}
-          zoom={pageMode ? 6 : 7}
-          minZoom={3}
-          maxZoom={12}
-          className="radar-map"
-          zoomControl
-          attributionControl
-          style={{ width: '100%', height: '100%' }}
+      {/* Quick model layers — always visible so mobile can open Ventusky without hunting */}
+      <div className="ventusky-quick" role="toolbar" aria-label="Model map layers">
+        <button
+          type="button"
+          className={`chip-btn ${overlay === 'none' ? 'active' : ''}`}
+          onClick={() => setOverlay('none')}
         >
-          <TileLayer url={base.url} attribution={base.attr} maxZoom={19} />
+          Radar
+        </button>
+        {(
+          [
+            ['temp', 'Temp'],
+            ['wind', 'Wind'],
+            ['precip', 'Rain'],
+            ['clouds', 'Clouds'],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            className={`chip-btn ${overlay === id ? 'active' : ''}`}
+            onClick={() => setOverlay(id)}
+          >
+            {label}
+          </button>
+        ))}
+        <button
+          type="button"
+          className={`chip-btn ${['gust', 'pressure', 'cape'].includes(overlay) ? 'active' : ''}`}
+          onClick={() => setOverlay(overlay === 'gust' ? 'pressure' : overlay === 'pressure' ? 'cape' : 'gust')}
+          title="More Ventusky layers"
+        >
+          More
+        </button>
+      </div>
 
-          {secondaryUrl && (
-            <WeatherTileLayer
-              urlTemplate={secondaryUrl}
-              opacity={0.55}
-              maxNativeZoom={7}
-              zIndex={180}
-              className="satellite-tiles"
-              attribution={meta.attribution}
-            />
-          )}
-
-          <WeatherTileLayer
-            urlTemplate={primaryUrl}
-            opacity={opacity}
-            maxNativeZoom={meta.maxNativeZoom}
-            zIndex={200}
-            attribution={meta.attribution}
-          />
-
-          <FireSmokeLayers
-            lat={lat}
-            lon={lon}
-            showFires={showFires}
-            showSmoke={showSmoke}
-          />
+      <div className="radar-stage">
+        {ventuskyOn ? (
           <MapOverlays
             lat={lat}
             lon={lon}
             mode={overlay}
-            units={units}
-            enabled={overlay !== 'none'}
+            placeName={placeName}
+            mapZoom={compact ? 5 : 6}
+            compact={compact}
           />
+        ) : (
+          <>
+            {loading && (
+              <div className="radar-overlay-msg" role="status">
+                Loading {meta.name}…
+              </div>
+            )}
+            {error && (
+              <div className="radar-overlay-msg error" role="alert">
+                {error}
+              </div>
+            )}
 
-          <CircleMarker
-            center={[lat, lon]}
-            radius={7}
-            pathOptions={{
-              color: '#fff',
-              weight: 2,
-              fillColor: '#38bdf8',
-              fillOpacity: 0.95,
-            }}
-          >
-            <Popup>{placeName}</Popup>
-          </CircleMarker>
-          <MapRecenter lat={lat} lon={lon} />
-          <MapSizeFix />
-        </MapContainer>
+            <MapContainer
+              key={`${mapId}-${lat.toFixed(2)}-${lon.toFixed(2)}`}
+              center={[lat, lon]}
+              zoom={pageMode ? 6 : 7}
+              minZoom={3}
+              maxZoom={12}
+              className="radar-map"
+              zoomControl
+              attributionControl
+              style={{ width: '100%', height: '100%' }}
+            >
+              <TileLayer url={base.url} attribution={base.attr} maxZoom={19} />
 
-        <div className="radar-legend">
-          <span>Light</span>
-          <div
-            className="legend-gradient"
-            style={{
-              background:
-                sourceId.includes('goes') || sourceId === 'nasa_ir'
-                  ? 'linear-gradient(90deg,#0b1220,#4b5563,#e5e7eb,#fef3c7,#f97316)'
-                  : 'linear-gradient(90deg,#00ecec,#01a0f6,#00ff00,#ffff00,#ff9000,#ff0000,#c000c0)',
-            }}
-          />
-          <span>Heavy</span>
-        </div>
+              {secondaryUrl && (
+                <WeatherTileLayer
+                  urlTemplate={secondaryUrl}
+                  opacity={0.55}
+                  maxNativeZoom={7}
+                  zIndex={180}
+                  className="satellite-tiles"
+                  attribution={meta.attribution}
+                />
+              )}
 
-        <div className="radar-time-badge">
-          <span className={`pulse ${playing && meta.animated ? 'on' : ''}`} />
-          {timeLabel}
-          {meta.animated && frames.length > 0 && (
-            <span className="frame-count">
-              {frameIdx + 1}/{frames.length}
-            </span>
-          )}
-        </div>
+              {meta.animated && frames.length > 0 ? (
+                <SmoothRadarLoop
+                  frames={frames}
+                  frameIdx={frameIdx}
+                  frameUrl={frameUrl}
+                  opacity={opacity}
+                  maxNativeZoom={meta.maxNativeZoom}
+                  attribution={meta.attribution}
+                  fadeMs={fadeMs}
+                />
+              ) : (
+                <WeatherTileLayer
+                  urlTemplate={primaryUrl}
+                  opacity={opacity}
+                  maxNativeZoom={meta.maxNativeZoom}
+                  zIndex={200}
+                  attribution={meta.attribution}
+                />
+              )}
+
+              <FireSmokeLayers
+                lat={lat}
+                lon={lon}
+                showFires={showFires}
+                showSmoke={false}
+              />
+
+              <CircleMarker
+                center={[lat, lon]}
+                radius={7}
+                pathOptions={{
+                  color: '#fff',
+                  weight: 2,
+                  fillColor: '#38bdf8',
+                  fillOpacity: 0.95,
+                }}
+              >
+                <Popup>{placeName}</Popup>
+              </CircleMarker>
+              <MapRecenter lat={lat} lon={lon} />
+              <MapSizeFix />
+            </MapContainer>
+
+            <div className="radar-legend">
+              <span>Light</span>
+              <div
+                className="legend-gradient"
+                style={{
+                  background:
+                    sourceId.includes('goes') || sourceId === 'nasa_ir'
+                      ? 'linear-gradient(90deg,#0b1220,#4b5563,#e5e7eb,#fef3c7,#f97316)'
+                      : 'linear-gradient(90deg,#00ecec,#01a0f6,#00ff00,#ffff00,#ff9000,#ff0000,#c000c0)',
+                }}
+              />
+              <span>Heavy</span>
+            </div>
+
+            <div className="radar-time-badge">
+              <span className={`pulse ${playing && meta.animated ? 'on' : ''}`} />
+              {timeLabel}
+              {meta.animated && frames.length > 0 && (
+                <span className="frame-count">
+                  {frameIdx + 1}/{frames.length}
+                </span>
+              )}
+            </div>
+          </>
+        )}
       </div>
 
       <div className="radar-controls">
@@ -506,16 +776,16 @@ export function RadarMap({
           </label>
 
           <label className="opt">
-            Model overlay
+            Model map (Ventusky)
             <select
               value={overlay}
               onChange={(e) => setOverlay(e.target.value as OverlayMode)}
             >
-              <option value="none">None</option>
-              <option value="temp">Temperature</option>
-              <option value="wind">Wind</option>
-              <option value="clouds">Cloud cover</option>
-              <option value="precip">Precip (model)</option>
+              {OVERLAY_OPTIONS.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.label}
+                </option>
+              ))}
             </select>
           </label>
 
@@ -527,20 +797,13 @@ export function RadarMap({
             />
             🔥 Fires
           </label>
-          <label className="toggle smoke-toggle">
-            <input
-              type="checkbox"
-              checked={showSmoke}
-              onChange={(e) => setShowSmoke(e.target.checked)}
-            />
-            💨 Smoke
-          </label>
         </div>
 
         <p className="radar-product-hint">
-          {meta.desc}
+          {overlay !== 'none'
+            ? 'Interactive model fields from Ventusky — pan, zoom, and scrub time inside the map.'
+            : meta.desc}
           {showFires ? ' · NASA FIRMS 24h fires' : ''}
-          {showSmoke ? ' · PM2.5 haze field' : ''}
         </p>
       </div>
     </section>

@@ -13,14 +13,27 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>Solara — Weather Command</title>
-    <!-- Non-blocking fonts: don't stall first paint -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!--
+      AdSense is injected after idle from main.tsx (loadAdSenseDeferred)
+      so mobile first paint isn't competing with ads JS.
+    -->
+    <!-- System UI fonts first; desktop still gets DM Sans below -->
+    <style>
+      html.system-fonts body,
+      html.system-fonts button,
+      html.system-fonts input,
+      html.system-fonts select {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+      }
+    </style>
+    <!-- Desktop-only web fonts (skipped when .system-fonts is set on <html>) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" media="(min-width: 721px)" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin media="(min-width: 721px)" />
     <link
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@400;500&display=swap"
       media="print"
-      onload="this.media='all'"
+      onload="this.media=window.matchMedia('(min-width:721px)').matches?'all':'not all'"
     />
     <noscript>
       <link

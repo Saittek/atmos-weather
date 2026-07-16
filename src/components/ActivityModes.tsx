@@ -24,7 +24,6 @@ export function ActivityModes({ weather, units, air }: Props) {
     <section className="panel activity-modes-panel">
       <div className="panel-header">
         <h2>🎯 Today’s modes</h2>
-        <span className="panel-hint">Commute · school · outdoor · evening</span>
       </div>
       <div className="activity-mode-tabs" role="tablist" aria-label="Activity mode">
         {ACTIVITY_MODES.map((m) => (

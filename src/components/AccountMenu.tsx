@@ -13,9 +13,10 @@ export function AccountMenu({ onCloudSync, synced }: Props) {
   const [open, setOpen] = useState(false)
   const [authOpen, setAuthOpen] = useState(false)
 
-  if (loading) {
+  // Only show spinner when we have no user yet (token revalidating with no cache)
+  if (loading && !user) {
     return (
-      <button type="button" className="chip-btn account-btn" disabled>
+      <button type="button" className="chip-btn account-btn" disabled title="Signing you in…">
         …
       </button>
     )

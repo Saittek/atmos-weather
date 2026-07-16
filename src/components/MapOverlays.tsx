@@ -1,175 +1,135 @@
-import { useEffect, useState } from 'react'
-import { CircleMarker, Popup, useMap } from 'react-leaflet'
-import { fetchWeatherGrid } from '../api/weather'
-import type { GridPoint } from '../api/types'
-import type { Units } from '../utils/format'
-import { convertSpeed, convertTemp, formatSpeed, formatTemp } from '../utils/format'
+/**
+ * Model overlay — Ventusky official embed
+ * https://embed.ventusky.com
+ * Sized to work in the compact dashboard radar panel and on mobile.
+ */
 
-export type OverlayMode = 'none' | 'temp' | 'wind' | 'clouds' | 'precip'
+export type OverlayMode =
+  | 'none'
+  | 'temp'
+  | 'wind'
+  | 'gust'
+  | 'clouds'
+  | 'precip'
+  | 'pressure'
+  | 'cape'
+
+/** Ventusky layer ids (parameter `l`) */
+const VENTUSKY_LAYERS: Record<Exclude<OverlayMode, 'none'>, string> = {
+  temp: 'temperature-2m',
+  wind: 'wind-10m',
+  gust: 'gust',
+  clouds: 'clouds-total',
+  precip: 'rain-1h',
+  pressure: 'pressure',
+  cape: 'cape',
+}
+
+export const OVERLAY_OPTIONS: { id: OverlayMode; label: string }[] = [
+  { id: 'none', label: 'None (radar only)' },
+  { id: 'temp', label: 'Temperature' },
+  { id: 'wind', label: 'Wind' },
+  { id: 'gust', label: 'Wind gusts' },
+  { id: 'clouds', label: 'Cloud cover' },
+  { id: 'precip', label: 'Precip 1h' },
+  { id: 'pressure', label: 'Pressure' },
+  { id: 'cape', label: 'CAPE / instability' },
+]
+
+export function ventuskyEmbedUrl(
+  lat: number,
+  lon: number,
+  mode: Exclude<OverlayMode, 'none'>,
+  zoom = 5,
+  placeName?: string,
+): string {
+  const layer = VENTUSKY_LAYERS[mode]
+  // Slightly lower zoom so the field fits small panels / phones
+  const z = Math.max(3, Math.min(8, Math.round(zoom)))
+  const p = `${lat.toFixed(3)};${lon.toFixed(3)};${z}`
+  // Build manually so `;` in p/pin stay unescaped (Ventusky requires them)
+  let url = `https://embed.ventusky.com/?p=${p}&l=${encodeURIComponent(layer)}`
+  if (placeName) {
+    const safe = placeName.replace(/[;|&<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 28)
+    if (safe) {
+      url += `&pin=${lat.toFixed(3)};${lon.toFixed(3)};dot;${encodeURIComponent(safe)}`
+    }
+  }
+  return url
+}
+
+export function ventuskyShareUrl(
+  lat: number,
+  lon: number,
+  mode: Exclude<OverlayMode, 'none'>,
+  zoom = 5,
+): string {
+  const layer = VENTUSKY_LAYERS[mode]
+  const z = Math.max(3, Math.min(8, Math.round(zoom)))
+  return `https://www.ventusky.com/?p=${lat.toFixed(3)};${lon.toFixed(3)};${z}&l=${layer}`
+}
 
 interface Props {
   lat: number
   lon: number
   mode: OverlayMode
-  units: Units
-  enabled: boolean
+  placeName?: string
+  /** Leaflet-ish zoom 3–12 → Ventusky zoom */
+  mapZoom?: number
+  /** Compact panel (dashboard) vs full page */
+  compact?: boolean
 }
 
-function tempColor(c: number): string {
-  // celsius scale
-  if (c <= -10) return '#312e81'
-  if (c <= 0) return '#2563eb'
-  if (c <= 10) return '#22d3ee'
-  if (c <= 18) return '#4ade80'
-  if (c <= 26) return '#facc15'
-  if (c <= 32) return '#f97316'
-  return '#ef4444'
-}
-
-function windColor(kmh: number): string {
-  if (kmh < 10) return '#86efac'
-  if (kmh < 20) return '#4ade80'
-  if (kmh < 35) return '#facc15'
-  if (kmh < 50) return '#f97316'
-  return '#ef4444'
-}
-
-function cloudColor(pct: number): string {
-  const a = 0.15 + (pct / 100) * 0.55
-  return `rgba(226,232,240,${a})`
-}
-
-function precipColor(mm: number): string {
-  if (mm <= 0) return 'transparent'
-  if (mm < 0.5) return 'rgba(56,189,248,0.45)'
-  if (mm < 2) return 'rgba(37,99,235,0.55)'
-  if (mm < 5) return 'rgba(29,78,216,0.65)'
-  return 'rgba(126,34,206,0.7)'
-}
-
-function GridLayer({
-  points,
+/**
+ * Full-bleed Ventusky model map for the radar stage.
+ * Renders nothing when mode is none.
+ */
+export function MapOverlays({
+  lat,
+  lon,
   mode,
-  units,
-}: {
-  points: GridPoint[]
-  mode: OverlayMode
-  units: Units
-}) {
-  if (mode === 'none' || !points.length) return null
+  placeName,
+  mapZoom = 5,
+  compact = false,
+}: Props) {
+  if (mode === 'none') return null
+
+  // Compact / mobile: pull out a bit so layers read better
+  const z = compact ? Math.min(mapZoom, 5) : mapZoom
+  const src = ventuskyEmbedUrl(lat, lon, mode, z, placeName)
+  const share = ventuskyShareUrl(lat, lon, mode, z)
+  const label = OVERLAY_OPTIONS.find((o) => o.id === mode)?.label ?? 'Ventusky'
 
   return (
-    <>
-      {points.map((p) => {
-        let color = '#fff'
-        let radius = 14
-        let label = ''
-
-        if (mode === 'temp') {
-          color = tempColor(p.temperature_2m)
-          label = formatTemp(p.temperature_2m, units)
-          radius = 16
-        } else if (mode === 'wind') {
-          color = windColor(p.wind_speed_10m)
-          label = formatSpeed(p.wind_speed_10m, units)
-          radius = 12 + Math.min(10, p.wind_speed_10m / 5)
-        } else if (mode === 'clouds') {
-          color = cloudColor(p.cloud_cover)
-          label = `${Math.round(p.cloud_cover)}% cloud`
-          radius = 18
-        } else if (mode === 'precip') {
-          color = precipColor(p.precipitation)
-          label =
-            p.precipitation > 0
-              ? `${p.precipitation.toFixed(1)} mm`
-              : 'Dry'
-          radius = p.precipitation > 0 ? 14 + p.precipitation * 2 : 8
-        }
-
-        if (mode === 'precip' && p.precipitation <= 0) return null
-
-        return (
-          <CircleMarker
-            key={`${p.lat}-${p.lon}-${mode}`}
-            center={[p.lat, p.lon]}
-            radius={radius}
-            pathOptions={{
-              color: mode === 'clouds' ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.25)',
-              weight: 1,
-              fillColor: color,
-              fillOpacity: mode === 'clouds' ? 0.85 : 0.72,
-            }}
+    <div className={`ventusky-overlay ${compact ? 'is-compact' : ''}`}>
+      <div className="ventusky-frame-wrap">
+        <iframe
+          key={src}
+          title={`Ventusky ${label}`}
+          src={src}
+          className="ventusky-frame"
+          // Do not use loading="lazy" — delayed iframes often never paint in small panels
+          allow="fullscreen; accelerometer; gyroscope"
+          allowFullScreen
+          referrerPolicy="origin-when-cross-origin"
+        />
+      </div>
+      <div className="ventusky-bar">
+        <span className="ventusky-credit">
+          <strong>{label}</strong>
+          <span className="ventusky-by"> · Ventusky</span>
+        </span>
+        <div className="ventusky-bar-actions">
+          <a
+            className="chip-btn ventusky-open"
+            href={share}
+            target="_blank"
+            rel="noreferrer"
           >
-            <Popup>
-              <strong>{label}</strong>
-              <br />
-              {formatTemp(p.temperature_2m, units)} · {formatSpeed(p.wind_speed_10m, units)}
-              <br />
-              {Math.round(p.cloud_cover)}% cloud
-              {mode === 'wind' && (
-                <>
-                  <br />
-                  Dir {Math.round(p.wind_direction_10m)}° ·{' '}
-                  {Math.round(convertSpeed(p.wind_speed_10m, units))}{' '}
-                  {units === 'metric' ? 'km/h' : 'mph'}
-                </>
-              )}
-              {mode === 'temp' && (
-                <>
-                  <br />
-                  {Math.round(convertTemp(p.temperature_2m, units))}° grid sample
-                </>
-              )}
-            </Popup>
-          </CircleMarker>
-        )
-      })}
-    </>
+            Full map ↗
+          </a>
+        </div>
+      </div>
+    </div>
   )
-}
-
-export function MapOverlays({ lat, lon, mode, units, enabled }: Props) {
-  const map = useMap()
-  const [points, setPoints] = useState<GridPoint[]>([])
-  const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    if (!enabled || mode === 'none') {
-      setPoints([])
-      return
-    }
-    let cancelled = false
-    const load = async () => {
-      setLoading(true)
-      try {
-        const z = map.getZoom()
-        const span = z >= 8 ? 1.2 : z >= 6 ? 2.5 : 4.5
-        const steps = z >= 8 ? 6 : 5
-        const grid = await fetchWeatherGrid(lat, lon, span, steps)
-        if (!cancelled) setPoints(grid)
-      } catch {
-        if (!cancelled) setPoints([])
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    void load()
-    return () => {
-      cancelled = true
-    }
-  }, [lat, lon, mode, enabled, map])
-
-  useEffect(() => {
-    const el = map.getContainer()
-    el.dataset.overlayLoading = loading ? '1' : '0'
-  }, [loading, map])
-
-  // Leaflet needs a size refresh after layout changes
-  useEffect(() => {
-    const t = window.setTimeout(() => map.invalidateSize(), 80)
-    return () => window.clearTimeout(t)
-  }, [map, mode, enabled])
-
-  if (!enabled || mode === 'none') return null
-  return <GridLayer points={points} mode={mode} units={units} />
 }
