@@ -61,14 +61,33 @@ const forecastCache = new Map<string, { at: number; data: WeatherData }>()
 const airCache = new Map<string, { at: number; data: AirQualityData | null }>()
 const FORECAST_TTL_MS = 90_000
 
-function cacheKey(lat: number, lon: number) {
-  return `${lat.toFixed(3)},${lon.toFixed(3)}`
+function cacheKey(lat: number, lon: number, tag = '') {
+  return `${lat.toFixed(3)},${lon.toFixed(3)}${tag ? `:${tag}` : ''}`
 }
 
-export async function fetchWeather(lat: number, lon: number): Promise<WeatherData> {
-  const key = cacheKey(lat, lon)
+export type FetchWeatherOpts = {
+  /**
+   * Smaller payload for phones: still enough for hourly strip + 10-day outlook,
+   * ~40–60% less JSON than the desktop request.
+   */
+  lite?: boolean
+}
+
+export async function fetchWeather(
+  lat: number,
+  lon: number,
+  opts?: FetchWeatherOpts,
+): Promise<WeatherData> {
+  const lite = Boolean(opts?.lite)
+  const key = cacheKey(lat, lon, lite ? 'lite' : 'full')
   const hit = forecastCache.get(key)
   if (hit && Date.now() - hit.at < FORECAST_TTL_MS) return hit.data
+
+  // Cap cache size so soft-refresh + place hopping doesn't grow forever
+  if (forecastCache.size > 24) {
+    const first = forecastCache.keys().next().value
+    if (first != null) forecastCache.delete(first)
+  }
 
   const params = new URLSearchParams({
     latitude: String(lat),
@@ -133,9 +152,10 @@ export async function fetchWeather(lat: number, lon: number): Promise<WeatherDat
     ].join(','),
     minutely_15: 'precipitation,weather_code,wind_speed_10m,temperature_2m',
     timezone: 'auto',
-    forecast_days: '14',
-    forecast_hours: '168',
-    forecast_minutely_15: '16',
+    // Lite: 10 days + 72h hourly is enough for mobile UI (hourly strip ≤16)
+    forecast_days: lite ? '10' : '14',
+    forecast_hours: lite ? '72' : '120',
+    forecast_minutely_15: lite ? '12' : '16',
     // Yesterday + recent hours for trends / "vs yesterday"
     past_days: '1',
   })
@@ -206,8 +226,13 @@ export async function fetchClimateNormal(
   }
 }
 
-export async function fetchAirQuality(lat: number, lon: number): Promise<AirQualityData | null> {
-  const key = cacheKey(lat, lon)
+export async function fetchAirQuality(
+  lat: number,
+  lon: number,
+  opts?: { lite?: boolean },
+): Promise<AirQualityData | null> {
+  const lite = Boolean(opts?.lite)
+  const key = cacheKey(lat, lon, lite ? 'air-lite' : 'air')
   const hit = airCache.get(key)
   if (hit && Date.now() - hit.at < FORECAST_TTL_MS) return hit.data
 
@@ -234,10 +259,13 @@ export async function fetchAirQuality(lat: number, lon: number): Promise<AirQual
         'european_aqi',
         pollen,
       ].join(','),
-      hourly: `us_aqi,pm10,pm2_5,${pollen}`,
       timezone: 'auto',
-      forecast_days: '3',
     })
+    // Hourly AQI/pollen is only used by deeper panels (desktop)
+    if (!lite) {
+      params.set('hourly', `us_aqi,pm10,pm2_5,${pollen}`)
+      params.set('forecast_days', '3')
+    }
     const res = await fetch(`${AIR}?${params}`)
     if (!res.ok) {
       airCache.set(key, { at: Date.now(), data: null })

@@ -107,7 +107,11 @@ export function AreaChat({ location }: Props) {
     }
 
     void load(false)
-    const id = window.setInterval(() => void load(true), 4000)
+    // 12s poll (was 4s) — still feels live, far less battery/API load
+    const id = window.setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return
+      void load(true)
+    }, 12_000)
     return () => {
       cancelled = true
       window.clearInterval(id)

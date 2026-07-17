@@ -333,7 +333,8 @@ export function WeatherIcon3D({
   isDay = true,
   size = 'md',
   className = '',
-  forceAnimate = true,
+  /** Only hero / featured icons should force continuous animation */
+  forceAnimate = false,
 }: Props) {
   const uid = useId().replace(/:/g, '')
   const boltGradId = `boltGrad-${uid}`

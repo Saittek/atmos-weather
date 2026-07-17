@@ -8,12 +8,14 @@ export function isIOS(): boolean {
   return Capacitor.getPlatform() === 'ios'
 }
 
-/** API base for auth — empty string uses same-origin / Vite proxy */
+/** API base for auth/chat — empty string uses same-origin / Vite proxy on web */
 export function getApiBase(): string {
   const fromEnv = import.meta.env.VITE_API_BASE as string | undefined
   if (fromEnv) return fromEnv.replace(/\/$/, '')
 
-  // On device, relative /api hits the phone itself — set VITE_API_BASE for cloud auth
+  // Capacitor bundles local files — relative /api would hit the phone, not Cloudflare
+  if (isNativeApp()) return 'https://solaraweather.com'
+
   return ''
 }
 

@@ -4,12 +4,15 @@
 # Setup:
 # 1. Push this repo to GitHub/GitLab/Bitbucket
 # 2. Sign up at https://codemagic.io and connect the repo
-# 3. In Codemagic → Teams → Code signing identities:
-#    - Upload App Store Connect API key (or Apple ID + app-specific password)
-#    - Or use automatic code signing with your Apple Developer account
-# 4. Set environment variables (optional):
-#    VITE_API_BASE = https://your-api.example.com
-# 5. Start the "ios-app-store" workflow
+# 3. Codemagic → Teams → Integrations → App Store Connect:
+#    - Add API key (.p8), name the integration exactly: Solara
+#      (or change the name under integrations: below)
+# 4. Create the app once in App Store Connect (bundle id com.solara.weather)
+# 5. Optional env vars in Codemagic UI (Application → Environment variables):
+#    - VITE_API_BASE = https://solaraweather.com
+#    - APP_STORE_APPLE_ID = 1234567890  (numeric id from App Store Connect URL)
+#      Only needed for some publishing setups; leave unset if you use bundle id.
+# 6. Start workflow: ios-simulator-check first, then ios-app-store
 
 workflows:
   ios-app-store:
@@ -17,17 +20,19 @@ workflows:
     max_build_duration: 60
     instance_type: mac_mini_m2
     integrations:
-      app_store_connect: Solara # rename to your Codemagic integration name
+      # Must match the integration name in Codemagic UI
+      app_store_connect: Solara
     environment:
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.solara.weather
       vars:
-        XCODE_WORKSPACE: "ios/App/App.xcodeproj"
-        # If Codemagic expects .xcworkspace after CocoaPods, switch to that path
         XCODE_SCHEME: "App"
         BUNDLE_ID: "com.solara.weather"
-        APP_STORE_APPLE_ID: "" # numeric App Store Connect app id after first create
+        # Do NOT put APP_STORE_APPLE_ID: "" here — empty strings fail validation.
+        # If Codemagic asks for it, add a non-empty numeric value in the UI:
+        #   App Store Connect → your app → App Information → Apple ID
+        #   or from the URL: appstoreconnect.apple.com/apps/XXXXXXXXXX/...
       node: v22.14.0
       xcode: latest
       cocoapods: default
@@ -37,7 +42,7 @@ workflows:
           npm ci || npm install
       - name: Build web + Capacitor sync
         script: |
-          # Optional: export VITE_API_BASE from Codemagic env group
+          export VITE_API_BASE="${VITE_API_BASE:-https://solaraweather.com}"
           npm run build
           npx cap sync ios
       - name: Set up code signing
@@ -56,17 +61,18 @@ workflows:
     publishing:
       email:
         recipients:
-          - you@example.com
+          - Yellowknife1989@gmail.com
         notify:
           success: true
           failure: true
       app_store_connect:
         auth: integration
-        # Submit to TestFlight (set true when ready)
+        # Upload to TestFlight after a successful archive
         submit_to_testflight: true
-        # submit_to_app_store: false
+        # Optional: only if set as a Codemagic env var (must be non-empty digits)
+        # apple_id: $APP_STORE_APPLE_ID
 
-  # Quick compile check (no upload) — free-tier friendly
+  # Quick compile check (no upload) — use this first
   ios-simulator-check:
     name: Solara iOS compile check
     max_build_duration: 45
@@ -77,6 +83,7 @@ workflows:
     scripts:
       - name: Install & build
         script: |
+          export VITE_API_BASE="${VITE_API_BASE:-https://solaraweather.com}"
           npm ci || npm install
           npm run build
           npx cap sync ios

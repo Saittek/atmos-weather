@@ -1,5 +1,5 @@
 /* Solara PWA — network-first HTML, cache hashed assets only */
-const CACHE = 'solara-v3'
+const CACHE = 'solara-v4'
 
 self.addEventListener('install', (event) => {
   // Activate immediately so mobile clients leave broken old caches

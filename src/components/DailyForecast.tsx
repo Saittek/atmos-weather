@@ -67,7 +67,7 @@ export function DailyForecast({ weather, units }: Props) {
                         : formatWeekday(day, weather.timezone)}
                 </span>
                 <span className="d-icon" title={info.label}>
-                  <WeatherIcon3D code={d.weather_code[i]} isDay size="sm" forceAnimate />
+                  <WeatherIcon3D code={d.weather_code[i]} isDay size="sm" />
                 </span>
                 <span className={`d-pop ${pop >= 40 ? 'wet' : ''}`}>
                   {pop > 0 ? `${pop}%` : ''}

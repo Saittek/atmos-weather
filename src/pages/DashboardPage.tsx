@@ -204,51 +204,67 @@ export default function DashboardPage() {
 
   const radarBlock = location && weather && (
     <div className="priority-radar" id="radar-map-wrap">
-      <div className="radar-jump-row">
-        <Link to={radarPath} className="primary-btn radar-open-btn">
-          📡 Full-page radar
-        </Link>
-        <Link to="/widget" className="chip-btn">
-          ☔ Rain widget
-        </Link>
-        {isMobile && !wantRadar && (
-          <button type="button" className="chip-btn" onClick={() => setRadarOpen(true)}>
-            Show inline radar
-          </button>
-        )}
-        {isMobile && wantRadar && !stormMode && (
-          <button type="button" className="chip-btn" onClick={() => setRadarOpen(false)}>
-            Hide radar
-          </button>
-        )}
-        {!stormMode && (
-          <button type="button" className="chip-btn" onClick={() => setStormMode(true)}>
-            🌩 Storm mode
-          </button>
-        )}
-      </div>
-      {wantRadar ? (
-        <Deferred
-          force={stormMode || !isMobile}
-          rootMargin="200px 0px"
-          minHeight={isMobile ? 320 : 420}
-          placeholder={<MapChunkFallback label="Loading radar when visible…" />}
-        >
-          <Suspense fallback={<MapChunkFallback label="Loading live radar…" />}>
-            <RadarMap
-              lat={location.latitude}
-              lon={location.longitude}
-              placeName={location.name}
-              units={units}
-              severeMode={severe}
-              mapId="radar-map"
-            />
-          </Suspense>
-        </Deferred>
+      {/* Mobile: collapsed until user taps View radar (saves battery/CPU) */}
+      {isMobile && !wantRadar ? (
+        <section className="panel radar-cta-panel" aria-label="Radar">
+          <div className="panel-header">
+            <h2>📡 Radar</h2>
+            <span className="panel-hint">Off until you open it</span>
+          </div>
+          <p className="radar-cta-copy muted-center">
+            Live radar uses more battery. Open it when you need the map.
+          </p>
+          <div className="radar-cta-actions">
+            <button
+              type="button"
+              className="primary-btn radar-view-btn"
+              onClick={() => setRadarOpen(true)}
+            >
+              View radar
+            </button>
+            <Link to={radarPath} className="chip-btn">
+              Full page
+            </Link>
+          </div>
+        </section>
       ) : (
-        <p className="radar-collapsed-hint muted-center">
-          Radar stays off to save battery — open full-page radar or tap Show inline radar.
-        </p>
+        <>
+          <div className="radar-jump-row">
+            <Link to={radarPath} className="primary-btn radar-open-btn">
+              📡 Full-page radar
+            </Link>
+            <Link to="/widget" className="chip-btn hide-sm">
+              ☔ Rain widget
+            </Link>
+            {isMobile && wantRadar && !stormMode && (
+              <button type="button" className="chip-btn" onClick={() => setRadarOpen(false)}>
+                Hide radar
+              </button>
+            )}
+            {!stormMode && (
+              <button type="button" className="chip-btn" onClick={() => setStormMode(true)}>
+                🌩 Storm mode
+              </button>
+            )}
+          </div>
+          <Deferred
+            force={stormMode || !isMobile || radarOpen}
+            rootMargin="200px 0px"
+            minHeight={isMobile ? 320 : 420}
+            placeholder={<MapChunkFallback label="Loading radar when visible…" />}
+          >
+            <Suspense fallback={<MapChunkFallback label="Loading live radar…" />}>
+              <RadarMap
+                lat={location.latitude}
+                lon={location.longitude}
+                placeName={location.name}
+                units={units}
+                severeMode={severe}
+                mapId="radar-map"
+              />
+            </Suspense>
+          </Deferred>
+        </>
       )}
     </div>
   )
@@ -335,9 +351,7 @@ export default function DashboardPage() {
           </div>
         </header>
 
-        <p className="brand-promise">
-          Weather that tells you if you&apos;ll get wet — radar, alerts, and your places.
-        </p>
+        <p className="brand-promise">The best weather app — clear, fast, and built for real life.</p>
 
         {stormMode && (
           <div className="storm-mode-banner" role="status">
@@ -444,22 +458,23 @@ export default function DashboardPage() {
                   profile={profile}
                 />
                 <RainNextHour weather={weather} units={units} />
-                {/* Defer secondary panels on mobile so first paint stays light */}
-                <Deferred
-                  force={!isMobile}
-                  rootMargin="120px 0px"
-                  minHeight={isMobile ? 80 : undefined}
-                >
-                  <ActivityModes weather={weather} units={units} air={air} />
-                  <HazardBadges weather={weather} units={units} />
-                  <TodayTimeline weather={weather} units={units} />
-                </Deferred>
+                {/* 7-day right under next ~2 hours, then radar below */}
+                <WeekStrip weather={weather} units={units} />
               </div>
 
-              {/* Storm: radar immediately after priority */}
-              {stormMode && radarBlock}
+              {/* Radar immediately under 7-day (mobile = View radar button until opened) */}
+              {radarBlock}
 
-              <WeekStrip weather={weather} units={units} />
+              {/* Defer secondary panels on mobile so first paint stays light */}
+              <Deferred
+                force={!isMobile}
+                rootMargin="120px 0px"
+                minHeight={isMobile ? 80 : undefined}
+              >
+                <ActivityModes weather={weather} units={units} air={air} />
+                <HazardBadges weather={weather} units={units} />
+                <TodayTimeline weather={weather} units={units} />
+              </Deferred>
 
               {/* Home pins need rain-watch network — skip empty shell on mobile */}
               {(!isMobile || rainWatch.snapshots.length > 0 || rainWatch.loading) && (
@@ -476,8 +491,6 @@ export default function DashboardPage() {
               <div id="alerts-panel">
                 {!alertsMinimized && <Alerts alerts={activeAlerts} />}
               </div>
-
-              {!stormMode && radarBlock}
 
               <HourlyForecast weather={weather} units={units} />
               <Deferred

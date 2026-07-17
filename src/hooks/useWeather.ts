@@ -162,7 +162,7 @@ export function useWeather() {
   const { user, cloudData, setCloudData } = useAuth()
   const [prefs, setPrefs] = useState<Prefs>(loadPrefs)
   const [resolvedTheme, setResolvedTheme] = useState<'dark' | 'light'>(() =>
-    applyTheme(loadPrefs().theme),
+    applyTheme(prefs.theme),
   )
   const [location, setLocation] = useState<LocationResult | null>(prefs.lastLocation ?? null)
   const [weather, setWeather] = useState<WeatherData | null>(null)
@@ -339,7 +339,7 @@ export function useWeather() {
           window.matchMedia('(max-width: 720px)').matches
 
         // Phase 1 — forecast only (fastest paint; biggest mobile win)
-        const w = await fetchWeather(loc.latitude, loc.longitude)
+        const w = await fetchWeather(loc.latitude, loc.longitude, { lite: mobile })
         if (gen !== fetchGen.current) return
         setWeather(w)
         setUpdatedAt(Date.now())
@@ -351,7 +351,7 @@ export function useWeather() {
         const loadAirAlerts = async () => {
           if (gen !== fetchGen.current) return
           const [a, al] = await Promise.all([
-            fetchAirQuality(loc.latitude, loc.longitude),
+            fetchAirQuality(loc.latitude, loc.longitude, { lite: mobile }),
             fetchAlerts(loc.latitude, loc.longitude),
           ])
           if (gen !== fetchGen.current) return

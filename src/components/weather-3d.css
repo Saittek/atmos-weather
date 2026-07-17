@@ -773,6 +773,34 @@
   animation-duration: 3.4s;
 }
 
+/* Mobile / low-power: freeze small list icons (hourly, daily, pins).
+   Hero keeps .w3d-force so it still animates. Huge scroll/jank win. */
+html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-stage,
+html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-orbit,
+html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-sun,
+html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-sun-svg,
+html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-sun-rays,
+html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-sun-corona,
+html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-moon,
+html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-star,
+html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-clouds,
+html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-cloud,
+html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-precip span,
+html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-snow span,
+html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-hail span,
+html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-bolt,
+html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-flash,
+html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-fog span,
+html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-floor,
+html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-splash,
+html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-ice-glaze,
+html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-snow-ground {
+  animation: none !important;
+}
+html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-stage {
+  transform: rotateX(8deg) rotateY(-6deg);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .w3d-stage,
   .w3d-orbit,

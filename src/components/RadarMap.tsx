@@ -404,7 +404,11 @@ export function RadarMap({
   const [error, setError] = useState<string | null>(null)
   const [rvHost, setRvHost] = useState('https://tilecache.rainviewer.com')
   const [fullscreen, setFullscreen] = useState(false)
+  /** Pause tile loop when map is scrolled off-screen (big mobile battery win) */
+  const [inView, setInView] = useState(true)
   const wrapRef = useRef<HTMLElement>(null)
+  /** Remember play intent across tab hide / off-screen */
+  const wantPlayRef = useRef(playing)
 
   const meta = getSourceMeta(sourceId)
   const base = BASEMAPS[basemap]
@@ -460,18 +464,46 @@ export function RadarMap({
 
   useEffect(() => {
     if (severeMode) {
+      wantPlayRef.current = true
       setPlaying(true)
       setOpacity((o) => Math.max(o, 0.8))
     }
   }, [severeMode])
 
+  // Track whether the map is actually on screen
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!el || typeof IntersectionObserver === 'undefined') return
+    const io = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.some((e) => e.isIntersecting)
+        setInView(visible)
+      },
+      { root: null, rootMargin: '80px 0px', threshold: 0.05 },
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [])
+
   useEffect(() => {
     const onVis = () => {
-      if (document.hidden) setPlaying(false)
+      if (document.hidden) {
+        // Pause without clearing user intent
+        setPlaying(false)
+      } else if (wantPlayRef.current && inView && overlay === 'none') {
+        setPlaying(true)
+      }
     }
     document.addEventListener('visibilitychange', onVis)
     return () => document.removeEventListener('visibilitychange', onVis)
-  }, [])
+  }, [inView, overlay])
+
+  // Resume/pause when scrolling map into / out of view
+  useEffect(() => {
+    if (document.hidden || overlay !== 'none') return
+    if (inView && wantPlayRef.current) setPlaying(true)
+    else if (!inView) setPlaying(false)
+  }, [inView, overlay])
 
   // Pause tile radar while Ventusky model map is open (saves bandwidth)
   useEffect(() => {
@@ -481,13 +513,14 @@ export function RadarMap({
   // Playback: hold + crossfade timing (advance after fade+hold)
   useEffect(() => {
     if (overlay !== 'none') return
-    if (!playing || document.hidden || !meta.animated || frames.length < 2) return
+    if (!playing || !inView || document.hidden || !meta.animated || frames.length < 2)
+      return
     const hold = frameIdx >= frames.length - 1 ? holdMs + 650 : holdMs
     const t = window.setTimeout(() => {
       setFrameIdx((i) => (i + 1) % frames.length)
     }, hold + fadeMs)
     return () => window.clearTimeout(t)
-  }, [playing, holdMs, fadeMs, frameIdx, frames.length, meta.animated, overlay])
+  }, [playing, holdMs, fadeMs, frameIdx, frames.length, meta.animated, overlay, inView])
 
   const toggleFullscreen = async () => {
     const el = wrapRef.current
@@ -696,7 +729,13 @@ export function RadarMap({
             <button
               type="button"
               className="chip-btn icon-chip"
-              onClick={() => setPlaying((p) => !p)}
+              onClick={() => {
+                setPlaying((p) => {
+                  const next = !p
+                  wantPlayRef.current = next
+                  return next
+                })
+              }}
               aria-label={playing ? 'Pause' : 'Play'}
             >
               {playing ? '❚❚' : '▶'}
@@ -708,6 +747,7 @@ export function RadarMap({
               max={Math.max(0, frames.length - 1)}
               value={frameIdx}
               onChange={(e) => {
+                wantPlayRef.current = false
                 setPlaying(false)
                 setFrameIdx(Number(e.target.value))
               }}

@@ -151,7 +151,7 @@ a:hover {
   background: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(255, 255, 255, 0.35) 0%, transparent 70%);
 }
 
-/* Floating ambient orbs (depth) — lighter on mobile / reduced motion */
+/* Floating ambient orbs (depth) â€” lighter on mobile / reduced motion */
 .ambient-orbs {
   pointer-events: none;
   position: fixed;
@@ -427,11 +427,11 @@ a:hover {
   color: var(--text-mute);
 }
 .empty-hints li::before {
-  content: '→ ';
+  content: 'â†’ ';
   color: var(--accent);
 }
 
-/* ===== Location alerts — compact sticky strip (never full screen) ===== */
+/* ===== Location alerts â€” compact sticky strip (never full screen) ===== */
 .alert-top-bar {
   position: sticky;
   top: 0;
@@ -447,7 +447,7 @@ a:hover {
   margin: 0 auto;
   padding: 0.45rem 0.75rem 0.5rem;
 }
-/* Single-row compact header — Hide always on screen */
+/* Single-row compact header â€” Hide always on screen */
 .alert-top-compact {
   display: flex;
   align-items: center;
@@ -766,7 +766,7 @@ a:hover {
   top: 0.4rem;
 }
 
-/* Top bar — sticky, single compact row */
+/* Top bar â€” sticky, single compact row */
 .topbar {
   position: sticky;
   top: 0.65rem;
@@ -883,7 +883,7 @@ a:hover {
   backdrop-filter: blur(16px);
 }
 
-/* Mobile settings sheet — full access to every option */
+/* Mobile settings sheet â€” full access to every option */
 .settings-sheet-root {
   display: none;
 }
@@ -1067,7 +1067,7 @@ a:hover {
   gap: 0.5rem;
 }
 
-/* Portaled to body — pin to top-right above map/topbar */
+/* Portaled to body â€” pin to top-right above map/topbar */
 .account-popover-portal {
   position: fixed;
   top: 4.5rem;
@@ -1540,7 +1540,7 @@ select:focus-visible {
   font-size: 1.1rem;
 }
 
-/* Panels — modern glass */
+/* Panels â€” modern glass */
 .panel {
   position: relative;
   background: var(--glass);
@@ -1615,7 +1615,7 @@ select:focus-visible {
   order: 0;
 }
 
-/* Current weather hero — 3D tilt */
+/* Current weather hero â€” 3D tilt */
 .current-weather {
   padding: 1.5rem 1.6rem 1.65rem;
 }
@@ -1779,7 +1779,7 @@ select:focus-visible {
   }
 }
 
-/* Below-fold panels: skip layout/paint work until near viewport (desktop only —
+/* Below-fold panels: skip layout/paint work until near viewport (desktop only â€”
    content-visibility has caused blank/broken rendering on some mobile Safari builds) */
 @media (min-width: 721px) {
   .dashboard .col > .panel,
@@ -2381,7 +2381,7 @@ select:focus-visible {
   padding: 0.35rem 0.6rem;
 }
 
-/* Ventusky model embed — fills radar stage (small panel + mobile) */
+/* Ventusky model embed â€” fills radar stage (small panel + mobile) */
 .radar-panel.has-ventusky .radar-stage {
   height: min(640px, 72vh);
   min-height: 360px;
@@ -2512,7 +2512,7 @@ select:focus-visible {
   filter: contrast(1.08) saturate(1.12);
 }
 
-/* Frame stack layers — GPU-friendly compositing for video-like fades */
+/* Frame stack layers â€” GPU-friendly compositing for video-like fades */
 .radar-frame-layer {
   will-change: opacity;
   transform: translateZ(0);
@@ -2924,11 +2924,11 @@ select:focus-visible {
   .search-input {
     font-size: 16px; /* avoid iOS zoom on focus */
   }
-  /* Drop radar/widget chips — available in page body + more menu flow */
+  /* Drop radar/widget chips â€” available in page body + more menu flow */
   .quick-nav {
     display: none !important;
   }
-  /* Slim action strip: Account + ★ + Refresh + ⚙ */
+  /* Slim action strip: Account + â˜… + Refresh + âš™ */
   .topbar-desktop-only {
     display: none !important;
   }
@@ -2963,7 +2963,7 @@ select:focus-visible {
   .favorites-list {
     max-height: none;
   }
-  /* Horizontal chip-style picks — faster than tall list on phones */
+  /* Horizontal chip-style picks â€” faster than tall list on phones */
   .favorites-mobile-slot .favorites-list {
     display: flex;
     flex-direction: row;
@@ -3063,7 +3063,7 @@ select:focus-visible {
   .settings-bar .chip-toggle {
     display: none !important;
   }
-  /* Do NOT hide inactive theme buttons — users need all settings on mobile */
+  /* Do NOT hide inactive theme buttons â€” users need all settings on mobile */
 }
 
 @media (min-width: 721px) {
@@ -3095,6 +3095,30 @@ html.mobile-perf .bg-scrim {
   border-radius: 12px;
   border: 1px dashed var(--border);
   background: rgba(15, 23, 42, 0.4);
+}
+
+/* Mobile radar gate â€” light panel with a clear View radar action */
+.radar-cta-panel {
+  text-align: center;
+}
+.radar-cta-copy {
+  margin: 0.15rem 0 0.85rem;
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+.radar-cta-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  justify-content: center;
+  align-items: center;
+}
+.radar-view-btn {
+  min-width: min(100%, 16rem);
+  padding: 0.9rem 1.25rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  text-decoration: none;
 }
 
 html.mobile-perf .topbar,
@@ -3168,7 +3192,7 @@ html.mobile-perf[data-theme='light'] .topbar {
   background: #f1f5f9 !important;
 }
 
-/* Radar crossfade layers — no CSS transition (opacity driven by rAF) */
+/* Radar crossfade layers â€” no CSS transition (opacity driven by rAF) */
 .radar-tiles.radar-fade-a,
 .radar-tiles.radar-fade-b {
   transition: none !important;
@@ -3360,7 +3384,7 @@ html.mobile-perf[data-theme='light'] .topbar {
   box-shadow: 0 0 10px rgba(226, 232, 240, 0.4);
 }
 
-/* Animated precip amount icons — small circular (original size) */
+/* Animated precip amount icons â€” small circular (original size) */
 .precip-motion {
   display: inline-grid;
   place-items: center;
@@ -4542,7 +4566,7 @@ html.mobile-perf[data-theme='light'] .topbar {
 }
 
 /* ===== Full-page radar (/radar) ===== */
-/* Definite height is required so Leaflet’s 100% stage does not collapse to 0 */
+/* Definite height is required so Leafletâ€™s 100% stage does not collapse to 0 */
 .radar-page {
   height: 100vh;
   height: 100dvh;
@@ -4621,7 +4645,7 @@ html.mobile-perf[data-theme='light'] .topbar {
   font-size: 0.95rem;
 }
 .radar-panel.radar-page-mode .radar-stage {
-  /* flex-basis 0 + definite parent height → fills leftover space (not 0) */
+  /* flex-basis 0 + definite parent height â†’ fills leftover space (not 0) */
   flex: 1 1 0;
   min-height: 240px;
   height: auto !important; /* override fixed min(520px, 62vh) */

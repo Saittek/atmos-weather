@@ -10,7 +10,15 @@ import { applyMobilePerfClass, loadAdSenseDeferred, scheduleIdle } from './utils
 
 applyMobilePerfClass()
 if (typeof window !== 'undefined') {
-  window.addEventListener('resize', () => applyMobilePerfClass(), { passive: true })
+  let resizeTimer = 0
+  window.addEventListener(
+    'resize',
+    () => {
+      window.clearTimeout(resizeTimer)
+      resizeTimer = window.setTimeout(() => applyMobilePerfClass(), 200)
+    },
+    { passive: true },
+  )
   // AdSense after first paint — huge win on mid-range phones
   if (import.meta.env.PROD) loadAdSenseDeferred()
 }
