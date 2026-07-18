@@ -248,12 +248,16 @@ export function mergeEcccIntoWeather(
       }
     }
 
-    const feels =
-      humidex != null && temp != null && humidex > temp
-        ? humidex
-        : windChill != null && temp != null && windChill < temp
-          ? windChill
-          : temp ?? out.current.apparent_temperature
+    // ECCC often leaves stale windChill/humidex on the payload — only apply when
+    // the air temp is in the right season for that index (fixes "dress for cold" on hot days).
+    let feels = temp ?? out.current.apparent_temperature
+    if (temp != null) {
+      if (humidex != null && temp >= 20 && humidex >= temp) {
+        feels = humidex
+      } else if (windChill != null && temp <= 5 && windChill <= temp) {
+        feels = windChill
+      }
+    }
 
     const next: CurrentWeather = {
       ...out.current,

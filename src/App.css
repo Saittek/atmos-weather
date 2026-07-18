@@ -6164,6 +6164,10 @@ label.fire-toggle {
   border-color: rgba(251, 191, 36, 0.35);
   background: linear-gradient(135deg, rgba(251, 191, 36, 0.1), transparent 55%), var(--glass);
 }
+.dress-panel.layers-hot {
+  border-color: rgba(249, 115, 22, 0.45);
+  background: linear-gradient(135deg, rgba(249, 115, 22, 0.14), transparent 55%), var(--glass);
+}
 .dress-row {
   display: flex;
   gap: 0.85rem;

@@ -8,26 +8,45 @@ export interface DressAdvice {
   title: string
   summary: string
   items: string[]
-  layers: 'light' | 'moderate' | 'warm' | 'winter'
+  layers: 'light' | 'moderate' | 'warm' | 'winter' | 'hot'
   emoji: string
 }
 
-/** Plain-English outfit advice from current + next ~8h conditions */
+/** Temperatures from APIs are always °C; never treat imperial display values as thresholds. */
+function effectiveFeelsC(weather: WeatherData): number {
+  const air = weather.current.temperature_2m
+  const feels = weather.current.apparent_temperature
+  // Guard bad overlays (e.g. stale wind chill on a hot day)
+  if (!Number.isFinite(feels)) return air
+  if (!Number.isFinite(air)) return feels
+  // Feels-like should stay near air temp; if it diverges wildly, trust the air temp
+  if (Math.abs(feels - air) > 18) return air
+  // Hot day but "feels" much colder → ignore bad chill
+  if (air >= 18 && feels < air - 8) return air
+  // Cold day but "feels" much hotter → ignore bad humidex
+  if (air <= 5 && feels > air + 8) return air
+  return feels
+}
+
+/** Plain-English outfit advice from current + next ~8h conditions (°C logic) */
 export function dressForToday(
   weather: WeatherData,
   units: Units,
   air: AirQualityData | null,
 ): DressAdvice {
   const c = weather.current
-  const feels = c.apparent_temperature
-  const wind = c.wind_speed_10m
-  const wet = willIGetWet(weather)
+  const airC = c.temperature_2m
+  const feels = effectiveFeelsC(weather)
+  // Dress for the warmer of now vs today's high when planning the day
   const ti = todayDailyIndex(weather)
   const high = weather.daily.temperature_2m_max[ti]
   const low = weather.daily.temperature_2m_min[ti]
+  const guide = Number.isFinite(high) ? Math.max(feels, high * 0.85 + feels * 0.15) : feels
+
+  const wind = c.wind_speed_10m
+  const wet = willIGetWet(weather)
   const aqi = air?.current?.us_aqi ?? null
 
-  // Peak UV next ~8h
   let maxUv = 0
   const now = Date.now()
   const h = weather.hourly
@@ -38,22 +57,26 @@ export function dressForToday(
     maxUv = Math.max(maxUv, h.uv_index?.[i] ?? 0)
   }
 
+  // Thresholds in °C based on feels / daytime guide temp
   let layers: DressAdvice['layers'] = 'moderate'
   let emoji = '👕'
-  if (feels <= 0) {
+  if (guide <= -5 || feels <= -5) {
     layers = 'winter'
     emoji = '🧥'
-  } else if (feels <= 8) {
+  } else if (guide <= 5 || feels <= 5) {
     layers = 'warm'
     emoji = '🧣'
-  } else if (feels <= 16) {
+  } else if (guide <= 12 || feels <= 12) {
     layers = 'moderate'
     emoji = '🧥'
-  } else if (feels <= 24) {
+  } else if (guide <= 22) {
     layers = 'light'
     emoji = '👕'
+  } else if (guide <= 28) {
+    layers = 'hot'
+    emoji = '☀️'
   } else {
-    layers = 'light'
+    layers = 'hot'
     emoji = '🩳'
   }
 
@@ -67,12 +90,17 @@ export function dressForToday(
     items.push('Long pants — it’s chilly out')
   } else if (layers === 'moderate') {
     items.push('Light jacket or sweater you can peel off')
-    if (high - low >= 10) items.push('Dress in layers — big day/night swing')
-  } else if (feels > 26) {
+    if (Number.isFinite(high) && Number.isFinite(low) && high - low >= 10) {
+      items.push('Dress in layers — big day/night swing')
+    }
+  } else if (layers === 'hot' && guide >= 28) {
     items.push('Light, breathable clothes')
     items.push('Stay hydrated if you’re outside long')
+    if (guide >= 32) items.push('Limit hard outdoor work in midday heat')
   } else {
+    // light / mild-hot
     items.push('T-shirt weather for most people')
+    if (guide >= 24) items.push('Shorts are fine if you’re comfortable')
   }
 
   if (wet.umbrella || wet.level === 'wet') {
@@ -83,12 +111,14 @@ export function dressForToday(
 
   if (wind >= 35) {
     items.push(`Windy (${formatSpeed(wind, units)}) — windproof outer layer helps`)
+  } else if (wind >= 22 && feels <= 15) {
+    items.push(`Breezy (${formatSpeed(wind, units)}) — may feel cooler`)
   } else if (wind >= 22) {
     items.push(`Breezy (${formatSpeed(wind, units)})`)
   }
 
   if (maxUv >= 6) items.push('Sunglasses + SPF — UV is strong')
-  else if (maxUv >= 3) items.push('Sunscreen if you’ll be out midday')
+  else if (maxUv >= 3 && guide >= 15) items.push('Sunscreen if you’ll be out midday')
 
   if (aqi != null && aqi >= 100) {
     items.push(`Air quality elevated (AQI ${aqi}) — limit hard outdoor exercise`)
@@ -99,13 +129,17 @@ export function dressForToday(
       ? 'Bundle up'
       : layers === 'warm'
         ? 'Dress warm'
-        : feels > 26
-          ? 'Dress light'
+        : layers === 'hot'
+          ? guide >= 30
+            ? 'Dress for the heat'
+            : 'Dress light'
           : wet.level === 'wet'
             ? 'Rain gear day'
-            : 'Comfortable layers'
+            : guide >= 20
+              ? 'Dress light'
+              : 'Comfortable layers'
 
-  const summary = `Feels like ${formatTemp(feels, units)} · H ${formatTemp(high, units)} / L ${formatTemp(low, units)} · ${wet.title}`
+  const summary = `Feels like ${formatTemp(feels, units)} · Now ${formatTemp(airC, units)} · H ${formatTemp(high, units)} / L ${formatTemp(low, units)} · ${wet.title}`
 
   return { title, summary, items: items.slice(0, 5), layers, emoji }
 }
