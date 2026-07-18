@@ -168,6 +168,21 @@ export function CurrentWeather({
           <span className="current-chip">{formatSpeed(c.wind_speed_10m, units)}</span>
           <span className="current-chip">{c.relative_humidity_2m}% humidity</span>
           {vsNormal && <span className="current-chip normal hide-sm">{vsNormal}</span>}
+          {weather.solara_source?.strategy && (
+            <span
+              className="current-chip model-chip"
+              title={
+                [
+                  weather.solara_source.shortModel,
+                  weather.solara_source.longModel,
+                ]
+                  .filter(Boolean)
+                  .join(' → ') || weather.solara_source.strategy
+              }
+            >
+              {weather.solara_source.strategy}
+            </span>
+          )}
         </div>
       </div>
     </section>

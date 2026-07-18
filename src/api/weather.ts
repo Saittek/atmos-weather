@@ -11,6 +11,7 @@ import type {
   WeatherData,
 } from './types'
 import { filterActiveAlerts } from '../utils/activeAlerts'
+import { blendWeatherData, pickModels } from './forecastModels'
 
 const GEOCODE = 'https://geocoding-api.open-meteo.com/v1/search'
 const FORECAST = 'https://api.open-meteo.com/v1/forecast'
@@ -73,96 +74,204 @@ export type FetchWeatherOpts = {
   lite?: boolean
 }
 
+const CURRENT_VARS = [
+  'temperature_2m',
+  'relative_humidity_2m',
+  'apparent_temperature',
+  'is_day',
+  'precipitation',
+  'rain',
+  'showers',
+  'snowfall',
+  'weather_code',
+  'cloud_cover',
+  'pressure_msl',
+  'surface_pressure',
+  'wind_speed_10m',
+  'wind_direction_10m',
+  'wind_gusts_10m',
+].join(',')
+
+const HOURLY_VARS = [
+  'temperature_2m',
+  'relative_humidity_2m',
+  'dew_point_2m',
+  'apparent_temperature',
+  'precipitation_probability',
+  'precipitation',
+  'rain',
+  'showers',
+  'snowfall',
+  'weather_code',
+  'pressure_msl',
+  'cloud_cover',
+  'visibility',
+  'wind_speed_10m',
+  'wind_direction_10m',
+  'wind_gusts_10m',
+  'uv_index',
+  'is_day',
+].join(',')
+
+const DAILY_VARS = [
+  'weather_code',
+  'temperature_2m_max',
+  'temperature_2m_min',
+  'apparent_temperature_max',
+  'apparent_temperature_min',
+  'sunrise',
+  'sunset',
+  'daylight_duration',
+  'sunshine_duration',
+  'uv_index_max',
+  'precipitation_sum',
+  'rain_sum',
+  'showers_sum',
+  'snowfall_sum',
+  'precipitation_hours',
+  'precipitation_probability_max',
+  'wind_speed_10m_max',
+  'wind_gusts_10m_max',
+  'wind_direction_10m_dominant',
+].join(',')
+
+function buildForecastParams(
+  lat: number,
+  lon: number,
+  opts: {
+    lite: boolean
+    model: string
+    /** Short-range fetch: fewer days/hours, keep 15-min precip */
+    mode: 'short' | 'long' | 'single'
+  },
+): URLSearchParams {
+  const { lite, model, mode } = opts
+  const short = mode === 'short'
+  const params = new URLSearchParams({
+    latitude: String(lat),
+    longitude: String(lon),
+    current: CURRENT_VARS,
+    hourly: HOURLY_VARS,
+    daily: DAILY_VARS,
+    timezone: 'auto',
+  })
+
+  if (model && model !== 'best_match') {
+    params.set('models', model)
+  }
+
+  if (short) {
+    // High-res nowcasting window (HRRR / GEM / ICON)
+    params.set('forecast_days', '2')
+    params.set('forecast_hours', '36')
+    params.set('minutely_15', 'precipitation,weather_code,wind_speed_10m,temperature_2m')
+    params.set('forecast_minutely_15', lite ? '12' : '16')
+  } else {
+    params.set('forecast_days', lite ? '10' : '14')
+    params.set('forecast_hours', lite ? '72' : '120')
+    params.set('past_days', '1')
+    // 15-min on long fetch too when single-model (global best_match)
+    if (mode === 'single') {
+      params.set('minutely_15', 'precipitation,weather_code,wind_speed_10m,temperature_2m')
+      params.set('forecast_minutely_15', lite ? '12' : '16')
+    }
+  }
+
+  return params
+}
+
+async function fetchForecastRaw(params: URLSearchParams): Promise<WeatherData | null> {
+  try {
+    const res = await fetch(`${FORECAST}?${params}`)
+    if (!res.ok) return null
+    const data = (await res.json()) as WeatherData
+    if (!data?.current || !data?.hourly?.time?.length) return null
+    return data
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Main forecast load: region-aware models + short/long blend for accuracy.
+ * US → HRRR + ECMWF · Canada → GEM + ECMWF · Europe → ICON + ECMWF · else best_match.
+ */
 export async function fetchWeather(
   lat: number,
   lon: number,
   opts?: FetchWeatherOpts,
 ): Promise<WeatherData> {
   const lite = Boolean(opts?.lite)
-  const key = cacheKey(lat, lon, lite ? 'lite' : 'full')
+  const pick = pickModels(lat, lon)
+  const key = cacheKey(lat, lon, `${lite ? 'lite' : 'full'}:${pick.label}`)
   const hit = forecastCache.get(key)
   if (hit && Date.now() - hit.at < FORECAST_TTL_MS) return hit.data
 
-  // Cap cache size so soft-refresh + place hopping doesn't grow forever
   if (forecastCache.size > 24) {
     const first = forecastCache.keys().next().value
     if (first != null) forecastCache.delete(first)
   }
 
-  const params = new URLSearchParams({
-    latitude: String(lat),
-    longitude: String(lon),
-    current: [
-      'temperature_2m',
-      'relative_humidity_2m',
-      'apparent_temperature',
-      'is_day',
-      'precipitation',
-      'rain',
-      'showers',
-      'snowfall',
-      'weather_code',
-      'cloud_cover',
-      'pressure_msl',
-      'surface_pressure',
-      'wind_speed_10m',
-      'wind_direction_10m',
-      'wind_gusts_10m',
-    ].join(','),
-    hourly: [
-      'temperature_2m',
-      'relative_humidity_2m',
-      'dew_point_2m',
-      'apparent_temperature',
-      'precipitation_probability',
-      'precipitation',
-      'rain',
-      'showers',
-      'snowfall',
-      'weather_code',
-      'pressure_msl',
-      'cloud_cover',
-      'visibility',
-      'wind_speed_10m',
-      'wind_direction_10m',
-      'wind_gusts_10m',
-      'uv_index',
-      'is_day',
-    ].join(','),
-    daily: [
-      'weather_code',
-      'temperature_2m_max',
-      'temperature_2m_min',
-      'apparent_temperature_max',
-      'apparent_temperature_min',
-      'sunrise',
-      'sunset',
-      'daylight_duration',
-      'sunshine_duration',
-      'uv_index_max',
-      'precipitation_sum',
-      'rain_sum',
-      'showers_sum',
-      'snowfall_sum',
-      'precipitation_hours',
-      'precipitation_probability_max',
-      'wind_speed_10m_max',
-      'wind_gusts_10m_max',
-      'wind_direction_10m_dominant',
-    ].join(','),
-    minutely_15: 'precipitation,weather_code,wind_speed_10m,temperature_2m',
-    timezone: 'auto',
-    // Lite: 10 days + 72h hourly is enough for mobile UI (hourly strip ≤16)
-    forecast_days: lite ? '10' : '14',
-    forecast_hours: lite ? '72' : '120',
-    forecast_minutely_15: lite ? '12' : '16',
-    // Yesterday + recent hours for trends / "vs yesterday"
-    past_days: '1',
-  })
+  let data: WeatherData | null = null
 
-  const res = await fetch(`${FORECAST}?${params}`)
-  if (!res.ok) throw new Error('Weather forecast failed')
-  const data = (await res.json()) as WeatherData
+  if (pick.shortModel) {
+    const [short, long] = await Promise.all([
+      fetchForecastRaw(
+        buildForecastParams(lat, lon, { lite, model: pick.shortModel, mode: 'short' }),
+      ),
+      fetchForecastRaw(
+        buildForecastParams(lat, lon, { lite, model: pick.longModel, mode: 'long' }),
+      ),
+    ])
+
+    if (long && short) {
+      data = blendWeatherData(short, long, pick)
+    } else if (long) {
+      data = blendWeatherData(null, long, pick)
+    } else if (short) {
+      // Extend short alone with best_match backbone
+      const fallback = await fetchForecastRaw(
+        buildForecastParams(lat, lon, { lite, model: 'best_match', mode: 'single' }),
+      )
+      if (fallback) data = blendWeatherData(short, fallback, { ...pick, longModel: 'best_match' })
+      else data = { ...short, solara_source: { strategy: pick.label, shortModel: pick.shortModel } }
+    }
+  }
+
+  if (!data) {
+    // Global / fallback
+    data = await fetchForecastRaw(
+      buildForecastParams(lat, lon, {
+        lite,
+        model: pick.longModel || 'best_match',
+        mode: 'single',
+      }),
+    )
+    if (data) {
+      data = {
+        ...data,
+        solara_source: {
+          strategy: pick.label,
+          longModel: pick.longModel || 'best_match',
+        },
+      }
+    }
+  }
+
+  if (!data) {
+    // Last resort: bare default Open-Meteo
+    data = await fetchForecastRaw(
+      buildForecastParams(lat, lon, { lite, model: 'best_match', mode: 'single' }),
+    )
+    if (data) {
+      data = {
+        ...data,
+        solara_source: { strategy: 'Best match', longModel: 'best_match' },
+      }
+    }
+  }
+
+  if (!data) throw new Error('Weather forecast failed')
   forecastCache.set(key, { at: Date.now(), data })
   return data
 }
@@ -284,6 +393,9 @@ export async function fetchLocationSnapshot(
   loc: LocationResult,
 ): Promise<LocationSnapshot | null> {
   try {
+    const pick = pickModels(loc.latitude, loc.longitude)
+    // Prefer high-res short model for rain timing on pins
+    const model = pick.shortModel || pick.longModel || 'best_match'
     const params = new URLSearchParams({
       latitude: String(loc.latitude),
       longitude: String(loc.longitude),
@@ -296,6 +408,7 @@ export async function fetchLocationSnapshot(
       forecast_hours: '12',
       forecast_minutely_15: '8',
     })
+    if (model !== 'best_match') params.set('models', model)
     const [wRes, aRes, alRes] = await Promise.all([
       fetch(`${FORECAST}?${params}`),
       fetch(
@@ -626,9 +739,11 @@ export async function fetchAlerts(lat: number, lon: number): Promise<WeatherAler
 
 const MODEL_META: { id: ModelId; label: string; param?: string }[] = [
   { id: 'best_match', label: 'Best match' },
-  { id: 'gfs_seamless', label: 'GFS (US)', param: 'gfs_seamless' },
+  { id: 'gfs_hrrr', label: 'HRRR (US)', param: 'gfs_hrrr' },
+  { id: 'gfs_seamless', label: 'GFS seamless', param: 'gfs_seamless' },
   { id: 'ecmwf_ifs025', label: 'ECMWF IFS', param: 'ecmwf_ifs025' },
   { id: 'icon_seamless', label: 'ICON (DWD)', param: 'icon_seamless' },
+  { id: 'gem_seamless', label: 'GEM (Canada)', param: 'gem_seamless' },
 ]
 
 export async function fetchMultiModel(lat: number, lon: number): Promise<ModelSeries[]> {

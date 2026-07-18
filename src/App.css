@@ -2276,17 +2276,27 @@ select:focus-visible {
 }
 
 /* Sun */
+/* Don't clip the sun marker / arc peak (global .panel uses overflow:hidden) */
+.panel.sun-panel {
+  overflow: visible;
+}
+.sun-arc-wrap {
+  overflow: visible;
+  padding-top: 0.35rem;
+}
 .sun-arc {
   width: 100%;
-  max-width: 280px;
+  max-width: 300px;
+  height: auto;
   display: block;
   margin: 0 auto;
+  overflow: visible;
 }
 .sun-times {
   display: flex;
   justify-content: space-between;
-  margin-top: -0.5rem;
-  padding: 0 0.5rem;
+  margin-top: -0.15rem;
+  padding: 0 0.75rem;
 }
 .sun-times .label,
 .sun-stats .label {
@@ -4999,6 +5009,12 @@ html.mobile-perf[data-theme='light'] .topbar {
   background: rgba(56, 189, 248, 0.15);
   border-color: rgba(56, 189, 248, 0.35);
   color: #7dd3fc;
+}
+.current-chip.model-chip {
+  background: rgba(167, 139, 250, 0.14);
+  border-color: rgba(167, 139, 250, 0.35);
+  color: #c4b5fd;
+  letter-spacing: 0.02em;
 }
 
 .comfort-grid {

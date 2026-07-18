@@ -31,30 +31,39 @@ export function SunMoon({ weather }: Props) {
         <h2>☀️🌙 Sun, moon & daylight</h2>
       </div>
       <div className="sun-arc-wrap">
-        <svg viewBox="0 0 200 90" className="sun-arc" aria-hidden>
-          <path
-            d="M 20 80 A 80 80 0 0 1 180 80"
-            fill="none"
-            stroke="rgba(255,255,255,0.12)"
-            strokeWidth="3"
-          />
-          <path
-            d="M 20 80 A 80 80 0 0 1 180 80"
-            fill="none"
-            stroke="url(#sunGrad)"
-            strokeWidth="3"
-            strokeDasharray={`${progress * 251} 251`}
-          />
+        {/*
+          Arc: center (100, 88), radius 72 → peak at y=16 so sun marker (r≈8)
+          never clips the viewBox top.
+        */}
+        <svg viewBox="0 0 200 108" className="sun-arc" aria-hidden>
           <defs>
             <linearGradient id="sunGrad" x1="0%" y1="0%" x2="100%" y2="0%">
               <stop offset="0%" stopColor="#fbbf24" />
               <stop offset="100%" stopColor="#f97316" />
             </linearGradient>
           </defs>
+          <path
+            d="M 28 88 A 72 72 0 0 1 172 88"
+            fill="none"
+            stroke="rgba(255,255,255,0.12)"
+            strokeWidth="3"
+            strokeLinecap="round"
+          />
+          <path
+            d="M 28 88 A 72 72 0 0 1 172 88"
+            fill="none"
+            stroke="url(#sunGrad)"
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeDasharray={`${progress * 226} 226`}
+          />
           {(() => {
+            const r = 72
+            const cx = 100
+            const cy = 88
             const angle = Math.PI * (1 - progress)
-            const x = 100 + 80 * Math.cos(angle)
-            const y = 80 - 80 * Math.sin(angle)
+            const x = cx + r * Math.cos(angle)
+            const y = cy - r * Math.sin(angle)
             return (
               <circle cx={x} cy={y} r="7" fill="#fbbf24" stroke="#fff" strokeWidth="1.5" />
             )

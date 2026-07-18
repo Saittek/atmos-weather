@@ -94,6 +94,12 @@ export interface WeatherData {
   daily: DailyWeather
   minutely_15?: Minutely15
   current_units: Record<string, string>
+  /** Which Open-Meteo models Solara blended for this payload */
+  solara_source?: {
+    strategy: string
+    shortModel?: string
+    longModel?: string
+  }
 }
 
 export interface AirQualityData {
@@ -180,7 +186,13 @@ export interface RadarMaps {
   }
 }
 
-export type ModelId = 'best_match' | 'gfs_seamless' | 'ecmwf_ifs025' | 'icon_seamless'
+export type ModelId =
+  | 'best_match'
+  | 'gfs_hrrr'
+  | 'gfs_seamless'
+  | 'ecmwf_ifs025'
+  | 'icon_seamless'
+  | 'gem_seamless'
 
 export interface ModelSeries {
   id: ModelId
