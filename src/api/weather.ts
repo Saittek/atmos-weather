@@ -11,7 +11,8 @@ import type {
   WeatherData,
 } from './types'
 import { filterActiveAlerts } from '../utils/activeAlerts'
-import { blendWeatherData, pickModels } from './forecastModels'
+import { blendWeatherData, pickModels, detectForecastRegion } from './forecastModels'
+import { fetchNearestEcccCityPage, mergeEcccIntoWeather } from './ecccCityPage'
 
 const GEOCODE = 'https://geocoding-api.open-meteo.com/v1/search'
 const FORECAST = 'https://api.open-meteo.com/v1/forecast'
@@ -194,7 +195,7 @@ async function fetchForecastRaw(params: URLSearchParams): Promise<WeatherData | 
 
 /**
  * Main forecast load: region-aware models + short/long blend for accuracy.
- * US → HRRR + ECMWF · Canada → GEM + ECMWF · Europe → ICON + ECMWF · else best_match.
+ * US → HRRR + ECMWF · Canada → ECCC City Page + GEM + ECMWF · Europe → ICON + ECMWF · else best_match.
  */
 export async function fetchWeather(
   lat: number,
@@ -203,7 +204,8 @@ export async function fetchWeather(
 ): Promise<WeatherData> {
   const lite = Boolean(opts?.lite)
   const pick = pickModels(lat, lon)
-  const key = cacheKey(lat, lon, `${lite ? 'lite' : 'full'}:${pick.label}`)
+  const region = detectForecastRegion(lat, lon)
+  const key = cacheKey(lat, lon, `${lite ? 'lite' : 'full'}:${pick.label}:eccc`)
   const hit = forecastCache.get(key)
   if (hit && Date.now() - hit.at < FORECAST_TTL_MS) return hit.data
 
@@ -212,16 +214,23 @@ export async function fetchWeather(
     if (first != null) forecastCache.delete(first)
   }
 
+  // Canada: start Environment Canada City Page in parallel with models
+  const ecccPromise =
+    region === 'canada'
+      ? fetchNearestEcccCityPage(lat, lon).catch(() => null)
+      : Promise.resolve(null)
+
   let data: WeatherData | null = null
 
   if (pick.shortModel) {
-    const [short, long] = await Promise.all([
+    const [short, long, eccc] = await Promise.all([
       fetchForecastRaw(
         buildForecastParams(lat, lon, { lite, model: pick.shortModel, mode: 'short' }),
       ),
       fetchForecastRaw(
         buildForecastParams(lat, lon, { lite, model: pick.longModel, mode: 'long' }),
       ),
+      ecccPromise,
     ])
 
     if (long && short) {
@@ -229,17 +238,24 @@ export async function fetchWeather(
     } else if (long) {
       data = blendWeatherData(null, long, pick)
     } else if (short) {
-      // Extend short alone with best_match backbone
       const fallback = await fetchForecastRaw(
         buildForecastParams(lat, lon, { lite, model: 'best_match', mode: 'single' }),
       )
       if (fallback) data = blendWeatherData(short, fallback, { ...pick, longModel: 'best_match' })
       else data = { ...short, solara_source: { strategy: pick.label, shortModel: pick.shortModel } }
     }
-  }
 
-  if (!data) {
-    // Global / fallback
+    // Official ECCC City Page overlays model backbone for Canadian locations
+    if (data && eccc) {
+      try {
+        data = mergeEcccIntoWeather(data, eccc)
+      } catch {
+        /* keep model blend if ECCC map fails */
+      }
+    }
+  } else {
+    // Non-blended path still checks ECCC if somehow canada without shortModel
+    const eccc = await ecccPromise
     data = await fetchForecastRaw(
       buildForecastParams(lat, lon, {
         lite,
@@ -254,6 +270,13 @@ export async function fetchWeather(
           strategy: pick.label,
           longModel: pick.longModel || 'best_match',
         },
+      }
+      if (eccc) {
+        try {
+          data = mergeEcccIntoWeather(data, eccc)
+        } catch {
+          /* ignore */
+        }
       }
     }
   }

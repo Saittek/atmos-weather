@@ -51,7 +51,8 @@ export function pickModels(lat: number, lon: number): ModelPick {
         shortModel: 'gem_seamless',
         longModel: 'ecmwf_ifs025',
         shortPreferHours: 36,
-        label: 'GEM + ECMWF',
+        // ECCC City Page overlays this in fetchWeather for official current/hourly
+        label: 'ECCC + GEM + ECMWF',
       }
     case 'europe':
       return {
