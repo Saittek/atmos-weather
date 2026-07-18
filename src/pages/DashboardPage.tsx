@@ -24,6 +24,8 @@ import { FireSmoke } from '../components/FireSmoke'
 import { TripPlanner } from '../components/TripPlanner'
 import { CityCompare } from '../components/CityCompare'
 import { InstallPrompt } from '../components/InstallPrompt'
+import { Onboarding } from '../components/Onboarding'
+import { DressForToday } from '../components/DressForToday'
 import { AlertTopBar } from '../components/AlertTopBar'
 import { WeatherStory } from '../components/WeatherStory'
 import { ComfortPanel } from '../components/ComfortPanel'
@@ -55,6 +57,8 @@ import { getWeatherInfo } from '../utils/weatherCodes'
 import { locationKey, shareUrl } from '../api/weather'
 import type { LocationResult } from '../api/types'
 import { filterActiveAlerts } from '../utils/activeAlerts'
+import { willIGetWet } from '../utils/wetSummary'
+import { usePullToRefresh } from '../hooks/usePullToRefresh'
 
 /** Leaflet + radar engine — large; load only when needed */
 const RadarMap = lazy(() =>
@@ -77,6 +81,9 @@ export default function DashboardPage() {
   const [isMobile] = useState(() => isMobileViewport())
   /** Mobile: radar is opt-in — Leaflet + tile loops are the #1 resource hog */
   const [radarOpen, setRadarOpen] = useState(false)
+  /** User manually hid radar — don't auto-reopen until conditions/place change */
+  const [userClosedRadar, setUserClosedRadar] = useState(false)
+  const [autoOpenedFor, setAutoOpenedFor] = useState<string | null>(null)
   const {
     location,
     weather,
@@ -119,6 +126,14 @@ export default function DashboardPage() {
   const { user } = useAuth()
 
   const rainWatch = useRainWatch(favorites, notifyAlerts, location)
+
+  const rainWatchRefresh = rainWatch.refresh
+  const doRefresh = useCallback(async () => {
+    refresh()
+    await rainWatchRefresh()
+  }, [refresh, rainWatchRefresh])
+
+  const pull = usePullToRefresh(doRefresh, isMobile)
 
   const [shareMsg, setShareMsg] = useState<string | null>(null)
   /** When true, alert strip is the red pill; panel list stays hidden until opened */
@@ -200,11 +215,30 @@ export default function DashboardPage() {
     document.getElementById('alerts-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
+  // Smart radar: auto-open on mobile when wet risk is high (once per place+level)
+  useEffect(() => {
+    if (!isMobile || !weather || !location || stormMode) return
+    const wet = willIGetWet(weather)
+    if (wet.level !== 'wet' && !(wet.level === 'maybe' && wet.umbrella)) return
+    const key = `${locationKey(location)}:${wet.level}`
+    if (userClosedRadar && autoOpenedFor === key) return
+    if (autoOpenedFor === key) return
+    setAutoOpenedFor(key)
+    setUserClosedRadar(false)
+    setRadarOpen(true)
+  }, [isMobile, weather, location, stormMode, userClosedRadar, autoOpenedFor])
+
+  // Reset manual-hide when place changes
+  useEffect(() => {
+    setUserClosedRadar(false)
+    setAutoOpenedFor(null)
+    if (isMobile) setRadarOpen(false)
+  }, [location?.latitude, location?.longitude, isMobile])
+
   const wantRadar = stormMode || radarOpen || !isMobile
 
   const radarBlock = location && weather && (
     <div className="priority-radar" id="radar-map-wrap">
-      {/* Mobile: collapsed until user taps View radar (saves battery/CPU) */}
       {isMobile && !wantRadar ? (
         <section className="panel radar-cta-panel" aria-label="Radar">
           <div className="panel-header">
@@ -212,13 +246,16 @@ export default function DashboardPage() {
             <span className="panel-hint">Off until you open it</span>
           </div>
           <p className="radar-cta-copy muted-center">
-            Live radar uses more battery. Open it when you need the map.
+            Live radar uses more battery. Opens automatically when rain risk is high.
           </p>
           <div className="radar-cta-actions">
             <button
               type="button"
               className="primary-btn radar-view-btn"
-              onClick={() => setRadarOpen(true)}
+              onClick={() => {
+                setUserClosedRadar(false)
+                setRadarOpen(true)
+              }}
             >
               View radar
             </button>
@@ -237,7 +274,14 @@ export default function DashboardPage() {
               ☔ Rain widget
             </Link>
             {isMobile && wantRadar && !stormMode && (
-              <button type="button" className="chip-btn" onClick={() => setRadarOpen(false)}>
+              <button
+                type="button"
+                className="chip-btn"
+                onClick={() => {
+                  setUserClosedRadar(true)
+                  setRadarOpen(false)
+                }}
+              >
                 Hide radar
               </button>
             )}
@@ -271,7 +315,7 @@ export default function DashboardPage() {
 
   return (
     <div
-      className={`app ${severe ? 'app-severe' : ''} ${stormMode ? 'app-storm' : ''} ${refreshing ? 'is-refreshing' : ''} ${activeAlerts.length ? 'has-alerts' : ''} ${alertsMinimized ? 'alerts-minimized' : ''}`}
+      className={`app ${severe ? 'app-severe' : ''} ${stormMode ? 'app-storm' : ''} ${refreshing || pull.refreshing ? 'is-refreshing' : ''} ${activeAlerts.length ? 'has-alerts' : ''} ${alertsMinimized ? 'alerts-minimized' : ''}`}
       style={bg ? { background: bg } : undefined}
       data-theme-active={theme}
       data-density={density}
@@ -280,6 +324,18 @@ export default function DashboardPage() {
       <div className="bg-scrim" aria-hidden />
       {!isMobile && <AmbientOrbs />}
 
+      {/* Pull-to-refresh indicator (mobile) */}
+      {(pull.pulling || pull.refreshing) && (
+        <div
+          className={`ptr-indicator ${pull.refreshing ? 'is-refreshing' : ''} ${pull.progress >= 1 ? 'is-ready' : ''}`}
+          style={{ transform: `translateY(${pull.refreshing ? 12 : Math.max(0, pull.distance - 24)}px)` }}
+          aria-hidden
+        >
+          <span className="ptr-spinner" />
+          <span>{pull.refreshing ? 'Updating…' : pull.progress >= 1 ? 'Release' : 'Pull to refresh'}</span>
+        </div>
+      )}
+
       <AlertTopBar
         alerts={activeAlerts}
         placeName={location?.name}
@@ -287,8 +343,9 @@ export default function DashboardPage() {
         onMinimizedChange={setAlertsMinimized}
       />
 
+      <Onboarding />
+
       <div className="app-shell">
-        {/* Install prompt is non-critical — skip on first mobile paint via Deferred */}
         <Deferred force={!isMobile} rootMargin="0px" minHeight={0}>
           <InstallPrompt />
         </Deferred>
@@ -351,7 +408,7 @@ export default function DashboardPage() {
           </div>
         </header>
 
-        <p className="brand-promise">The best weather app — clear, fast, and built for real life.</p>
+        <p className="brand-promise">Clear forecasts. Real answers. Built for real life.</p>
 
         {stormMode && (
           <div className="storm-mode-banner" role="status">
@@ -429,15 +486,16 @@ export default function DashboardPage() {
 
         {loading && !weather && <DashboardSkeleton />}
 
-        <Deferred rootMargin="200px 0px" minHeight={isMobile ? 48 : 0}>
-          <AreaChat location={location} />
-        </Deferred>
-
         {weather && location && (
           <main className={`dashboard ${stormMode ? 'dashboard-storm' : ''}`}>
             <div className="col main-col">
-              {/* Priority: story of now */}
+              {/*
+                Feed order = what people check first:
+                1 Now → 2 Wet/dry → 3 Alerts → 4 Next 2h → 5 Hourly
+                → 6 7-day → 7 Radar → 8 Quick outdoor facts → rest
+              */}
               <div className="priority-stack">
+                {/* 1. Right now */}
                 <CurrentWeather
                   weather={weather}
                   location={location}
@@ -449,7 +507,19 @@ export default function DashboardPage() {
                   alertCount={alertsMinimized ? 0 : activeAlerts.length}
                   offline={offline}
                 />
+
+                {/* 2. Will I get wet? */}
                 <WillIGetWet weather={weather} />
+
+                {/* 3. What to wear */}
+                <DressForToday weather={weather} units={units} air={air} />
+
+                {/* 4. Active alerts */}
+                <div id="alerts-panel">
+                  {!alertsMinimized && <Alerts alerts={activeAlerts} />}
+                </div>
+
+                {/* 5. Immediate timeline + next couple hours */}
                 <SevereTimeline
                   weather={weather}
                   units={units}
@@ -458,25 +528,48 @@ export default function DashboardPage() {
                   profile={profile}
                 />
                 <RainNextHour weather={weather} units={units} />
-                {/* 7-day right under next ~2 hours, then radar below */}
-                <WeekStrip weather={weather} units={units} />
               </div>
 
-              {/* Radar immediately under 7-day (mobile = View radar button until opened) */}
+              {/* 5. Hourly — next temps / rain chances */}
+              <p className="feed-label">Coming up</p>
+              <HourlyForecast weather={weather} units={units} />
+
+              {/* 6. Week at a glance */}
+              <p className="feed-label">This week</p>
+              <WeekStrip weather={weather} units={units} />
+
+              {/* Mobile: full multi-day list next (desktop uses sidebar) */}
+              <div className="daily-mobile-slot">
+                <DailyForecast weather={weather} units={units} />
+              </div>
+
+              {/* 7. Radar */}
+              <p className="feed-label">Radar & maps</p>
               {radarBlock}
 
-              {/* Defer secondary panels on mobile so first paint stays light */}
+              {/* Mobile: sun / AQI / pollen soon after radar */}
+              <div className="outdoor-mobile-slot">
+                <p className="feed-label">Outdoors</p>
+                <SunMoon weather={weather} />
+                <AirQuality air={air} />
+                <PollenPanel air={air} />
+              </div>
+
+              {/* 8. Outdoor snapshot */}
               <Deferred
                 force={!isMobile}
-                rootMargin="120px 0px"
-                minHeight={isMobile ? 80 : undefined}
+                rootMargin="100px 0px"
+                minHeight={isMobile ? 72 : undefined}
               >
-                <ActivityModes weather={weather} units={units} air={air} />
+                <p className="feed-label hide-sm">Details</p>
                 <HazardBadges weather={weather} units={units} />
+                <UvWindPanel weather={weather} units={units} />
+                <OutdoorAirStrip weather={weather} air={air} />
                 <TodayTimeline weather={weather} units={units} />
+                <ActivityModes weather={weather} units={units} air={air} />
               </Deferred>
 
-              {/* Home pins need rain-watch network — skip empty shell on mobile */}
+              {/* Saved places strip (after primary weather) */}
               {(!isMobile || rainWatch.snapshots.length > 0 || rainWatch.loading) && (
                 <HomePins
                   snapshots={rainWatch.snapshots}
@@ -488,23 +581,18 @@ export default function DashboardPage() {
                 />
               )}
 
-              <div id="alerts-panel">
-                {!alertsMinimized && <Alerts alerts={activeAlerts} />}
-              </div>
-
-              <HourlyForecast weather={weather} units={units} />
+              {/* Deeper outlook — still useful, not first paint */}
               <Deferred
                 force={!isMobile}
-                rootMargin="180px 0px"
-                minHeight={isMobile ? 80 : undefined}
+                rootMargin="160px 0px"
+                minHeight={isMobile ? 64 : undefined}
               >
-                <OutdoorAirStrip weather={weather} air={air} />
-                <UvWindPanel weather={weather} units={units} />
                 <PrecipTotals weather={weather} units={units} />
                 <VisibilityPanel weather={weather} units={units} />
                 {!isMobile && <StormRisk weather={weather} profile={profile} />}
               </Deferred>
-              {/* Fire map is heavy (Leaflet) — never auto on mobile unless scrolled deep */}
+
+              {/* Heavy map — last of the visual stack */}
               <Deferred
                 force={false}
                 rootMargin={isMobile ? '40px 0px' : '200px 0px'}
@@ -527,6 +615,11 @@ export default function DashboardPage() {
                   />
                 </Suspense>
               </Deferred>
+
+              <Deferred force={!isMobile} rootMargin="120px 0px" minHeight={isMobile ? 0 : 48}>
+                <AreaChat location={location} />
+              </Deferred>
+
               <Deferred force={!isMobile} rootMargin="100px 0px">
                 <ShareWeatherCard weather={weather} location={location} units={units} />
                 <WeatherStory weather={weather} units={units} placeName={location.name} />
@@ -568,7 +661,18 @@ export default function DashboardPage() {
                   accountSynced={cloudSynced}
                 />
               </div>
-              <DailyForecast weather={weather} units={units} />
+
+              {/* Full multi-day list — desktop sidebar (hidden on phones) */}
+              <div className="daily-desktop-slot">
+                <DailyForecast weather={weather} units={units} />
+              </div>
+
+              {/* Sun / air / pollen — desktop sidebar (mobile uses outdoor-mobile-slot) */}
+              <div className="outdoor-desktop-slot">
+                <SunMoon weather={weather} />
+                <AirQuality air={air} />
+                <PollenPanel air={air} />
+              </div>
 
               <AdvancedSection title="Planning & environment" defaultOpen={false} id="advanced-side">
                 <div className="advanced-grid">
@@ -581,12 +685,9 @@ export default function DashboardPage() {
                   <SnowOutlook weather={weather} units={units} />
                   <TripPlanner weather={weather} units={units} placeName={location.name} />
                   <OutlookTips weather={weather} units={units} />
-                  <PollenPanel air={air} />
                   <FireSmoke weather={weather} air={air} />
-                  <SunMoon weather={weather} />
                   <Sounding profile={profile} units={units} timezone={weather.timezone} />
                   <Tropical storms={storms} onFocus={openStorm} />
-                  <AirQuality air={air} />
                 </div>
               </AdvancedSection>
 
@@ -625,6 +726,13 @@ export default function DashboardPage() {
               </footer>
             </aside>
           </main>
+        )}
+
+        {/* Chat / community — below weather so it never blocks the forecast */}
+        {!weather && (
+          <Deferred rootMargin="200px 0px" minHeight={isMobile ? 0 : 48}>
+            <AreaChat location={location} />
+          </Deferred>
         )}
       </div>
     </div>

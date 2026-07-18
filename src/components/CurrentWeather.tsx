@@ -2,10 +2,12 @@ import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import type { LocationResult, WeatherData } from '../api/types'
 import { fetchClimateNormal, formatLocationLabel } from '../api/weather'
 import type { Units } from '../utils/format'
-import { formatTemp, formatTime } from '../utils/format'
+import { formatSpeed, formatTemp, formatTime } from '../utils/format'
 import { getWeatherInfo } from '../utils/weatherCodes'
 import { nextPrecipLabel, todayDailyIndex } from '../utils/weatherStory'
 import { vsNormalLine } from '../utils/severeTimeline'
+import { formatUpdatedAgo } from '../utils/relativeTime'
+import { isMobileViewport } from '../utils/device'
 import { WeatherIcon3D } from './WeatherIcon3D'
 
 interface Props {
@@ -40,6 +42,8 @@ export function CurrentWeather({
   const rainLabel = nextPrecipLabel(weather)
   const cardRef = useRef<HTMLElement>(null)
   const [vsNormal, setVsNormal] = useState<string | null>(null)
+  const [nowTick, setNowTick] = useState(() => Date.now())
+  const mobile = isMobileViewport()
 
   useEffect(() => {
     let cancelled = false
@@ -52,14 +56,18 @@ export function CurrentWeather({
     }
   }, [location.latitude, location.longitude, high, units])
 
-  const updatedLabel = updatedAt
-    ? new Date(updatedAt).toLocaleTimeString(undefined, {
-        hour: 'numeric',
-        minute: '2-digit',
-      })
-    : null
+  // Keep “Updated Xm ago” fresh without heavy re-renders
+  useEffect(() => {
+    if (updatedAt == null) return
+    const id = window.setInterval(() => setNowTick(Date.now()), 60_000)
+    return () => window.clearInterval(id)
+  }, [updatedAt])
+
+  const updatedLabel =
+    updatedAt != null ? formatUpdatedAgo(updatedAt, nowTick) : null
 
   const onMove = (e: MouseEvent<HTMLElement>) => {
+    if (mobile) return
     const el = cardRef.current
     if (!el || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
     const r = el.getBoundingClientRect()
@@ -92,6 +100,7 @@ export function CurrentWeather({
 
       <div className="current-top">
         <div className="current-place">
+          <p className="hero-kicker">Right now</p>
           <div className="place-row">
             <h1 className="place-name">{location.name}</h1>
             {onToggleFavorite && (
@@ -109,9 +118,6 @@ export function CurrentWeather({
           <p className="place-meta">
             {[location.admin1, location.country].filter(Boolean).join(' · ') ||
               formatLocationLabel(location)}
-            {weather.elevation != null && (
-              <span className="elev"> · {Math.round(weather.elevation)} m</span>
-            )}
           </p>
           <p className="local-time">
             Local {formatTime(c.time, weather.timezone)}
@@ -119,31 +125,18 @@ export function CurrentWeather({
             {updatedLabel && (
               <span className="updated-at">
                 {' '}
-                · Updated {updatedLabel}
-                {refreshing ? ' · refreshing…' : ''}
-                {offline ? ' · offline cache' : ''}
+                · {refreshing ? 'Refreshing…' : `Updated ${updatedLabel}`}
+                {offline ? ' · offline' : ''}
               </span>
             )}
           </p>
-          <div className="current-chips">
-            {offline && <span className="current-chip offline">Offline</span>}
-            {alertCount > 0 && (
-              <span className="current-chip alert">
-                ⚠️ {alertCount} alert{alertCount > 1 ? 's' : ''}
-              </span>
-            )}
-            {rainLabel && <span className="current-chip rain">☔ {rainLabel}</span>}
-            {vsNormal && <span className="current-chip normal">📊 {vsNormal}</span>}
-            <span className="current-chip">💨 {Math.round(c.wind_speed_10m)} km/h</span>
-            <span className="current-chip">💧 {c.relative_humidity_2m}%</span>
-          </div>
         </div>
 
         <div className="current-3d-wrap" title={info.description}>
           <WeatherIcon3D
             code={c.weather_code}
             isDay={c.is_day === 1}
-            size="xl"
+            size={mobile ? 'lg' : 'xl'}
             forceAnimate
           />
         </div>
@@ -162,6 +155,19 @@ export function CurrentWeather({
             </span>
             {vsNormal && <span className="vs-normal-line">{vsNormal}</span>}
           </div>
+        </div>
+
+        <div className="current-chips" aria-label="Quick stats">
+          {offline && <span className="current-chip offline">Offline</span>}
+          {alertCount > 0 && (
+            <span className="current-chip alert">
+              {alertCount} alert{alertCount > 1 ? 's' : ''}
+            </span>
+          )}
+          {rainLabel && <span className="current-chip rain">{rainLabel}</span>}
+          <span className="current-chip">{formatSpeed(c.wind_speed_10m, units)}</span>
+          <span className="current-chip">{c.relative_humidity_2m}% humidity</span>
+          {vsNormal && <span className="current-chip normal hide-sm">{vsNormal}</span>}
         </div>
       </div>
     </section>
