@@ -70,7 +70,7 @@ export function HourlyForecast({ weather, units }: Props) {
                 {hourLabel(hourly.time[i], timezone, i === idx)}
               </span>
               <span className="h-icon" title={info.description}>
-                <WeatherIcon3D code={code} isDay={isDay} size="sm" />
+                <WeatherIcon3D code={code} isDay={isDay} size="sm" forceAnimate />
               </span>
               <span className="h-temp">{formatTemp(t, units)}</span>
               <div className="h-bar-wrap" aria-hidden>

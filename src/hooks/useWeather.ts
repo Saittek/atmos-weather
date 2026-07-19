@@ -619,12 +619,13 @@ export function useWeather() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Soft auto-refresh — rare on mobile; never when tab is hidden
+  // Soft auto-refresh — fresher icons/conditions; never when tab is hidden
   useEffect(() => {
     if (!location) return
     const mobile =
       typeof window !== 'undefined' && window.matchMedia('(max-width: 720px)').matches
-    const ms = (mobile ? 20 : 12) * 60 * 1000
+    // More frequent so weather codes / animated icons stay current
+    const ms = (mobile ? 6 : 4) * 60 * 1000
     const id = window.setInterval(() => {
       if (typeof document !== 'undefined' && document.hidden) return
       void loadForLocationRef.current?.(location, { soft: true })

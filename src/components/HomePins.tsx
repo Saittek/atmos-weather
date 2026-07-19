@@ -57,7 +57,7 @@ export function HomePins({
               <div className="pin-top">
                 <span className="pin-name">{s.location.name}</span>
                 <span className="pin-icon" aria-hidden>
-                  <WeatherIcon3D code={s.weatherCode} isDay={s.isDay} size="sm" />
+                  <WeatherIcon3D code={s.weatherCode} isDay={s.isDay} size="sm" forceAnimate />
                 </span>
               </div>
               <div className="pin-temp">{formatTemp(s.temperature, units)}</div>

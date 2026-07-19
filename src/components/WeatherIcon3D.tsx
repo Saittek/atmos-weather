@@ -1,4 +1,4 @@
-import { useId } from 'react'
+import { useEffect, useId, useState } from 'react'
 import './weather-3d.css'
 
 /** Distinct animated 3D scenes for all WMO weather groups */
@@ -333,14 +333,30 @@ export function WeatherIcon3D({
   isDay = true,
   size = 'md',
   className = '',
-  /** Only hero / featured icons should force continuous animation */
-  forceAnimate = false,
+  /** Keep CSS animations running (default on for lively icons) */
+  forceAnimate = true,
 }: Props) {
   const uid = useId().replace(/:/g, '')
   const boltGradId = `boltGrad-${uid}`
   const { kind, intensity } = weatherKindFromCode(code, isDay)
   const dropCount = intensity === 1 ? 6 : intensity === 2 ? 10 : 14
   const flakeCount = intensity === 1 ? 7 : intensity === 2 ? 11 : 15
+  /** Remount key so animations restart after tab sleep / every few cycles */
+  const [animGen, setAnimGen] = useState(0)
+
+  useEffect(() => {
+    // Restart motion periodically so loops don’t freeze after long idle
+    const every = size === 'sm' ? 12_000 : 8_000
+    const id = window.setInterval(() => setAnimGen((g) => g + 1), every)
+    const onVis = () => {
+      if (document.visibilityState === 'visible') setAnimGen((g) => g + 1)
+    }
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      window.clearInterval(id)
+      document.removeEventListener('visibilitychange', onVis)
+    }
+  }, [size, code, isDay])
 
   const scene = (() => {
     switch (kind) {
@@ -491,6 +507,7 @@ export function WeatherIcon3D({
 
   return (
     <div
+      key={`${kind}-${isDay ? 1 : 0}-${animGen}`}
       className={`w3d w3d-${size} w3d-${kind} w3d-i${intensity} ${forceAnimate ? 'w3d-force' : ''} ${className}`}
       aria-hidden
       data-kind={kind}

@@ -28,21 +28,21 @@
   width: 100%;
   height: 100%;
   transform-style: preserve-3d;
-  animation: w3d-float 4.5s ease-in-out infinite;
+  animation: w3d-float 2.8s ease-in-out infinite;
 }
 
 .w3d-orbit {
   position: absolute;
   inset: 0;
   transform-style: preserve-3d;
-  animation: w3d-yaw 9s ease-in-out infinite;
+  animation: w3d-yaw 5s ease-in-out infinite;
 }
 
 .w3d-sm .w3d-stage {
-  animation-duration: 5.5s;
+  animation-duration: 3.2s;
 }
 .w3d-sm .w3d-orbit {
-  animation-duration: 11s;
+  animation-duration: 6s;
 }
 
 @keyframes w3d-float {
@@ -75,7 +75,7 @@
   background: radial-gradient(ellipse, rgba(0, 0, 0, 0.4), transparent 70%);
   filter: blur(3px);
   pointer-events: none;
-  animation: w3d-shadow 4.5s ease-in-out infinite;
+  animation: w3d-shadow 2.8s ease-in-out infinite;
 }
 
 @keyframes w3d-shadow {
@@ -113,17 +113,17 @@
   filter: drop-shadow(0 0 10px rgba(251, 191, 36, 0.55))
     drop-shadow(0 4px 14px rgba(180, 83, 9, 0.35));
   transform: translateZ(6px);
-  animation: w3d-sun-breathe 3.2s ease-in-out infinite;
+  animation: w3d-sun-breathe 2s ease-in-out infinite;
 }
 
 .w3d-sun-corona {
-  animation: w3d-sun-corona-pulse 2.8s ease-in-out infinite;
+  animation: w3d-sun-corona-pulse 1.8s ease-in-out infinite;
   transform-origin: 50px 50px;
 }
 
 .w3d-sun-rays {
   transform-origin: 50px 50px;
-  animation: w3d-sun-spin 28s linear infinite;
+  animation: w3d-sun-spin 14s linear infinite;
 }
 
 .w3d-sun-ray.major {
@@ -475,8 +475,8 @@
   border-radius: 99px;
   background: linear-gradient(180deg, transparent, #bae6fd 20%, #38bdf8 70%, #0ea5e9);
   left: calc(4% + (var(--i) / var(--n, 10)) * 90%);
-  animation: w3d-fall 0.75s linear infinite;
-  animation-delay: calc(var(--i) * 0.07s);
+  animation: w3d-fall 0.55s linear infinite;
+  animation-delay: calc(var(--i) * 0.05s);
   opacity: 0.9;
   box-shadow: 0 0 4px rgba(56, 189, 248, 0.45);
 }
@@ -773,32 +773,18 @@
   animation-duration: 3.4s;
 }
 
-/* Mobile / low-power: freeze small list icons (hourly, daily, pins).
-   Hero keeps .w3d-force so it still animates. Huge scroll/jank win. */
-html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-stage,
-html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-orbit,
-html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-sun,
-html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-sun-svg,
-html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-sun-rays,
-html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-sun-corona,
-html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-moon,
-html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-star,
-html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-clouds,
-html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-cloud,
-html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-precip span,
-html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-snow span,
-html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-hail span,
-html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-bolt,
-html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-flash,
-html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-fog span,
-html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-floor,
-html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-splash,
-html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-ice-glaze,
-html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-snow-ground {
-  animation: none !important;
+/* Mobile: keep icons animated but slightly calmer (no full freeze) */
+html.mobile-perf .w3d-sm .w3d-stage {
+  animation-duration: 3.6s;
 }
-html.mobile-perf .w3d-sm:not(.w3d-force) .w3d-stage {
-  transform: rotateX(8deg) rotateY(-6deg);
+html.mobile-perf .w3d-sm .w3d-orbit {
+  animation-duration: 7s;
+}
+html.mobile-perf .w3d-sm .w3d-precip span {
+  animation-duration: 0.7s;
+}
+html.mobile-perf .w3d-sm .w3d-sun-rays {
+  animation-duration: 18s;
 }
 
 @media (prefers-reduced-motion: reduce) {
