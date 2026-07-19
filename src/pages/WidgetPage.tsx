@@ -2,9 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useWeather } from '../hooks/useWeather'
 import { useRainWatch } from '../hooks/useRainWatch'
-import { WillIGetWet } from '../components/WillIGetWet'
 import { RainNextHour } from '../components/RainNextHour'
-import { DressForToday } from '../components/DressForToday'
 import { getWeatherInfo } from '../utils/weatherCodes'
 import { formatTemp } from '../utils/format'
 import { locationKey } from '../api/weather'
@@ -18,7 +16,6 @@ export default function WidgetPage() {
   const {
     location,
     weather,
-    air,
     units,
     favorites,
     notifyAlerts,
@@ -110,27 +107,7 @@ export default function WidgetPage() {
             </Link>
           </section>
 
-          <WillIGetWet weather={weather} />
-          <DressForToday weather={weather} units={units} air={air} />
           <RainNextHour weather={weather} units={units} />
-
-          <section className="panel widget-homescreen-tip">
-            <div className="panel-header">
-              <h2>Home screen</h2>
-            </div>
-            <p className="widget-tip-copy">
-              Add this page to your home screen for a one-tap rain check — works great as a phone
-              “widget” shortcut until native Live Activities ship in the App Store build.
-            </p>
-            <ul className="widget-tip-steps">
-              <li>
-                <strong>iPhone:</strong> Safari → Share → Add to Home Screen
-              </li>
-              <li>
-                <strong>Android:</strong> Browser menu → Install app / Add to Home screen
-              </li>
-            </ul>
-          </section>
 
           {rainyPins.length > 0 && (
             <section className="panel widget-pins">

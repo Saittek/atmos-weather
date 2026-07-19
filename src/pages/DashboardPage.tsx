@@ -18,7 +18,6 @@ import { Sounding } from '../components/Sounding'
 import { Tropical } from '../components/Tropical'
 import { SettingsBar } from '../components/SettingsBar'
 import { HomePins } from '../components/HomePins'
-import { WillIGetWet } from '../components/WillIGetWet'
 import { PollenPanel } from '../components/PollenPanel'
 import { FireSmoke } from '../components/FireSmoke'
 import { TripPlanner } from '../components/TripPlanner'
@@ -27,7 +26,6 @@ import { InstallPrompt } from '../components/InstallPrompt'
 import { Onboarding } from '../components/Onboarding'
 import { DressForToday } from '../components/DressForToday'
 import { AlertTopBar } from '../components/AlertTopBar'
-import { WeatherStory } from '../components/WeatherStory'
 import { ComfortPanel } from '../components/ComfortPanel'
 import { ClimateCompare } from '../components/ClimateCompare'
 import { SnowOutlook } from '../components/SnowOutlook'
@@ -36,14 +34,12 @@ import { AmbientOrbs } from '../components/AmbientOrbs'
 import { AdvancedSection } from '../components/AdvancedSection'
 import { isMobileViewport } from '../utils/device'
 import { DashboardSkeleton } from '../components/Skeleton'
-import { TodayTimeline } from '../components/TodayTimeline'
 import { WeekStrip } from '../components/WeekStrip'
 import { HazardBadges } from '../components/HazardBadges'
 import { PrecipTotals } from '../components/PrecipTotals'
 import { AreaChat } from '../components/AreaChat'
 import { UvWindPanel } from '../components/UvWindPanel'
 import { VisibilityPanel } from '../components/VisibilityPanel'
-import { SevereTimeline } from '../components/SevereTimeline'
 import { ActivityModes } from '../components/ActivityModes'
 import { ShareWeatherCard } from '../components/ShareWeatherCard'
 import { OutdoorAirStrip } from '../components/OutdoorAirStrip'
@@ -408,8 +404,6 @@ export default function DashboardPage() {
           </div>
         </header>
 
-        <p className="brand-promise">Clear forecasts. Real answers. Built for real life.</p>
-
         {stormMode && (
           <div className="storm-mode-banner" role="status">
             <div>
@@ -464,23 +458,16 @@ export default function DashboardPage() {
             </div>
             <h1>Where should we look?</h1>
             <p className="empty-lead">
-              Solara answers one thing first: <strong>will you get wet?</strong>
-              <br />
-              Then radar, alerts (US + Canada), and your pinned places.
+              Search a city or use your location for forecasts, radar, and alerts.
             </p>
             <div className="empty-actions">
               <button type="button" className="primary-btn" onClick={requestMyLocation}>
                 Use my location
               </button>
               <Link to="/radar" className="chip-btn empty-secondary">
-                Open radar anyway
+                Open radar
               </Link>
             </div>
-            <ul className="empty-hints">
-              <li>Search any city in the bar above</li>
-              <li>Star places for rain watch</li>
-              <li>Storm mode prioritizes live radar</li>
-            </ul>
           </div>
         )}
 
@@ -489,13 +476,7 @@ export default function DashboardPage() {
         {weather && location && (
           <main className={`dashboard ${stormMode ? 'dashboard-storm' : ''}`}>
             <div className="col main-col">
-              {/*
-                Feed order = what people check first:
-                1 Now → 2 Wet/dry → 3 Alerts → 4 Next 2h → 5 Hourly
-                → 6 7-day → 7 Radar → 8 Quick outdoor facts → rest
-              */}
               <div className="priority-stack">
-                {/* 1. Right now */}
                 <CurrentWeather
                   weather={weather}
                   location={location}
@@ -508,68 +489,39 @@ export default function DashboardPage() {
                   offline={offline}
                 />
 
-                {/* 2. Will I get wet? */}
-                <WillIGetWet weather={weather} />
-
-                {/* 3. What to wear */}
-                <DressForToday weather={weather} units={units} air={air} />
-
-                {/* 4. Active alerts */}
                 <div id="alerts-panel">
                   {!alertsMinimized && <Alerts alerts={activeAlerts} />}
                 </div>
 
-                {/* 5. Immediate timeline + next couple hours */}
-                <SevereTimeline
-                  weather={weather}
-                  units={units}
-                  alerts={alertsMinimized ? [] : activeAlerts}
-                  air={air}
-                  profile={profile}
-                />
                 <RainNextHour weather={weather} units={units} />
               </div>
 
-              {/* 5. Hourly — next temps / rain chances */}
-              <p className="feed-label">Coming up</p>
               <HourlyForecast weather={weather} units={units} />
-
-              {/* 6. Week at a glance */}
-              <p className="feed-label">This week</p>
               <WeekStrip weather={weather} units={units} />
 
-              {/* Mobile: full multi-day list next (desktop uses sidebar) */}
               <div className="daily-mobile-slot">
                 <DailyForecast weather={weather} units={units} />
               </div>
 
-              {/* 7. Radar */}
-              <p className="feed-label">Radar & maps</p>
               {radarBlock}
 
-              {/* Mobile: sun / AQI / pollen soon after radar */}
               <div className="outdoor-mobile-slot">
-                <p className="feed-label">Outdoors</p>
                 <SunMoon weather={weather} />
                 <AirQuality air={air} />
                 <PollenPanel air={air} />
               </div>
 
-              {/* 8. Outdoor snapshot */}
               <Deferred
                 force={!isMobile}
                 rootMargin="100px 0px"
                 minHeight={isMobile ? 72 : undefined}
               >
-                <p className="feed-label hide-sm">Details</p>
                 <HazardBadges weather={weather} units={units} />
                 <UvWindPanel weather={weather} units={units} />
                 <OutdoorAirStrip weather={weather} air={air} />
-                <TodayTimeline weather={weather} units={units} />
                 <ActivityModes weather={weather} units={units} air={air} />
               </Deferred>
 
-              {/* Saved places strip (after primary weather) */}
               {(!isMobile || rainWatch.snapshots.length > 0 || rainWatch.loading) && (
                 <HomePins
                   snapshots={rainWatch.snapshots}
@@ -581,7 +533,6 @@ export default function DashboardPage() {
                 />
               )}
 
-              {/* Deeper outlook — still useful, not first paint */}
               <Deferred
                 force={!isMobile}
                 rootMargin="160px 0px"
@@ -592,7 +543,9 @@ export default function DashboardPage() {
                 {!isMobile && <StormRisk weather={weather} profile={profile} />}
               </Deferred>
 
-              {/* Heavy map — last of the visual stack */}
+              {/* Dress advice — lower on the page */}
+              <DressForToday weather={weather} units={units} air={air} />
+
               <Deferred
                 force={false}
                 rootMargin={isMobile ? '40px 0px' : '200px 0px'}
@@ -622,7 +575,6 @@ export default function DashboardPage() {
 
               <Deferred force={!isMobile} rootMargin="100px 0px">
                 <ShareWeatherCard weather={weather} location={location} units={units} />
-                <WeatherStory weather={weather} units={units} placeName={location.name} />
               </Deferred>
 
               <AdvancedSection title="More details" defaultOpen={false}>
@@ -719,10 +671,9 @@ export default function DashboardPage() {
                   </a>
                   .
                 </p>
-                <p className="tiny">
-                  {user ? `Signed in as ${user.email} · ` : ''}
-                  <strong>Storm mode</strong> = radar first. <strong>Notify</strong> = rain watch.
-                </p>
+                {user && (
+                  <p className="tiny">Signed in as {user.email}</p>
+                )}
               </footer>
             </aside>
           </main>
