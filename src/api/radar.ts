@@ -4,6 +4,7 @@
  * - US precipitation Q2 (IEM)
  * - GOES East/West IR & VIS (IEM)
  * - Global precip loop (RainViewer)
+ * - Mapbox map + global radar (RainViewer tiles on Mapbox basemap)
  * - Global IR (NASA GIBS)
  */
 
@@ -12,6 +13,7 @@ export type RadarSourceId =
   | 'us_nexrad_loop'
   | 'us_precip'
   | 'global_loop'
+  | 'mapbox_radar'
   | 'goes_east_ir'
   | 'goes_west_ir'
   | 'goes_east_vis'
@@ -73,6 +75,15 @@ export const RADAR_SOURCES: RadarSourceMeta[] = [
     animated: true,
     maxNativeZoom: 7,
     attribution: 'Radar © RainViewer',
+  },
+  {
+    id: 'mapbox_radar',
+    name: 'Mapbox + radar',
+    desc: 'Global precip loop on a Mapbox basemap (set VITE_MAPBOX_TOKEN)',
+    coverage: 'Global',
+    animated: true,
+    maxNativeZoom: 7,
+    attribution: 'Basemap © Mapbox · Radar © RainViewer',
   },
   {
     id: 'goes_east_ir',
@@ -203,7 +214,8 @@ export async function loadFrames(
   switch (sourceId) {
     case 'us_nexrad_loop':
       return buildIemNexradFrames(lite ? 1 : 1.5, 5)
-    case 'global_loop': {
+    case 'global_loop':
+    case 'mapbox_radar': {
       const maps = await fetchRainViewerMaps()
       // Fewer frames on constrained devices = less tile RAM / GPU
       return rainViewerFrames(maps, lite ? 8 : 14)
@@ -238,7 +250,8 @@ export function primaryTileUrl(
       return `${IEM_TILE}/${frame.key}/{z}/{x}/{y}.png`
     case 'us_precip':
       return `${IEM_TILE}/q2-n1p-900913/{z}/{x}/{y}.png`
-    case 'global_loop': {
+    case 'global_loop':
+    case 'mapbox_radar': {
       const host = (rvHost ?? 'https://tilecache.rainviewer.com').replace(/\/$/, '')
       // color 6 NEXRAD-ish, smooth+snow
       return `${host}${frame.key}/256/{z}/{x}/{y}/6/1_1.png`
@@ -274,6 +287,21 @@ export function gibsInfraredTileUrl(date = new Date()): string {
   const m = String(d.getUTCMonth() + 1).padStart(2, '0')
   const day = String(d.getUTCDate()).padStart(2, '0')
   return `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Aqua_Brightness_Temp_Band31_Night/default/${y}-${m}-${day}/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png`
+}
+
+/** Mapbox access token from build env (public pk. token is OK for client tiles) */
+export function getMapboxToken(): string | null {
+  const t = import.meta.env.VITE_MAPBOX_TOKEN
+  const s = typeof t === 'string' ? t.trim() : ''
+  return s || null
+}
+
+/** Raster style tiles for Leaflet (Mapbox Styles API) */
+export function mapboxStyleTileUrl(
+  styleId: 'dark-v11' | 'streets-v12' | 'outdoors-v12' | 'satellite-streets-v12',
+  token: string,
+): string {
+  return `https://api.mapbox.com/styles/v1/mapbox/${styleId}/tiles/256/{z}/{x}/{y}@2x?access_token=${encodeURIComponent(token)}`
 }
 
 /** @deprecated kept for any leftover imports */

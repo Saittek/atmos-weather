@@ -14,6 +14,8 @@ import {
   primaryTileUrl,
   secondaryTileUrl,
   fetchRainViewerMaps,
+  getMapboxToken,
+  mapboxStyleTileUrl,
   RADAR_SOURCES,
   type RadarFrame,
   type RadarSourceId,
@@ -34,24 +36,53 @@ interface Props {
   pageMode?: boolean
 }
 
-type Basemap = 'dark' | 'street' | 'sat'
+type Basemap = 'dark' | 'street' | 'sat' | 'mapbox_dark' | 'mapbox_streets' | 'mapbox_sat'
 
-const BASEMAPS: Record<Basemap, { url: string; attr: string; name: string }> = {
-  dark: {
-    name: 'Dark',
-    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    attr: '&copy; OSM &copy; CARTO',
-  },
-  street: {
-    name: 'Street',
-    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attr: '&copy; OpenStreetMap',
-  },
-  sat: {
-    name: 'Satellite',
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    attr: 'Tiles &copy; Esri',
-  },
+function buildBasemaps(mapboxToken: string | null): Record<Basemap, { url: string; attr: string; name: string }> {
+  const free: Record<'dark' | 'street' | 'sat', { url: string; attr: string; name: string }> = {
+    dark: {
+      name: 'Dark',
+      url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+      attr: '&copy; OSM &copy; CARTO',
+    },
+    street: {
+      name: 'Street',
+      url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      attr: '&copy; OpenStreetMap',
+    },
+    sat: {
+      name: 'Satellite',
+      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      attr: 'Tiles &copy; Esri',
+    },
+  }
+  if (!mapboxToken) {
+    return {
+      ...free,
+      mapbox_dark: { ...free.dark, name: 'Mapbox Dark (add token)' },
+      mapbox_streets: { ...free.street, name: 'Mapbox Streets (add token)' },
+      mapbox_sat: { ...free.sat, name: 'Mapbox Satellite (add token)' },
+    }
+  }
+  const attr = '© Mapbox © OpenStreetMap'
+  return {
+    ...free,
+    mapbox_dark: {
+      name: 'Mapbox Dark',
+      url: mapboxStyleTileUrl('dark-v11', mapboxToken),
+      attr,
+    },
+    mapbox_streets: {
+      name: 'Mapbox Streets',
+      url: mapboxStyleTileUrl('streets-v12', mapboxToken),
+      attr,
+    },
+    mapbox_sat: {
+      name: 'Mapbox Satellite',
+      url: mapboxStyleTileUrl('satellite-streets-v12', mapboxToken),
+      attr,
+    },
+  }
 }
 
 /** Hold time after a crossfade finishes (ms) */
@@ -388,6 +419,8 @@ export function RadarMap({
 }: Props) {
   void _units
   const lite = useMemo(() => isConstrainedDevice(), [])
+  const mapboxToken = useMemo(() => getMapboxToken(), [])
+  const BASEMAPS = useMemo(() => buildBasemaps(mapboxToken), [mapboxToken])
   const [sourceId, setSourceId] = useState<RadarSourceId>('global_loop')
   const [frames, setFrames] = useState<RadarFrame[]>([])
   const [frameIdx, setFrameIdx] = useState(0)
@@ -397,7 +430,9 @@ export function RadarMap({
     isConstrainedDevice() ? 'slow' : 'normal',
   )
   const [opacity, setOpacity] = useState(0.78)
-  const [basemap, setBasemap] = useState<Basemap>('dark')
+  const [basemap, setBasemap] = useState<Basemap>(() =>
+    getMapboxToken() ? 'mapbox_dark' : 'dark',
+  )
   const [showFires, setShowFires] = useState(false)
   const [overlay, setOverlay] = useState<OverlayMode>('none')
   const [loading, setLoading] = useState(true)
@@ -411,7 +446,7 @@ export function RadarMap({
   const wantPlayRef = useRef(playing)
 
   const meta = getSourceMeta(sourceId)
-  const base = BASEMAPS[basemap]
+  const base = BASEMAPS[basemap] ?? BASEMAPS.dark
   const frame = frames[frameIdx] ?? null
   const fadeMs = lite ? Math.min(SPEED_FADE_MS[speed], 180) : SPEED_FADE_MS[speed]
   const holdMs = SPEED_HOLD_MS[speed]
@@ -427,17 +462,30 @@ export function RadarMap({
   )
   const secondaryUrl = useMemo(() => secondaryTileUrl(sourceId), [sourceId])
 
+  // Mapbox radar source: pair with Mapbox dark basemap when token is available
+  useEffect(() => {
+    if (sourceId === 'mapbox_radar' && mapboxToken) {
+      setBasemap('mapbox_dark')
+    }
+  }, [sourceId, mapboxToken])
+
   const reload = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      if (sourceId === 'global_loop') {
+      if (sourceId === 'global_loop' || sourceId === 'mapbox_radar') {
         const maps = await fetchRainViewerMaps()
         setRvHost(maps.host || 'https://tilecache.rainviewer.com')
       }
+      if (sourceId === 'mapbox_radar' && !mapboxToken) {
+        // Still show radar; basemap falls back to free dark tiles
+        console.info(
+          'Solara: set VITE_MAPBOX_TOKEN for Mapbox basemap (radar still works)',
+        )
+      }
       // Prefer fuller loop for global radar smoothness
       const next = await loadFrames(sourceId, {
-        lite: lite && sourceId !== 'global_loop',
+        lite: lite && sourceId !== 'global_loop' && sourceId !== 'mapbox_radar',
       })
       if (!next.length) throw new Error('No frames available for this source')
       setFrames(next)
@@ -448,7 +496,7 @@ export function RadarMap({
     } finally {
       setLoading(false)
     }
-  }, [sourceId, lite])
+  }, [sourceId, lite, mapboxToken])
 
   useEffect(() => {
     void reload()
@@ -630,7 +678,7 @@ export function RadarMap({
             )}
 
             <MapContainer
-              key={`${mapId}-${lat.toFixed(2)}-${lon.toFixed(2)}`}
+              key={`${mapId}-${lat.toFixed(2)}-${lon.toFixed(2)}-${basemap}`}
               center={[lat, lon]}
               zoom={pageMode ? 6 : 7}
               minZoom={3}
@@ -640,7 +688,13 @@ export function RadarMap({
               attributionControl
               style={{ width: '100%', height: '100%' }}
             >
-              <TileLayer url={base.url} attribution={base.attr} maxZoom={19} />
+              <TileLayer
+                url={base.url}
+                attribution={base.attr}
+                maxZoom={19}
+                tileSize={256}
+                zoomOffset={0}
+              />
 
               {secondaryUrl && (
                 <WeatherTileLayer
@@ -807,13 +861,24 @@ export function RadarMap({
               value={basemap}
               onChange={(e) => setBasemap(e.target.value as Basemap)}
             >
-              {(Object.keys(BASEMAPS) as Basemap[]).map((k) => (
-                <option key={k} value={k}>
-                  {BASEMAPS[k].name}
-                </option>
-              ))}
+              {(Object.keys(BASEMAPS) as Basemap[])
+                .filter((k) => {
+                  // Hide Mapbox basemap choices when no token (except labels already mark add token)
+                  if (!mapboxToken && k.startsWith('mapbox_')) return false
+                  return true
+                })
+                .map((k) => (
+                  <option key={k} value={k}>
+                    {BASEMAPS[k].name}
+                  </option>
+                ))}
             </select>
           </label>
+          {sourceId === 'mapbox_radar' && !mapboxToken && (
+            <p className="radar-mapbox-hint muted-center">
+              Mapbox basemap needs <code>VITE_MAPBOX_TOKEN</code> — radar loop still runs.
+            </p>
+          )}
 
           <label className="opt">
             Model map (Ventusky)
