@@ -367,6 +367,18 @@ export default function DashboardPage() {
           />
           <div className="topbar-right">
             <nav className="quick-nav" aria-label="App modes">
+              <Link
+                to={
+                  location
+                    ? `/chase?lat=${location.latitude.toFixed(4)}&lon=${location.longitude.toFixed(4)}&name=${encodeURIComponent(location.name)}`
+                    : '/chase'
+                }
+                className="chip-btn nav-chip chaser-nav-btn"
+                title="Storm chasers desk"
+              >
+                <span aria-hidden>🌪</span>
+                <span className="chaser-nav-label">Chasers</span>
+              </Link>
               <Link to={radarPath} className="chip-btn icon-chip nav-chip" title="Full-page radar" aria-label="Radar">
                 📡
               </Link>

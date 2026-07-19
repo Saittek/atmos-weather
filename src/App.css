@@ -6392,3 +6392,283 @@ html.mobile-perf .panel {
   font-size: 0.88rem;
   color: var(--text);
 }
+
+/* ===== Storm Chasers desk ===== */
+.chaser-nav-btn {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 0.3rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.25), rgba(168, 85, 247, 0.22)) !important;
+  border-color: rgba(248, 113, 113, 0.45) !important;
+  color: #fecaca !important;
+  padding: 0.35rem 0.55rem !important;
+}
+.chaser-nav-label {
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+}
+@media (max-width: 720px) {
+  .chaser-nav-label {
+    display: none;
+  }
+  .chaser-nav-btn {
+    padding: 0.4rem 0.5rem !important;
+  }
+}
+
+.chaser-page {
+  min-height: 100dvh;
+  background: linear-gradient(165deg, #070b14 0%, #1a1020 40%, #0c1424 100%);
+  color: #f8fafc;
+  padding: 0.75rem 0.85rem 2.5rem;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+.chaser-topbar {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+.chaser-brand {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.chaser-brand strong {
+  font-size: 1.1rem;
+  letter-spacing: -0.02em;
+}
+.chaser-brand span {
+  font-size: 0.82rem;
+  color: rgba(226, 232, 240, 0.65);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chaser-top-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+.chaser-disclaimer {
+  margin: 0 0 1rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 12px;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: #fecaca;
+  background: rgba(127, 29, 29, 0.35);
+  border: 1px solid rgba(248, 113, 113, 0.35);
+}
+.chaser-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 3rem;
+  color: rgba(226, 232, 240, 0.7);
+}
+.chaser-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.chaser-overall {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 1.15rem 1.25rem;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(135deg, rgba(88, 28, 135, 0.35), rgba(15, 23, 42, 0.7));
+}
+.chaser-overall.chaser-level-high {
+  border-color: rgba(248, 113, 113, 0.55);
+  background: linear-gradient(135deg, rgba(153, 27, 27, 0.55), rgba(88, 28, 135, 0.4));
+}
+.chaser-overall.chaser-level-moderate,
+.chaser-overall.chaser-level-enhanced {
+  border-color: rgba(251, 146, 60, 0.5);
+}
+.chaser-kicker {
+  margin: 0 0 0.25rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(252, 165, 165, 0.9);
+}
+.chaser-overall h1 {
+  margin: 0;
+  font-size: clamp(1.15rem, 3vw, 1.45rem);
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+.chaser-meta {
+  margin: 0.45rem 0 0;
+  font-size: 0.88rem;
+  color: rgba(226, 232, 240, 0.75);
+}
+.chaser-now-temp {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.15rem;
+  font-size: 0.8rem;
+  color: rgba(226, 232, 240, 0.65);
+}
+.chaser-now-big {
+  font-size: 2.4rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  color: #fff;
+  line-height: 1;
+}
+
+.chaser-hazard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.75rem;
+}
+.chaser-hazard {
+  padding: 0.95rem 1rem;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(15, 23, 42, 0.55);
+}
+.chaser-hazard.chaser-level-high {
+  border-color: rgba(248, 113, 113, 0.5);
+  background: rgba(127, 29, 29, 0.35);
+}
+.chaser-hazard.chaser-level-moderate,
+.chaser-hazard.chaser-level-enhanced {
+  border-color: rgba(251, 146, 60, 0.45);
+  background: rgba(154, 52, 18, 0.25);
+}
+.chaser-hazard.chaser-level-slight {
+  border-color: rgba(250, 204, 21, 0.4);
+}
+.chaser-hazard-top {
+  display: flex;
+  gap: 0.65rem;
+  align-items: flex-start;
+  margin-bottom: 0.5rem;
+}
+.chaser-hazard-emoji {
+  font-size: 1.5rem;
+}
+.chaser-hazard h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+.chaser-level-pill {
+  display: inline-block;
+  margin-top: 0.2rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.12rem 0.4rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+}
+.chaser-hazard-summary {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  color: rgba(226, 232, 240, 0.85);
+  line-height: 1.35;
+}
+.chaser-factor-list {
+  margin: 0 0 0.65rem;
+  padding-left: 1.05rem;
+  font-size: 0.8rem;
+  color: rgba(226, 232, 240, 0.7);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.chaser-score-bar {
+  height: 4px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+.chaser-score-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #fbbf24, #f97316, #ef4444);
+}
+
+.chaser-section h2 {
+  margin: 0 0 0.65rem;
+  font-size: 1.05rem;
+}
+.chaser-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+.chaser-section-head h2 {
+  margin: 0;
+}
+.chaser-radar-wrap .radar-panel {
+  margin: 0;
+}
+.chaser-two-col {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 0.85rem;
+}
+@media (max-width: 800px) {
+  .chaser-two-col {
+    grid-template-columns: 1fr;
+  }
+}
+.chaser-atmos-note {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  color: rgba(226, 232, 240, 0.7);
+}
+.chaser-stat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55rem;
+  margin: 0 0 0.85rem;
+}
+.chaser-stat-grid dt {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(148, 163, 184, 0.9);
+}
+.chaser-stat-grid dd {
+  margin: 0.15rem 0 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+.chaser-check-list {
+  margin: 0 0 1rem;
+  padding-left: 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  line-height: 1.35;
+  color: rgba(226, 232, 240, 0.88);
+}
+.chaser-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+.chaser-link-btn {
+  text-decoration: none;
+}

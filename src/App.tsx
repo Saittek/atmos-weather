@@ -5,6 +5,7 @@ import './App.css'
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const RadarPage = lazy(() => import('./pages/RadarPage'))
 const WidgetPage = lazy(() => import('./pages/WidgetPage'))
+const StormChaserPage = lazy(() => import('./pages/StormChaserPage'))
 
 function RouteFallback() {
   return (
@@ -21,6 +22,8 @@ export default function App() {
       <Routes>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/radar" element={<RadarPage />} />
+        <Route path="/chase" element={<StormChaserPage />} />
+        <Route path="/storm" element={<StormChaserPage />} />
         <Route path="/widget" element={<WidgetPage />} />
         <Route path="/w" element={<DashboardPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
