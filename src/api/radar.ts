@@ -9,6 +9,7 @@
  */
 
 export type RadarSourceId =
+  | 'storm_chaser'
   | 'us_nexrad_live'
   | 'us_nexrad_loop'
   | 'us_precip'
@@ -19,6 +20,11 @@ export type RadarSourceId =
   | 'goes_east_vis'
   | 'nasa_ir'
   | 'us_combo'
+
+/** RainViewer color schemes — 6 ≈ NEXRAD Level III (chaser / WeatherWise-like) */
+export const RV_COLOR_NEXRAD = 6
+/** Slightly punchier “pro” palette often used in storm apps */
+export const RV_COLOR_UNIVERSAL = 2
 
 export interface RadarFrame {
   /** Unix seconds (UTC) when known */
@@ -40,6 +46,15 @@ export interface RadarSourceMeta {
 }
 
 export const RADAR_SOURCES: RadarSourceMeta[] = [
+  {
+    id: 'storm_chaser',
+    name: 'Storm chaser',
+    desc: 'WeatherWise-style: dark map + high-contrast NEXRAD colors (US NEXRAD / global composite)',
+    coverage: 'Global',
+    animated: true,
+    maxNativeZoom: 8,
+    attribution: 'Radar © IEM NEXRAD / RainViewer · Map © Mapbox or OSM',
+  },
   {
     id: 'us_nexrad_live',
     name: 'US NEXRAD (live)',
@@ -136,9 +151,31 @@ export function getSourceMeta(id: RadarSourceId): RadarSourceMeta {
   return RADAR_SOURCES.find((s) => s.id === id) ?? RADAR_SOURCES[0]
 }
 
-/** Default map source — global loop for everyone */
+/** CONUS-ish where IEM national NEXRAD mosaic is strong */
+export function isNexradMosaicRegion(lat?: number, lon?: number): boolean {
+  if (lat == null || lon == null) return false
+  return lat >= 24 && lat <= 50 && lon >= -125 && lon <= -66
+}
+
+/** Default: WeatherWise-style storm chaser radar everywhere */
 export function defaultSourceForLocation(_lat?: number, _lon?: number): RadarSourceId {
-  return 'global_loop'
+  return 'storm_chaser'
+}
+
+/** Prefer Mapbox dark basemap for chaser-style sources when token exists */
+export function prefersMapboxBasemap(sourceId: RadarSourceId): boolean {
+  return sourceId === 'storm_chaser' || sourceId === 'mapbox_radar'
+}
+
+/** High-contrast radar tile styling (NEXRAD / WeatherWise-like) */
+export function usesChaserColors(sourceId: RadarSourceId): boolean {
+  return (
+    sourceId === 'storm_chaser' ||
+    sourceId === 'us_nexrad_live' ||
+    sourceId === 'us_nexrad_loop' ||
+    sourceId === 'us_combo' ||
+    sourceId === 'mapbox_radar'
+  )
 }
 
 const IEM_TILE = 'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0'
@@ -208,10 +245,24 @@ export function rainViewerFrames(maps: RvMaps, maxPast = 16): RadarFrame[] {
 
 export async function loadFrames(
   sourceId: RadarSourceId,
-  opts?: { lite?: boolean },
+  opts?: { lite?: boolean; lat?: number; lon?: number },
 ): Promise<RadarFrame[]> {
   const lite = Boolean(opts?.lite)
   switch (sourceId) {
+    case 'storm_chaser': {
+      // North America CONUS → real NEXRAD mosaic; elsewhere → global composite with NEXRAD palette
+      if (isNexradMosaicRegion(opts?.lat, opts?.lon)) {
+        return buildIemNexradFrames(lite ? 1.25 : 2, 5).map((f) => ({
+          ...f,
+          key: `iem:${f.key}`,
+        }))
+      }
+      const maps = await fetchRainViewerMaps()
+      return rainViewerFrames(maps, lite ? 10 : 16).map((f) => ({
+        ...f,
+        key: `rv:${f.key}`,
+      }))
+    }
     case 'us_nexrad_loop':
       return buildIemNexradFrames(lite ? 1 : 1.5, 5)
     case 'global_loop':
@@ -244,6 +295,16 @@ export function primaryTileUrl(
 ): string | null {
   if (!frame) return null
   switch (sourceId) {
+    case 'storm_chaser': {
+      const host = (rvHost ?? 'https://tilecache.rainviewer.com').replace(/\/$/, '')
+      if (frame.key.startsWith('iem:')) {
+        const path = frame.key.slice(4)
+        return `${IEM_TILE}/${path}/{z}/{x}/{y}.png`
+      }
+      const path = frame.key.startsWith('rv:') ? frame.key.slice(3) : frame.key
+      // NEXRAD Level III palette (chaser / WeatherWise-like greens→yellow→red→magenta)
+      return `${host}${path}/256/{z}/{x}/{y}/${RV_COLOR_NEXRAD}/1_1.png`
+    }
     case 'us_nexrad_live':
       return `${IEM_TILE}/nexrad-n0q-900913/{z}/{x}/{y}.png`
     case 'us_nexrad_loop':
@@ -253,8 +314,8 @@ export function primaryTileUrl(
     case 'global_loop':
     case 'mapbox_radar': {
       const host = (rvHost ?? 'https://tilecache.rainviewer.com').replace(/\/$/, '')
-      // color 6 NEXRAD-ish, smooth+snow
-      return `${host}${frame.key}/256/{z}/{x}/{y}/6/1_1.png`
+      // color 6 NEXRAD Level III (same family as chaser style)
+      return `${host}${frame.key}/256/{z}/{x}/{y}/${RV_COLOR_NEXRAD}/1_1.png`
     }
     case 'goes_east_ir':
       return `${IEM_TILE}/goes-east-ir-4km-900913/{z}/{x}/{y}.png`

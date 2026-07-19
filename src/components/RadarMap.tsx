@@ -16,6 +16,9 @@ import {
   fetchRainViewerMaps,
   getMapboxToken,
   mapboxStyleTileUrl,
+  defaultSourceForLocation,
+  prefersMapboxBasemap,
+  usesChaserColors,
   RADAR_SOURCES,
   type RadarFrame,
   type RadarSourceId,
@@ -273,14 +276,14 @@ function SmoothRadarLoop({
       maxNativeZoom,
       zIndex: 200,
       attribution,
-      className: 'radar-tiles radar-fade-a',
+      className: 'radar-tiles radar-fade-a radar-chaser-colors',
     })
     const b = makeTileLayer(EMPTY_TILE, {
       opacity: 0,
       maxNativeZoom,
       zIndex: 201,
       attribution,
-      className: 'radar-tiles radar-fade-b',
+      className: 'radar-tiles radar-fade-b radar-chaser-colors',
     })
     a.addTo(map)
     b.addTo(map)
@@ -421,7 +424,9 @@ export function RadarMap({
   const lite = useMemo(() => isConstrainedDevice(), [])
   const mapboxToken = useMemo(() => getMapboxToken(), [])
   const BASEMAPS = useMemo(() => buildBasemaps(mapboxToken), [mapboxToken])
-  const [sourceId, setSourceId] = useState<RadarSourceId>('global_loop')
+  const [sourceId, setSourceId] = useState<RadarSourceId>(() =>
+    defaultSourceForLocation(lat, lon),
+  )
   const [frames, setFrames] = useState<RadarFrame[]>([])
   const [frameIdx, setFrameIdx] = useState(0)
   // Don't autoplay on constrained devices — user taps play
@@ -429,10 +434,11 @@ export function RadarMap({
   const [speed, setSpeed] = useState<SpeedKey>(() =>
     isConstrainedDevice() ? 'slow' : 'normal',
   )
-  const [opacity, setOpacity] = useState(0.78)
+  const [opacity, setOpacity] = useState(0.82)
   const [basemap, setBasemap] = useState<Basemap>(() =>
     getMapboxToken() ? 'mapbox_dark' : 'dark',
   )
+  const chaserStyle = usesChaserColors(sourceId)
   const [showFires, setShowFires] = useState(false)
   const [overlay, setOverlay] = useState<OverlayMode>('none')
   const [loading, setLoading] = useState(true)
@@ -462,41 +468,59 @@ export function RadarMap({
   )
   const secondaryUrl = useMemo(() => secondaryTileUrl(sourceId), [sourceId])
 
-  // Mapbox radar source: pair with Mapbox dark basemap when token is available
+  // Chaser / Mapbox sources: dark Mapbox basemap when token available
   useEffect(() => {
-    if (sourceId === 'mapbox_radar' && mapboxToken) {
+    if (prefersMapboxBasemap(sourceId) && mapboxToken) {
       setBasemap('mapbox_dark')
     }
   }, [sourceId, mapboxToken])
+
+  // When location jumps continents, refresh default source (keep if user already picked)
+  useEffect(() => {
+    setSourceId((prev) => {
+      if (prev === 'storm_chaser' || prev === 'global_loop' || prev === 'mapbox_radar') {
+        return defaultSourceForLocation(lat, lon)
+      }
+      return prev
+    })
+  }, [lat, lon])
 
   const reload = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      if (sourceId === 'global_loop' || sourceId === 'mapbox_radar') {
+      const needsRv =
+        sourceId === 'global_loop' ||
+        sourceId === 'mapbox_radar' ||
+        sourceId === 'storm_chaser'
+      if (needsRv) {
         const maps = await fetchRainViewerMaps()
         setRvHost(maps.host || 'https://tilecache.rainviewer.com')
       }
-      if (sourceId === 'mapbox_radar' && !mapboxToken) {
-        // Still show radar; basemap falls back to free dark tiles
+      if (prefersMapboxBasemap(sourceId) && !mapboxToken) {
         console.info(
           'Solara: set VITE_MAPBOX_TOKEN for Mapbox basemap (radar still works)',
         )
       }
-      // Prefer fuller loop for global radar smoothness
       const next = await loadFrames(sourceId, {
-        lite: lite && sourceId !== 'global_loop' && sourceId !== 'mapbox_radar',
+        lite:
+          lite &&
+          sourceId !== 'global_loop' &&
+          sourceId !== 'mapbox_radar' &&
+          sourceId !== 'storm_chaser',
+        lat,
+        lon,
       })
       if (!next.length) throw new Error('No frames available for this source')
       setFrames(next)
-      setFrameIdx(0) // start loop from oldest → newest for natural motion
+      setFrameIdx(0)
     } catch (e) {
       setFrames([])
       setError(e instanceof Error ? e.message : 'Radar failed to load')
     } finally {
       setLoading(false)
     }
-  }, [sourceId, lite, mapboxToken])
+  }, [sourceId, lite, mapboxToken, lat, lon])
 
   useEffect(() => {
     void reload()
@@ -601,7 +625,7 @@ export function RadarMap({
     <section
       id={mapId}
       ref={wrapRef as React.RefObject<HTMLElement>}
-      className={`panel radar-panel ${fullscreen ? 'is-fullscreen' : ''} ${pageMode ? 'radar-page-mode' : ''} ${severeMode ? 'severe-radar' : ''} ${ventuskyOn ? 'has-ventusky' : ''} ${compact ? 'radar-compact' : ''}`}
+      className={`panel radar-panel ${fullscreen ? 'is-fullscreen' : ''} ${pageMode ? 'radar-page-mode' : ''} ${severeMode ? 'severe-radar' : ''} ${ventuskyOn ? 'has-ventusky' : ''} ${compact ? 'radar-compact' : ''} ${chaserStyle ? 'radar-chaser-style' : ''}`}
     >
       <div className="panel-header radar-header">
         <h2>{ventuskyOn ? '🌡 Model map' : '📡 Live radar'}</h2>
@@ -724,6 +748,11 @@ export function RadarMap({
                   maxNativeZoom={meta.maxNativeZoom}
                   zIndex={200}
                   attribution={meta.attribution}
+                  className={
+                    chaserStyle
+                      ? 'radar-tiles radar-chaser-colors'
+                      : 'radar-tiles'
+                  }
                 />
               )}
 
@@ -753,12 +782,13 @@ export function RadarMap({
             <div className="radar-legend">
               <span>Light</span>
               <div
-                className="legend-gradient"
+                className={`legend-gradient ${chaserStyle ? 'legend-chaser' : ''}`}
                 style={{
                   background:
                     sourceId.includes('goes') || sourceId === 'nasa_ir'
                       ? 'linear-gradient(90deg,#0b1220,#4b5563,#e5e7eb,#fef3c7,#f97316)'
-                      : 'linear-gradient(90deg,#00ecec,#01a0f6,#00ff00,#ffff00,#ff9000,#ff0000,#c000c0)',
+                      : // NEXRAD / WeatherWise-like reflectivity ramp
+                        'linear-gradient(90deg,#04e9e7,#019ff4,#02fd02,#f5f805,#fd9a04,#fd0000,#d400d4,#ad90f0)',
                 }}
               />
               <span>Heavy</span>
@@ -874,9 +904,9 @@ export function RadarMap({
                 ))}
             </select>
           </label>
-          {sourceId === 'mapbox_radar' && !mapboxToken && (
+          {prefersMapboxBasemap(sourceId) && !mapboxToken && (
             <p className="radar-mapbox-hint muted-center">
-              Mapbox basemap needs <code>VITE_MAPBOX_TOKEN</code> — radar loop still runs.
+              For Mapbox dark map set <code>VITE_MAPBOX_TOKEN</code> — storm radar still runs.
             </p>
           )}
 

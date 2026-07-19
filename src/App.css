@@ -2561,6 +2561,24 @@ select:focus-visible {
   filter: contrast(1.08) saturate(1.12);
 }
 
+/* WeatherWise-style: punchy NEXRAD greens→yellow→red→magenta on a dim map */
+.radar-panel.radar-chaser-style .radar-tiles,
+.radar-panel.radar-chaser-style .radar-chaser-colors {
+  filter: contrast(1.22) saturate(1.45) brightness(1.06);
+}
+.radar-panel.radar-chaser-style .leaflet-tile-pane > .leaflet-layer:first-child {
+  /* Dim basemap so radar pops (like chaser apps) */
+  filter: brightness(0.78) contrast(1.08) saturate(0.85);
+}
+.radar-panel.radar-chaser-style .radar-stage {
+  box-shadow:
+    0 0 0 1px rgba(56, 189, 248, 0.12),
+    0 16px 48px rgba(0, 0, 0, 0.45);
+}
+.legend-gradient.legend-chaser {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
 /* Frame stack layers â€” GPU-friendly compositing for video-like fades */
 .radar-frame-layer {
   will-change: opacity;
