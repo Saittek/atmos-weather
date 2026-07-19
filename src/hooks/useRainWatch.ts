@@ -23,7 +23,14 @@ function saveNotified(s: Set<string>) {
   }
 }
 
-function notify(title: string, body: string, tag: string) {
+async function notify(title: string, body: string, tag: string) {
+  try {
+    const { showLocalAlert } = await import('../api/push')
+    await showLocalAlert(title, body, tag)
+    return
+  } catch {
+    /* fall through */
+  }
   if (!('Notification' in window) || Notification.permission !== 'granted') return
   try {
     new Notification(title, { body, icon: '/icons/icon-192.png', tag })
@@ -93,7 +100,7 @@ export function useRainWatch(
                 : `Rain in ~${s.rainStartsInMin} min near ${s.location.name}`
             setBanner(msg)
             window.setTimeout(() => setBanner(null), 8000)
-            notify('Solara rain watch', msg, key)
+            void notify('Solara rain watch', msg, key)
           }
         }
 
@@ -105,7 +112,7 @@ export function useRainWatch(
             const msg = `Weather alert active near ${s.location.name}`
             setBanner(msg)
             window.setTimeout(() => setBanner(null), 8000)
-            notify('Solara alert', msg, key)
+            void notify('Solara alert', msg, key)
           }
         }
       }

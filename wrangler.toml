@@ -4,6 +4,7 @@
 name = "atmos-weather"
 main = "worker/index.js"
 compatibility_date = "2025-11-01"
+compatibility_flags = ["nodejs_compat"]
 
 [assets]
 directory = "./dist"
@@ -18,6 +19,15 @@ binding = "DB"
 database_name = "atmos-db"
 database_id = "4c902a95-fbfb-4fb8-b682-735d786bfc97"
 migrations_dir = "migrations"
+
+# Public VAPID key (safe to expose). Private key is a secret: VAPID_PRIVATE_KEY
+[vars]
+VAPID_PUBLIC_KEY = "BB45eTflubxeiE2QHcq5-oP02nkxnSs82CkJVSuBQ8RWMO3piOq25R4bgqShAyWGQVuyNIKn9252uBDuD0HXpf4"
+VAPID_SUBJECT = "mailto:yellowknife1989@gmail.com"
+
+# Check saved places for severe alerts every 10 minutes
+[triggers]
+crons = ["*/10 * * * *"]
 
 [observability]
 enabled = true

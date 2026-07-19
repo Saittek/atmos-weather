@@ -1,7 +1,10 @@
 /**
- * Solara API — Cloudflare Worker (auth, prefs sync, area chat, FIRMS fires)
+ * Solara API — Cloudflare Worker (auth, prefs sync, area chat, FIRMS fires, push)
  * Serves /api/*; static SPA assets handled by Workers Static Assets.
  */
+
+import { runAlertPushCron } from './push-cron.js'
+import { getVapidConfig } from './push-send.js'
 
 const TOKEN_DAYS = 30
 const CELL = 0.2
@@ -466,7 +469,7 @@ export default {
         status: 204,
         headers: {
           'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS',
+          'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type, Authorization',
           'Access-Control-Max-Age': '86400',
         },
@@ -478,9 +481,112 @@ export default {
         return json({
           ok: true,
           service: 'solara-api',
-          features: ['auth', 'chat', 'fires'],
+          features: ['auth', 'chat', 'fires', 'push'],
           runtime: 'cloudflare-worker',
+          pushConfigured: Boolean(getVapidConfig(env)),
         })
+      }
+
+      // ── Web Push public key ──
+      if (path === '/api/push/vapid-public-key' && method === 'GET') {
+        const vapid = getVapidConfig(env)
+        if (!vapid) return err('Push not configured on server', 503)
+        return json({ publicKey: vapid.publicKey })
+      }
+
+      // ── Web Push subscribe ──
+      if (path === '/api/push/subscribe' && method === 'POST') {
+        const auth = await requireUser(request, env)
+        if (auth.error) return auth.error
+        const body = await request.json().catch(() => ({}))
+        const endpoint = typeof body?.endpoint === 'string' ? body.endpoint : ''
+        const p256dh = typeof body?.keys?.p256dh === 'string' ? body.keys.p256dh : ''
+        const authKey = typeof body?.keys?.auth === 'string' ? body.keys.auth : ''
+        if (!endpoint.startsWith('https://') || !p256dh || !authKey) {
+          return err('Invalid push subscription')
+        }
+        const id = crypto.randomUUID()
+        const createdAt = new Date().toISOString()
+        const ua =
+          typeof body?.userAgent === 'string'
+            ? body.userAgent.slice(0, 200)
+            : request.headers.get('user-agent')?.slice(0, 200) || null
+
+        // Upsert by endpoint
+        await env.DB.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?')
+          .bind(endpoint)
+          .run()
+        await env.DB.prepare(
+          `INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth, user_agent, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        )
+          .bind(id, auth.user.id, endpoint, p256dh, authKey, ua, createdAt)
+          .run()
+
+        // Ensure notify flag on for this user
+        const data = parseUserData(auth.user.data)
+        if (!data.notifyAlerts) {
+          data.notifyAlerts = true
+          await env.DB.prepare('UPDATE users SET data = ? WHERE id = ?')
+            .bind(JSON.stringify(data), auth.user.id)
+            .run()
+        }
+
+        return json({ ok: true, id }, 201)
+      }
+
+      // ── Web Push unsubscribe ──
+      if (path === '/api/push/unsubscribe' && method === 'POST') {
+        const auth = await requireUser(request, env)
+        if (auth.error) return auth.error
+        const body = await request.json().catch(() => ({}))
+        if (typeof body?.endpoint === 'string' && body.endpoint) {
+          await env.DB.prepare(
+            'DELETE FROM push_subscriptions WHERE user_id = ? AND endpoint = ?',
+          )
+            .bind(auth.user.id, body.endpoint)
+            .run()
+        } else {
+          await env.DB.prepare('DELETE FROM push_subscriptions WHERE user_id = ?')
+            .bind(auth.user.id)
+            .run()
+        }
+        return json({ ok: true })
+      }
+
+      // ── Native device token (iOS/Android — for future APNs/FCM send) ──
+      if (path === '/api/push/device' && method === 'POST') {
+        const auth = await requireUser(request, env)
+        if (auth.error) return auth.error
+        const body = await request.json().catch(() => ({}))
+        const token = typeof body?.token === 'string' ? body.token.trim() : ''
+        const platform = body?.platform === 'android' ? 'android' : 'ios'
+        if (!token || token.length < 8) return err('Invalid device token')
+        const id = crypto.randomUUID()
+        const createdAt = new Date().toISOString()
+        await env.DB.prepare('DELETE FROM device_tokens WHERE token = ?').bind(token).run()
+        await env.DB.prepare(
+          `INSERT INTO device_tokens (id, user_id, token, platform, created_at)
+           VALUES (?, ?, ?, ?, ?)`,
+        )
+          .bind(id, auth.user.id, token, platform, createdAt)
+          .run()
+        return json({ ok: true, id }, 201)
+      }
+
+      // ── Manual cron trigger (auth optional secret) ──
+      if (path === '/api/push/run-check' && method === 'POST') {
+        const secret = request.headers.get('x-cron-secret') || ''
+        if (env.CRON_SECRET && secret !== env.CRON_SECRET) {
+          return err('Unauthorized', 401)
+        }
+        // Allow if CRON_SECRET unset only in non-prod? Require secret if set; if unset allow for admin debug with auth
+        if (!env.CRON_SECRET) {
+          const auth = await requireUser(request, env)
+          if (auth.error) return err('Set CRON_SECRET or sign in', 401)
+        }
+        const result = await runAlertPushCron(env)
+        return json(result)
       }
 
       // ── fires ──
@@ -663,5 +769,14 @@ export default {
       console.error(e)
       return err('Internal server error', 500)
     }
+  },
+
+  /** Every 10 minutes: severe alerts → Web Push for notify-enabled users */
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(
+      runAlertPushCron(env)
+        .then((r) => console.log('alert-push-cron', JSON.stringify(r)))
+        .catch((e) => console.error('alert-push-cron failed', e)),
+    )
   },
 }

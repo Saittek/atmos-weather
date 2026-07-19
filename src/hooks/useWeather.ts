@@ -514,12 +514,38 @@ export function useWeather() {
 
   const setNotifyAlerts = useCallback(
     async (notifyAlerts: boolean) => {
-      if (notifyAlerts && 'Notification' in window) {
-        const perm = await Notification.requestPermission()
-        if (perm !== 'granted') {
-          patchPrefs({ notifyAlerts: false })
-          showStatus('Notification permission denied')
-          return false
+      if (notifyAlerts) {
+        if ('Notification' in window) {
+          const perm = await Notification.requestPermission()
+          if (perm !== 'granted') {
+            patchPrefs({ notifyAlerts: false })
+            showStatus('Notification permission denied')
+            return false
+          }
+        }
+        // Web Push (background) + native hooks when available
+        try {
+          const { subscribeWebPush } = await import('../api/push')
+          const result = await subscribeWebPush()
+          if (!result.ok) {
+            // Still allow in-app/local notify when push subscribe needs sign-in
+            if (result.reason?.toLowerCase().includes('sign in')) {
+              showStatus('Notifications on — sign in for alerts when the app is closed')
+            } else if (result.reason) {
+              showStatus(result.reason)
+            }
+          } else {
+            showStatus('Alert notifications enabled')
+          }
+        } catch {
+          /* optional */
+        }
+      } else {
+        try {
+          const { unsubscribeWebPush } = await import('../api/push')
+          await unsubscribeWebPush()
+        } catch {
+          /* ignore */
         }
       }
       patchPrefs({ notifyAlerts })

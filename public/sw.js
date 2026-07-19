@@ -1,5 +1,5 @@
-/* Solara PWA — network-first HTML, cache hashed assets only */
-const CACHE = 'solara-v4'
+/* Solara PWA — network-first HTML, cache hashed assets only + Web Push */
+const CACHE = 'solara-v5'
 
 self.addEventListener('install', (event) => {
   // Activate immediately so mobile clients leave broken old caches
@@ -14,6 +14,55 @@ self.addEventListener('activate', (event) => {
         Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))),
       )
       .then(() => self.clients.claim()),
+  )
+})
+
+/** Server → phone alert notifications (even when tab closed) */
+self.addEventListener('push', (event) => {
+  let data = {
+    title: 'Solara',
+    body: 'Weather alert',
+    url: '/',
+    tag: 'solara',
+  }
+  try {
+    if (event.data) {
+      const parsed = event.data.json()
+      data = { ...data, ...parsed }
+    }
+  } catch {
+    try {
+      const t = event.data && event.data.text()
+      if (t) data.body = t
+    } catch {
+      /* ignore */
+    }
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title || 'Solara', {
+      body: data.body || 'Weather update',
+      icon: '/icons/icon-192.png',
+      badge: '/icons/favicon-32.png',
+      tag: data.tag || 'solara-alert',
+      data: { url: data.url || '/' },
+      renotify: true,
+    }),
+  )
+})
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const url = (event.notification.data && event.notification.data.url) || '/'
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      for (const client of list) {
+        if ('focus' in client) {
+          client.navigate(url)
+          return client.focus()
+        }
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(url)
+    }),
   )
 })
 
