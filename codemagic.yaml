@@ -27,7 +27,7 @@ workflows:
         script: xcode-project use-profiles
 
       - name: Build IPA
-        script: xcode-project build-ipa --project ios/App/App.xcodeproj --scheme "$XCODE_SCHEME" --archive-method ad-hoc
+        script: xcode-project build-ipa --project ios/App/App.xcodeproj --scheme "$XCODE_SCHEME"
 
     artifacts:
       - ios/App/build/ios/ipa/*.ipa
@@ -41,3 +41,4 @@ workflows:
         notify:
           success: true
           failure: true
+          
