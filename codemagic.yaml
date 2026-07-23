@@ -15,8 +15,7 @@ workflows:
 
     scripts:
       - name: Install JS dependencies
-        script: |
-          npm ci || npm install
+        script: npm ci
 
       - name: Build web app + Capacitor iOS sync
         script: |
@@ -24,16 +23,11 @@ workflows:
           npm run build
           npx cap sync ios
 
-            - name: Set up code signing
-        script: |
-          xcode-project use-profiles
+      - name: Set up code signing
+        script: xcode-project use-profiles
 
       - name: Build IPA
-        script: |
-          cd ios/App
-          xcode-project build-ipa \
-            --project "App.xcodeproj" \
-            --scheme "$XCODE_SCHEME"
+        script: xcode-project build-ipa --project ios/App/App.xcodeproj --scheme "$XCODE_SCHEME"
 
     artifacts:
       - ios/App/build/ios/ipa/*.ipa
@@ -47,31 +41,3 @@ workflows:
         notify:
           success: true
           failure: true
-
-  ios-simulator-check:
-    name: Solara iOS compile check
-    max_build_duration: 45
-    instance_type: mac_mini_m2
-    environment:
-      node: v22.14.0
-      xcode: latest
-    scripts:
-      - name: Install and build web + sync
-        script: |
-          export VITE_API_BASE="${VITE_API_BASE:-https://solaraweather.com}"
-          npm ci || npm install
-          npm run build
-          npx cap sync ios
-      - name: Compile for iOS Simulator
-        script: |
-          cd ios/App
-          xcodebuild \
-            -project App.xcodeproj \
-            -scheme App \
-            -sdk iphonesimulator \
-            -destination 'generic/platform=iOS Simulator' \
-            -configuration Debug \
-            CODE_SIGNING_ALLOWED=NO \
-            build
-    artifacts:
-      - /tmp/xcodebuild_logs/*.log
