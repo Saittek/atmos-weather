@@ -20,8 +20,6 @@ workflows:
     instance_type: mac_mini_m2
 
     # Must match the App Store Connect API key name in Codemagic integrations
-    integrations:
-      app_store_connect: Solara
 
     environment:
       vars:
