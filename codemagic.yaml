@@ -24,9 +24,6 @@ workflows:
       app_store_connect: Solara
 
     environment:
-      ios_signing:
-        distribution_type: development
-        bundle_identifier: com.solara.weather
       vars:
         XCODE_SCHEME: App
         BUNDLE_ID: com.solara.weather
