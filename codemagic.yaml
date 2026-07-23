@@ -24,7 +24,6 @@ workflows:
         script: xcode-project use-profiles --project ios/App/App.xcodeproj
 
       - name: Build IPA
-        script: xcode-project build-ipa --project ios/App/App.xcodeproj --scheme "$XCODE_SCHEME" --export-options-plist export_options.plist
-
+        script: xcode-project build-ipa --project ios/App/App.xcodeproj --scheme "$XCODE_SCHEME"
     artifacts:
       - ios/App/build/ios/ipa/*.ipa
