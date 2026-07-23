@@ -21,20 +21,7 @@ workflows:
           npx cap sync ios
 
       - name: Set up code signing
-        script: |
-          xcode-project use-profiles --team-id "$CM_TEAM_ID"
-          cat > export_options.plist << EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>method</key>
-              <string>app-store</string>
-              <key>teamID</key>
-              <string>$CM_TEAM_ID</string>
-          </dict>
-          </plist>
-          EOF
+        script: xcode-project use-profiles --project ios/App/App.xcodeproj
 
       - name: Build IPA
         script: xcode-project build-ipa --project ios/App/App.xcodeproj --scheme "$XCODE_SCHEME" --export-options-plist export_options.plist
