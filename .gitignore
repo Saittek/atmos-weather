@@ -19,6 +19,7 @@ dist-ssr
 server/data/
 .dev.vars
 .wrangler/
+.wrangler-out/
 
 
 # Editor directories and files

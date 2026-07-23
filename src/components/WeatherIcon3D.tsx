@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react'
+import { useId } from 'react'
 import './weather-3d.css'
 
 /** Distinct animated 3D scenes for all WMO weather groups */
@@ -11,6 +11,7 @@ export type Weather3DKind =
   | 'partly-night'
   | 'overcast'
   | 'fog'
+  | 'smoke'
   | 'rime'
   | 'drizzle'
   | 'freezing-drizzle'
@@ -42,6 +43,7 @@ export function weatherKindFromCode(
   if (code === 1) return { kind: isDay ? 'mostly-day' : 'mostly-night', intensity: 1 }
   if (code === 2) return { kind: isDay ? 'partly-day' : 'partly-night', intensity: 1 }
   if (code === 3) return { kind: 'overcast', intensity: 2 }
+  if (code === 44) return { kind: 'smoke', intensity: 2 }
   if (code === 45) return { kind: 'fog', intensity: 2 }
   if (code === 48) return { kind: 'rime', intensity: 2 }
 
@@ -79,7 +81,15 @@ function Drops({ n, className }: { n: number; className?: string }) {
   return (
     <div className={className}>
       {Array.from({ length: n }, (_, i) => (
-        <span key={i} style={{ ['--i' as string]: i, ['--n' as string]: n }} />
+        <span
+          key={i}
+          style={{
+            ['--i' as string]: i,
+            ['--n' as string]: n,
+            // Negative delay = already mid-loop (seamless, no mass reset)
+            animationDelay: `${-((i / Math.max(n, 1)) * 0.9)}s`,
+          }}
+        />
       ))}
     </div>
   )
@@ -89,7 +99,14 @@ function Flakes({ n, glyph = '❄' }: { n: number; glyph?: string }) {
   return (
     <div className="w3d-snow">
       {Array.from({ length: n }, (_, i) => (
-        <span key={i} style={{ ['--i' as string]: i, ['--n' as string]: n }}>
+        <span
+          key={i}
+          style={{
+            ['--i' as string]: i,
+            ['--n' as string]: n,
+            animationDelay: `${-((i / Math.max(n, 1)) * 2)}s`,
+          }}
+        >
           {glyph}
         </span>
       ))}
@@ -319,7 +336,13 @@ function Bolt({ hail = false, gradId }: { hail?: boolean; gradId: string }) {
       {hail && (
         <div className="w3d-hail">
           {Array.from({ length: 7 }, (_, i) => (
-            <span key={i} style={{ ['--i' as string]: i }} />
+            <span
+              key={i}
+              style={{
+                ['--i' as string]: i,
+                animationDelay: `${-((i / 7) * 0.8)}s`,
+              }}
+            />
           ))}
         </div>
       )}
@@ -341,22 +364,7 @@ export function WeatherIcon3D({
   const { kind, intensity } = weatherKindFromCode(code, isDay)
   const dropCount = intensity === 1 ? 6 : intensity === 2 ? 10 : 14
   const flakeCount = intensity === 1 ? 7 : intensity === 2 ? 11 : 15
-  /** Remount key so animations restart after tab sleep / every few cycles */
-  const [animGen, setAnimGen] = useState(0)
-
-  useEffect(() => {
-    // Restart motion periodically so loops don’t freeze after long idle
-    const every = size === 'sm' ? 12_000 : 8_000
-    const id = window.setInterval(() => setAnimGen((g) => g + 1), every)
-    const onVis = () => {
-      if (document.visibilityState === 'visible') setAnimGen((g) => g + 1)
-    }
-    document.addEventListener('visibilitychange', onVis)
-    return () => {
-      window.clearInterval(id)
-      document.removeEventListener('visibilitychange', onVis)
-    }
-  }, [size, code, isDay])
+  // No periodic remount — remounting every few seconds caused a visible snap to frame 0
 
   const scene = (() => {
     switch (kind) {
@@ -403,6 +411,18 @@ export function WeatherIcon3D({
           <>
             <Clouds dark />
             <div className="w3d-fog">
+              <span />
+              <span />
+              <span />
+              <span />
+            </div>
+          </>
+        )
+      case 'smoke':
+        return (
+          <>
+            <Clouds dark />
+            <div className="w3d-fog w3d-smoke">
               <span />
               <span />
               <span />
@@ -507,7 +527,6 @@ export function WeatherIcon3D({
 
   return (
     <div
-      key={`${kind}-${isDay ? 1 : 0}-${animGen}`}
       className={`w3d w3d-${size} w3d-${kind} w3d-i${intensity} ${forceAnimate ? 'w3d-force' : ''} ${className}`}
       aria-hidden
       data-kind={kind}

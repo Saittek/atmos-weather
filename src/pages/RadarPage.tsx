@@ -8,14 +8,23 @@ const RadarMap = lazy(() =>
   import('../components/RadarMap').then((m) => ({ default: m.RadarMap })),
 )
 
-function readStoredLocation(): LocationResult | null {
+function readStoredPrefs(): {
+  lastLocation: LocationResult | null
+  homeLocation: LocationResult | null
+} {
   try {
     const raw = localStorage.getItem('atmos-weather-prefs-v2')
-    if (!raw) return null
-    const p = JSON.parse(raw) as { lastLocation?: LocationResult }
-    return p.lastLocation ?? null
+    if (!raw) return { lastLocation: null, homeLocation: null }
+    const p = JSON.parse(raw) as {
+      lastLocation?: LocationResult
+      homeLocation?: LocationResult | null
+    }
+    return {
+      lastLocation: p.lastLocation ?? null,
+      homeLocation: p.homeLocation ?? null,
+    }
   } catch {
-    return null
+    return { lastLocation: null, homeLocation: null }
   }
 }
 
@@ -44,9 +53,11 @@ const FALLBACK: LocationResult = {
  */
 export default function RadarPage() {
   const [params] = useSearchParams()
+  const stored = useMemo(() => readStoredPrefs(), [])
   const [place, setPlace] = useState<LocationResult>(() => {
-    return placeFromParams(params) ?? readStoredLocation() ?? FALLBACK
+    return placeFromParams(params) ?? stored.lastLocation ?? FALLBACK
   })
+  const homeLocation = stored.homeLocation
 
   const units: Units = params.get('units') === 'metric' ? 'metric' : 'imperial'
 
@@ -66,8 +77,8 @@ export default function RadarPage() {
       })
       return
     }
-    const stored = readStoredLocation()
-    if (stored) setPlace(stored)
+    const s = readStoredPrefs()
+    if (s.lastLocation) setPlace(s.lastLocation)
   }, [params])
 
   // Resolve a friendly name if only coords were provided
@@ -130,8 +141,11 @@ export default function RadarPage() {
             lon={place.longitude}
             placeName={place.name}
             units={units}
+            severeMode
+            chaserOverlays
             mapId="radar-page-map"
             pageMode
+            homeLocation={homeLocation}
           />
         </Suspense>
       </div>

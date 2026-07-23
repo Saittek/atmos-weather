@@ -7,7 +7,6 @@ import {
   parseWeatherLocal,
   precipUnit,
 } from '../utils/format'
-import { PrecipMotionIcon } from './PrecipMotionIcon'
 import { resolvePrecipKind } from '../utils/precipKind'
 
 interface Props {
@@ -205,9 +204,10 @@ export function RainNextHour({ weather, units }: Props) {
       <div className="rain-hour-bars" role="list" aria-label="Precipitation timeline">
         {slots.map((slot) => {
           const wet = hasPrecipMm(slot.mm)
+          // Compact bars: track is ~44px tall
           const hgt = wet
-            ? Math.max(20, Math.round((slot.mm / scaleMm) * 78))
-            : 10
+            ? Math.max(10, Math.round((slot.mm / scaleMm) * 38))
+            : 5
           const kind = resolvePrecipKind(slot.tempC, slot.code, wet)
           const amt = formatPrecipAmount(slot.mm, units)
           const tempLabel =
@@ -222,48 +222,19 @@ export function RainNextHour({ weather, units }: Props) {
               role="listitem"
               title={`${slot.label}: ${amt} ${precipUnit(units)} ${stepLabel}${
                 slot.pop != null ? ` · ${slot.pop}% chance` : ''
-              }${kind === 'snow' ? ' · snow' : kind === 'mix' ? ' · mix' : ''}`}
+              }${tempLabel ? ` · ${tempLabel}` : ''}${
+                kind === 'snow' ? ' · snow' : kind === 'mix' ? ' · mix' : ''
+              }`}
             >
-              {tempLabel && <span className="rain-hour-temp">{tempLabel}</span>}
-              <span className="rain-hour-icon">
-                <PrecipMotionIcon
-                  intensity={slot.mm}
-                  kind={kind}
-                  tempC={slot.tempC}
-                  weatherCode={slot.code}
-                  size="sm"
-                />
-              </span>
               <div className="rain-hour-track">
                 <div
                   className={`rain-hour-fill ${wet ? 'wet' : 'dry'} fill-${kind}`}
                   style={{ height: `${hgt}px` }}
-                >
-                  {wet && kind !== 'snow' && (
-                    <span className="fill-water" aria-hidden>
-                      <i />
-                      <i />
-                      <i />
-                    </span>
-                  )}
-                  {wet && (kind === 'snow' || kind === 'mix') && (
-                    <span className="fill-snow" aria-hidden>
-                      <i />
-                      <i />
-                      <i />
-                      <i />
-                    </span>
-                  )}
-                </div>
+                />
               </div>
               <span className={`rain-hour-amt ${wet ? 'wet' : ''} ${kind}`}>
-                {amt}
+                {wet ? amt : '·'}
               </span>
-              {slot.pop != null && (
-                <span className={`rain-hour-pop ${slot.pop >= 40 ? 'high' : ''}`}>
-                  {Math.round(slot.pop)}%
-                </span>
-              )}
               <span className="rain-hour-lab">{slot.label}</span>
             </div>
           )

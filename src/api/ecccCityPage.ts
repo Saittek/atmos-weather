@@ -61,8 +61,10 @@ export function ecccIconToWmo(icon: number | null | undefined, isDay = true): nu
   if (c === 11 || c === 27) return 75
   // Freezing rain / ice
   if (c === 20 || c === 21 || c === 22 || c === 23 || c === 24) return 66
-  // Fog / haze / smoke / blowing
-  if (c === 44) return 45 // smoke → foggy treatment
+  // Fog / haze / smoke / blowing (ECCC icons)
+  // 44 = smoke — keep distinct (Solara code 44); never call it fog
+  if (c === 44) return 44
+  // 45–47 often fog / ice fog / blowing snow mix — treat as fog when not smoke
   if (c === 45 || c === 46 || c === 47 || c === 48) return 45
   // Drizzle
   if (c === 50 || c === 51) return 51
@@ -228,19 +230,11 @@ export function mergeEcccIntoWeather(
     const windChill = num((cc.windChill as { value?: unknown })?.value)
     const ts = str((cc.timestamp as { en?: string })?.en ?? cc.timestamp) || out.current.time
 
-    // Rough day/night from local hour if possible
+    // Day/night only from sunrise/sunset (never UTC hour hacks)
     let isDay = out.current.is_day
-    try {
-      const hour = new Date(ts).getUTCHours()
-      // crude — refined below with riseSet if present
-      isDay = hour >= 12 && hour < 24 ? 1 : out.current.is_day
-    } catch {
-      /* keep */
-    }
-
     const riseSet = p.riseSet as { sunrise?: { en?: string }; sunset?: { en?: string } } | undefined
     if (riseSet?.sunrise?.en && riseSet?.sunset?.en) {
-      const now = Date.parse(ts)
+      const now = Date.parse(ts.includes('Z') || /[+-]\d{2}:?\d{2}$/.test(ts) ? ts : ts)
       const rise = Date.parse(riseSet.sunrise.en)
       const set = Date.parse(riseSet.sunset.en)
       if (Number.isFinite(now) && Number.isFinite(rise) && Number.isFinite(set)) {
@@ -405,14 +399,14 @@ export function mergeEcccIntoWeather(
       if (a.low != null) d.apparent_temperature_min[i] = a.low
     }
 
-    // Sunrise/sunset for today from riseSet
+    // Sunrise/sunset for today from riseSet — keep absolute ISO (with Z)
+    // so clients can compare against Date.now() without TZ ambiguity
     const riseSet = p.riseSet as { sunrise?: { en?: string }; sunset?: { en?: string } } | undefined
     if (riseSet?.sunrise?.en && d.sunrise?.[0] != null) {
-      // Keep as ISO; Open-Meteo uses local-ish strings — store ECCC UTC ISO
-      d.sunrise[0] = riseSet.sunrise.en.replace('Z', '')
+      d.sunrise[0] = riseSet.sunrise.en
     }
     if (riseSet?.sunset?.en && d.sunset?.[0] != null) {
-      d.sunset[0] = riseSet.sunset.en.replace('Z', '')
+      d.sunset[0] = riseSet.sunset.en
     }
 
     out.daily = d

@@ -3,6 +3,7 @@
  */
 import { fetchAlertsForPoint, isNotifiableAlert } from './alerts.js'
 import { sendWebPush } from './push-send.js'
+import { isApnsConfigured, sendApns } from './apns.js'
 
 function parseUserData(raw) {
   try {
@@ -43,6 +44,8 @@ export async function runAlertPushCron(env) {
     userMeta.set(row.id, { id: row.id, severeOnly: data.severeMode !== false })
 
     const locs = []
+    // Exact home first — highest priority for alerts
+    if (data.homeLocation?.latitude != null) locs.push(data.homeLocation)
     if (data.lastLocation?.latitude != null) locs.push(data.lastLocation)
     if (Array.isArray(data.favorites)) {
       for (const f of data.favorites.slice(0, 8)) {
@@ -84,7 +87,16 @@ export async function runAlertPushCron(env) {
         .bind(userId)
         .all()
       const subRows = subs.results || []
-      if (!subRows.length) continue
+
+      const devices = await db
+        .prepare(
+          'SELECT id, token, platform FROM device_tokens WHERE user_id = ?',
+        )
+        .bind(userId)
+        .all()
+      const deviceRows = devices.results || []
+
+      if (!subRows.length && !deviceRows.length) continue
 
       for (const alert of alerts) {
         if (!isNotifiableAlert(alert, { severeOnly: meta.severeOnly })) continue
@@ -99,7 +111,7 @@ export async function runAlertPushCron(env) {
         const payload = {
           title: `Solara: ${alert.event}`,
           body: `${alert.headline} · near ${place.name}`,
-          url: `/?lat=${place.lat.toFixed(4)}&lon=${place.lon.toFixed(4)}&name=${encodeURIComponent(place.name)}`,
+          url: `/chase?lat=${place.lat.toFixed(4)}&lon=${place.lon.toFixed(4)}&name=${encodeURIComponent(place.name)}`,
           tag: alertKey,
           urgency: alert.severityRank >= 4 ? 'high' : 'normal',
           topic: 'solara-alert',
@@ -122,6 +134,30 @@ export async function runAlertPushCron(env) {
           } catch (e) {
             errors++
             console.error('push fail', e)
+          }
+        }
+
+        // Native APNs when Apple secrets are configured
+        if (isApnsConfigured(env)) {
+          for (const dev of deviceRows) {
+            if (dev.platform !== 'ios') continue
+            try {
+              const result = await sendApns(env, dev.token, payload)
+              if (result.status === 410 || result.status === 400) {
+                await db
+                  .prepare('DELETE FROM device_tokens WHERE id = ?')
+                  .bind(dev.id)
+                  .run()
+              } else if (result.ok) {
+                anyOk = true
+                pushes++
+              } else if (!result.skipped) {
+                errors++
+              }
+            } catch (e) {
+              errors++
+              console.error('apns fail', e)
+            }
           }
         }
 
@@ -148,5 +184,6 @@ export async function runAlertPushCron(env) {
     alertsChecked,
     pushes,
     errors,
+    apnsConfigured: isApnsConfigured(env),
   }
 }

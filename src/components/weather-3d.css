@@ -428,6 +428,19 @@
     transparent
   );
 }
+/* Wildfire / particle smoke — warm brown, not gray-white fog */
+.w3d-fog.w3d-smoke span {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(180, 120, 60, 0.55) 25%,
+    rgba(120, 80, 40, 0.75) 50%,
+    rgba(160, 100, 50, 0.55) 75%,
+    transparent
+  );
+  box-shadow: 0 2px 10px rgba(90, 50, 20, 0.35);
+  opacity: 0.9;
+}
 .w3d-fog span:nth-child(2) {
   animation-delay: 0.4s;
   width: 92%;
@@ -475,9 +488,11 @@
   border-radius: 99px;
   background: linear-gradient(180deg, transparent, #bae6fd 20%, #38bdf8 70%, #0ea5e9);
   left: calc(4% + (var(--i) / var(--n, 10)) * 90%);
-  animation: w3d-fall 0.55s linear infinite;
-  animation-delay: calc(var(--i) * 0.05s);
-  opacity: 0.9;
+  animation: w3d-fall 0.7s linear infinite;
+  /* default delay if not set inline — staggered mid-stream */
+  animation-delay: calc((var(--i) / var(--n, 10)) * -0.7s);
+  opacity: 0;
+  will-change: transform, opacity;
   box-shadow: 0 0 4px rgba(56, 189, 248, 0.45);
 }
 .w3d-precip.light span {
@@ -505,16 +520,20 @@
   box-shadow: 0 0 5px rgba(165, 243, 252, 0.6);
 }
 
+/* Seamless loop: fully transparent at wrap so restart is invisible */
 @keyframes w3d-fall {
   0% {
-    transform: translateY(0) translateX(0) rotate(12deg);
+    transform: translate3d(0, 0, 0) rotate(12deg);
     opacity: 0;
   }
-  12% {
-    opacity: 1;
+  6% {
+    opacity: 0.95;
+  }
+  88% {
+    opacity: 0.95;
   }
   100% {
-    transform: translateY(160%) translateX(-10px) rotate(12deg);
+    transform: translate3d(-8px, 165%, 0) rotate(12deg);
     opacity: 0;
   }
 }
@@ -578,21 +597,25 @@
   text-shadow:
     0 0 6px rgba(255, 255, 255, 0.95),
     0 2px 4px rgba(56, 189, 248, 0.35);
-  animation: w3d-snow 2.2s linear infinite;
-  animation-delay: calc(var(--i) * 0.12s);
-  opacity: 0.95;
+  animation: w3d-snow 2.4s linear infinite;
+  animation-delay: calc((var(--i) / var(--n, 10)) * -2.4s);
+  opacity: 0;
+  will-change: transform, opacity;
 }
 
 @keyframes w3d-snow {
   0% {
-    transform: translateY(0) translateX(0) rotate(0deg);
+    transform: translate3d(0, 0, 0) rotate(0deg);
     opacity: 0;
   }
-  12% {
+  8% {
+    opacity: 1;
+  }
+  90% {
     opacity: 1;
   }
   100% {
-    transform: translateY(200%) translateX(12px) rotate(220deg);
+    transform: translate3d(10px, 200%, 0) rotate(240deg);
     opacity: 0;
   }
 }
@@ -653,14 +676,20 @@
   border-radius: 50%;
   background: radial-gradient(circle at 30% 30%, #fff 0%, #e2e8f0 50%, #94a3b8 100%);
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.35);
-  animation: w3d-hail 0.85s linear infinite;
-  animation-delay: calc(var(--i) * 0.1s);
+  animation: w3d-hail 0.9s linear infinite;
+  animation-delay: calc(var(--i) * -0.12s);
+  opacity: 0;
+  will-change: transform, opacity;
 }
 
+/* Flash: 0% === 100% so loop has no pop */
 @keyframes w3d-flash {
   0%,
-  86%,
   100% {
+    opacity: 0.12;
+    transform: scale(0.92) translateY(0);
+  }
+  86% {
     opacity: 0.12;
     transform: scale(0.92) translateY(0);
   }
@@ -681,8 +710,10 @@
 }
 @keyframes w3d-sky-flash {
   0%,
-  86%,
   100% {
+    opacity: 0;
+  }
+  86% {
     opacity: 0;
   }
   88%,
@@ -695,14 +726,17 @@
 }
 @keyframes w3d-hail {
   0% {
-    transform: translateY(0) scale(1);
+    transform: translate3d(0, 0, 0) scale(1);
     opacity: 0;
   }
-  15% {
+  10% {
+    opacity: 1;
+  }
+  88% {
     opacity: 1;
   }
   100% {
-    transform: translateY(180%) scale(0.7);
+    transform: translate3d(0, 180%, 0) scale(0.75);
     opacity: 0;
   }
 }
@@ -732,7 +766,7 @@
   display: none;
 }
 
-/* forceAnimate — full motion on every size */
+/* forceAnimate — full motion on every size (durations keep 0%/100% seamless) */
 .w3d-force .w3d-stage {
   animation: w3d-float 3.6s ease-in-out infinite;
 }
@@ -746,20 +780,20 @@
   animation-duration: 2.6s;
 }
 .w3d-force .w3d-precip.light span {
-  animation-duration: 0.95s;
+  animation-duration: 1s;
 }
 .w3d-force .w3d-precip.med span {
-  animation-duration: 0.7s;
+  animation-duration: 0.75s;
 }
 .w3d-force .w3d-precip.heavy span {
-  animation-duration: 0.48s;
+  animation-duration: 0.55s;
 }
 .w3d-force .w3d-snow span {
-  animation-duration: 1.9s;
+  animation-duration: 2.2s;
 }
 .w3d-force .w3d-bolt,
 .w3d-force .w3d-flash {
-  animation-duration: 1.6s;
+  animation-duration: 1.8s;
 }
 .w3d-force .w3d-fog span {
   animation-duration: 2.8s;
@@ -771,6 +805,24 @@
 }
 .w3d-xl.w3d-force .w3d-stage {
   animation-duration: 3.4s;
+}
+
+/* Pause without snapping when tab is hidden (browser freezes frames) */
+.w3d {
+  animation-play-state: running;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .w3d-stage,
+  .w3d-orbit,
+  .w3d-precip span,
+  .w3d-snow span,
+  .w3d-hail span,
+  .w3d-sun-rays,
+  .w3d-sun-svg,
+  .w3d-bolt,
+  .w3d-flash {
+    animation-iteration-count: infinite;
+  }
 }
 
 /* Mobile: keep icons animated but slightly calmer (no full freeze) */

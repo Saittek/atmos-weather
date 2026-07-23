@@ -1,63 +1,67 @@
-# Codemagic cloud Mac CI — build Solara for TestFlight / App Store
-# Docs: https://docs.codemagic.io/
+# Codemagic CI — Solara iOS → TestFlight
+# https://docs.codemagic.io/
 #
-# Setup:
-# 1. Push this repo to GitHub/GitLab/Bitbucket
-# 2. Sign up at https://codemagic.io and connect the repo
-# 3. Codemagic → Teams → Integrations → App Store Connect:
-#    - Add API key (.p8), name the integration exactly: Solara
-#      (or change the name under integrations: below)
-# 4. Create the app once in App Store Connect (bundle id com.solara.weather)
-# 5. Optional env vars in Codemagic UI (Application → Environment variables):
-#    - VITE_API_BASE = https://solaraweather.com
-#    - APP_STORE_APPLE_ID = 1234567890  (numeric id from App Store Connect URL)
-#      Only needed for some publishing setups; leave unset if you use bundle id.
-# 6. Start workflow: ios-simulator-check first, then ios-app-store
+# Prerequisites (Codemagic UI):
+# 1. Connect this repo
+# 2. Team integrations → Developer Portal / App Store Connect API key
+#    - Name the key exactly as integrations.app_store_connect below (Solara)
+#    - Key needs App Manager access
+# 3. App exists in App Store Connect with bundle id com.solara.weather
+# 4. Optional Application → Environment variables:
+#      VITE_API_BASE = https://solaraweather.com
+#
+# After each successful ios-app-store build, the IPA is uploaded to
+# App Store Connect / TestFlight via the connected integration.
 
 workflows:
   ios-app-store:
     name: Solara iOS → TestFlight
     max_build_duration: 60
     instance_type: mac_mini_m2
+
+    # Must match the App Store Connect API key name in Codemagic integrations
     integrations:
-      # Must match the integration name in Codemagic UI
       app_store_connect: Solara
+
     environment:
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.solara.weather
       vars:
-        XCODE_SCHEME: "App"
-        BUNDLE_ID: "com.solara.weather"
-        # Do NOT put APP_STORE_APPLE_ID: "" here — empty strings fail validation.
-        # If Codemagic asks for it, add a non-empty numeric value in the UI:
-        #   App Store Connect → your app → App Information → Apple ID
-        #   or from the URL: appstoreconnect.apple.com/apps/XXXXXXXXXX/...
+        XCODE_SCHEME: App
+        BUNDLE_ID: com.solara.weather
       node: v22.14.0
       xcode: latest
       cocoapods: default
+
     scripts:
       - name: Install JS dependencies
         script: |
           npm ci || npm install
-      - name: Build web + Capacitor sync
+
+      - name: Build web app + Capacitor iOS sync
         script: |
           export VITE_API_BASE="${VITE_API_BASE:-https://solaraweather.com}"
           npm run build
           npx cap sync ios
-      - name: Set up code signing
+
+      - name: Set up code signing profiles
         script: |
           xcode-project use-profiles
-      - name: Build ipa
+
+      - name: Build IPA
         script: |
           cd ios/App
           xcode-project build-ipa \
             --project "App.xcodeproj" \
-            --scheme "App"
+            --scheme "$XCODE_SCHEME"
+
     artifacts:
       - ios/App/build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+
+    # Upload IPA to App Store Connect / TestFlight after a successful build
     publishing:
       email:
         recipients:
@@ -65,14 +69,23 @@ workflows:
         notify:
           success: true
           failure: true
-      app_store_connect:
-        auth: integration
-        # Upload to TestFlight after a successful archive
-        submit_to_testflight: true
-        # Optional: only if set as a Codemagic env var (must be non-empty digits)
-        # apple_id: $APP_STORE_APPLE_ID
 
-  # Quick compile check (no upload) — use this first
+      app_store_connect:
+        # Use the API key from integrations.app_store_connect above
+        auth: integration
+
+        # Upload the IPA and submit the build to TestFlight
+        # (post-processing; does not consume extra build minutes)
+        submit_to_testflight: true
+
+        # Do not auto-submit for App Store review
+        submit_to_app_store: false
+
+        # Optional: add TestFlight beta group names once you create them
+        # beta_groups:
+        #   - Internal Testers
+
+  # Compile-only check (no signing / no upload)
   ios-simulator-check:
     name: Solara iOS compile check
     max_build_duration: 45
@@ -81,13 +94,13 @@ workflows:
       node: v22.14.0
       xcode: latest
     scripts:
-      - name: Install & build
+      - name: Install and build web + sync
         script: |
           export VITE_API_BASE="${VITE_API_BASE:-https://solaraweather.com}"
           npm ci || npm install
           npm run build
           npx cap sync ios
-      - name: Compile for simulator
+      - name: Compile for iOS Simulator
         script: |
           cd ios/App
           xcodebuild \

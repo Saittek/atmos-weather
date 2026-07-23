@@ -5,6 +5,7 @@
 
 import { runAlertPushCron } from './push-cron.js'
 import { getVapidConfig } from './push-send.js'
+import { getWeatherVideos } from './weather-videos.js'
 
 const TOKEN_DAYS = 30
 const CELL = 0.2
@@ -51,9 +52,11 @@ function defaultUserData() {
     theme: 'dark',
     density: 'comfortable',
     lastLocation: null,
+    homeLocation: null,
     favorites: [],
     severeMode: true,
     stormMode: false,
+    simpleMode: true,
     notifyAlerts: false,
   }
 }
@@ -73,6 +76,46 @@ function parseUserData(raw) {
     return { ...defaultUserData(), ...d }
   } catch {
     return defaultUserData()
+  }
+}
+
+/** Normalize a saved place (last location, home, favorite) */
+function cleanLocation(loc) {
+  if (!loc || typeof loc !== 'object') return null
+  const lat = Number(loc.latitude)
+  const lon = Number(loc.longitude)
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null
+  if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null
+  return {
+    id: loc.id != null ? loc.id : 1,
+    name: String(loc.name || 'Place').slice(0, 120),
+    latitude: lat,
+    longitude: lon,
+    elevation: loc.elevation != null ? Number(loc.elevation) : undefined,
+    country_code: loc.country_code ? String(loc.country_code).slice(0, 8) : undefined,
+    country: loc.country ? String(loc.country).slice(0, 80) : undefined,
+    admin1: loc.admin1 ? String(loc.admin1).slice(0, 80) : undefined,
+    timezone: loc.timezone ? String(loc.timezone).slice(0, 64) : undefined,
+    population: loc.population != null ? Number(loc.population) : undefined,
+  }
+}
+
+function cleanUserData(incoming) {
+  const src = incoming && typeof incoming === 'object' ? incoming : {}
+  const favorites = Array.isArray(src.favorites)
+    ? src.favorites.map(cleanLocation).filter(Boolean).slice(0, 12)
+    : []
+  return {
+    units: src.units === 'metric' ? 'metric' : 'imperial',
+    theme: ['dark', 'light', 'auto'].includes(src.theme) ? src.theme : 'dark',
+    density: src.density === 'compact' ? 'compact' : 'comfortable',
+    lastLocation: cleanLocation(src.lastLocation),
+    homeLocation: cleanLocation(src.homeLocation),
+    favorites,
+    severeMode: Boolean(src.severeMode),
+    stormMode: Boolean(src.stormMode),
+    simpleMode: src.simpleMode === undefined ? true : Boolean(src.simpleMode),
+    notifyAlerts: Boolean(src.notifyAlerts),
   }
 }
 
@@ -481,10 +524,24 @@ export default {
         return json({
           ok: true,
           service: 'solara-api',
-          features: ['auth', 'chat', 'fires', 'push'],
+          features: ['auth', 'chat', 'fires', 'push', 'weather-videos'],
           runtime: 'cloudflare-worker',
           pushConfigured: Boolean(getVapidConfig(env)),
         })
+      }
+
+      // ── Free official weather videos (NWS / NOAA YouTube RSS) ──
+      if (path === '/api/weather-videos' && method === 'GET') {
+        try {
+          const data = await getWeatherVideos()
+          return json(data, 200, {
+            'Cache-Control': 'public, max-age=600',
+            'Access-Control-Allow-Origin': '*',
+          })
+        } catch (e) {
+          console.error('weather-videos', e)
+          return err('Could not load weather videos', 502)
+        }
       }
 
       // ── Web Push public key ──
@@ -748,16 +805,8 @@ export default {
         if (auth.error) return auth.error
         const body = await request.json().catch(() => ({}))
         const incoming = body?.data ?? body ?? {}
-        const cleaned = {
-          units: incoming.units === 'metric' ? 'metric' : 'imperial',
-          theme: ['dark', 'light', 'auto'].includes(incoming.theme) ? incoming.theme : 'dark',
-          density: incoming.density === 'compact' ? 'compact' : 'comfortable',
-          lastLocation: incoming.lastLocation ?? null,
-          favorites: Array.isArray(incoming.favorites) ? incoming.favorites.slice(0, 12) : [],
-          severeMode: Boolean(incoming.severeMode),
-          stormMode: Boolean(incoming.stormMode),
-          notifyAlerts: Boolean(incoming.notifyAlerts),
-        }
+        // Persist full prefs including home pin (desktop ↔ phone when signed in)
+        const cleaned = cleanUserData(incoming)
         await env.DB.prepare('UPDATE users SET data = ? WHERE id = ?')
           .bind(JSON.stringify(cleaned), auth.user.id)
           .run()

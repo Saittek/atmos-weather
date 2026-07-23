@@ -20,9 +20,13 @@ export interface CloudPrefs {
   theme: ThemeMode
   density: DensityMode
   lastLocation: LocationResult | null
+  /** Exact home (full-precision lat/lon) */
+  homeLocation?: LocationResult | null
   favorites: LocationResult[]
   severeMode: boolean
   stormMode?: boolean
+  /** Compact dashboard — basics only */
+  simpleMode?: boolean
   notifyAlerts: boolean
 }
 

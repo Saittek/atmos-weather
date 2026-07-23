@@ -10,6 +10,7 @@ import { Alerts } from '../components/Alerts'
 import { SunMoon } from '../components/SunMoon'
 import { PrecipChart } from '../components/PrecipChart'
 import { Favorites } from '../components/Favorites'
+import { HomeLocationPanel } from '../components/HomeLocationPanel'
 import { RainNextHour } from '../components/RainNextHour'
 import { HourlyCharts } from '../components/HourlyCharts'
 import { OutlookTips } from '../components/OutlookTips'
@@ -17,14 +18,17 @@ import { ModelCompare } from '../components/ModelCompare'
 import { Sounding } from '../components/Sounding'
 import { Tropical } from '../components/Tropical'
 import { SettingsBar } from '../components/SettingsBar'
-import { HomePins } from '../components/HomePins'
-import { PollenPanel } from '../components/PollenPanel'
+
+import { AllergySection } from '../components/AllergySection'
 import { FireSmoke } from '../components/FireSmoke'
 import { TripPlanner } from '../components/TripPlanner'
 import { CityCompare } from '../components/CityCompare'
 import { InstallPrompt } from '../components/InstallPrompt'
 import { Onboarding } from '../components/Onboarding'
 import { DressForToday } from '../components/DressForToday'
+import { ForecastSummary } from '../components/ForecastSummary'
+import { GlanceModules } from '../components/GlanceModules'
+import { WeatherVideos } from '../components/WeatherVideos'
 import { AlertTopBar } from '../components/AlertTopBar'
 import { ComfortPanel } from '../components/ComfortPanel'
 import { ClimateCompare } from '../components/ClimateCompare'
@@ -47,8 +51,13 @@ import { StormRisk } from '../components/StormRisk'
 import { DayLastYear } from '../components/DayLastYear'
 import { Deferred } from '../components/Deferred'
 import { useWeather } from '../hooks/useWeather'
+import { useThreatProximity } from '../hooks/useThreatProximity'
+import { useHomeAlerts } from '../hooks/useHomeAlerts'
+import { sameExactPlace } from '../hooks/useWeather'
+import { ThreatBanner } from '../components/ThreatBanner'
 import { useAuth } from '../hooks/useAuth'
 import { useRainWatch } from '../hooks/useRainWatch'
+import { isDaytimeNow } from '../utils/daylight'
 import { getWeatherInfo } from '../utils/weatherCodes'
 import { locationKey, shareUrl } from '../api/weather'
 import type { LocationResult } from '../api/types'
@@ -97,8 +106,10 @@ export default function DashboardPage() {
     resolvedTheme,
     density,
     favorites,
+    homeLocation,
     severeMode,
     stormMode,
+    simpleMode,
     notifyAlerts,
     severeActive,
     setUnits,
@@ -106,9 +117,13 @@ export default function DashboardPage() {
     setDensity,
     setSevereMode,
     setStormMode,
+    setSimpleMode,
     setNotifyAlerts,
     toggleFavorite,
     isFavorite,
+    setHomeLocation,
+    isHome,
+    goHome,
     loadForLocation,
     requestMyLocation,
     syncNow,
@@ -121,7 +136,20 @@ export default function DashboardPage() {
   } = useWeather()
   const { user } = useAuth()
 
-  const rainWatch = useRainWatch(favorites, notifyAlerts, location)
+  const threat = useThreatProximity(location?.latitude, location?.longitude, {
+    enabled: Boolean(location && (severeMode || stormMode || notifyAlerts)),
+    maxKm: 60,
+  })
+
+  const rainWatch = useRainWatch(favorites, notifyAlerts, location, homeLocation)
+
+  useHomeAlerts({
+    home: homeLocation,
+    weather,
+    units,
+    enabled: Boolean(homeLocation && (notifyAlerts || severeMode)),
+    homeWeather: sameExactPlace(location, homeLocation) ? weather : null,
+  })
 
   const rainWatchRefresh = rainWatch.refresh
   const doRefresh = useCallback(async () => {
@@ -145,7 +173,7 @@ export default function DashboardPage() {
 
   const bg =
     weather != null && resolvedTheme === 'dark'
-      ? getWeatherInfo(weather.current.weather_code, weather.current.is_day === 1).gradient
+      ? getWeatherInfo(weather.current.weather_code, isDaytimeNow(weather)).gradient
       : undefined
 
   const onShare = useCallback(async () => {
@@ -190,22 +218,12 @@ export default function DashboardPage() {
     window.setTimeout(jumpRadar, 450)
   }
 
-  const openPin = (lat: number, lon: number, name: string) => {
-    void loadForLocation({
-      id: Date.now(),
-      name,
-      latitude: lat,
-      longitude: lon,
-    })
-  }
-
   const severe = (severeMode && severeActive) || stormMode
   const statusMsg =
     shareMsg ||
     cloudStatus ||
     rainWatch.banner ||
     (offline ? 'Offline — showing last saved weather' : null)
-  const currentKey = location ? locationKey(location) : undefined
 
   const jumpAlerts = () => {
     document.getElementById('alerts-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -301,6 +319,7 @@ export default function DashboardPage() {
                 units={units}
                 severeMode={severe}
                 mapId="radar-map"
+                homeLocation={homeLocation}
               />
             </Suspense>
           </Deferred>
@@ -339,6 +358,24 @@ export default function DashboardPage() {
         onMinimizedChange={setAlertsMinimized}
       />
 
+      {location && threat.threats.length > 0 && (
+        <div className="dashboard-threat-wrap">
+          <ThreatBanner
+            threats={threat.threats}
+            loading={threat.loading}
+            muted={threat.muted}
+            onMute={threat.setMuted}
+            onJump={() => {
+              const p = location
+              window.location.assign(
+                `/chase?lat=${p.latitude.toFixed(4)}&lon=${p.longitude.toFixed(4)}&name=${encodeURIComponent(p.name)}`,
+              )
+            }}
+            onRefresh={() => threat.refresh()}
+          />
+        </div>
+      )}
+
       <Onboarding />
 
       <div className="app-shell">
@@ -357,6 +394,7 @@ export default function DashboardPage() {
             />
             <div>
               <strong>Solara</strong>
+              {simpleMode && !stormMode && <span className="brand-tag simple-tag">Simple</span>}
               {stormMode && <span className="brand-tag">Storm mode</span>}
             </div>
           </div>
@@ -367,29 +405,55 @@ export default function DashboardPage() {
           />
           <div className="topbar-right">
             <nav className="quick-nav" aria-label="App modes">
-              <Link
-                to={
-                  location
-                    ? `/chase?lat=${location.latitude.toFixed(4)}&lon=${location.longitude.toFixed(4)}&name=${encodeURIComponent(location.name)}`
-                    : '/chase'
-                }
-                className="chip-btn nav-chip chaser-nav-btn"
-                title="Storm chasers desk"
+              <button
+                type="button"
+                className={`chip-btn nav-chip simple-nav-btn ${simpleMode ? 'active' : ''}`}
+                title={simpleMode ? 'Simple mode on — tap for full forecast' : 'Simple mode — basics only'}
+                aria-label={simpleMode ? 'Turn off simple mode' : 'Turn on simple mode'}
+                aria-pressed={simpleMode}
+                onClick={() => setSimpleMode(!simpleMode)}
               >
-                <span aria-hidden>🌪</span>
-                <span className="chaser-nav-label">Chasers</span>
-              </Link>
+                <span aria-hidden>{simpleMode ? '◎' : '○'}</span>
+                <span className="simple-nav-label">{simpleMode ? 'Simple' : 'Full'}</span>
+              </button>
+              {homeLocation && (
+                <button
+                  type="button"
+                  className={`chip-btn icon-chip nav-chip home-nav-btn ${isHome(location) ? 'active' : ''}`}
+                  title={`Go home · ${homeLocation.name || 'Home'}`}
+                  aria-label="Go home"
+                  onClick={() => goHome()}
+                >
+                  🏠
+                </button>
+              )}
+              {!simpleMode && (
+                <Link
+                  to={
+                    location
+                      ? `/chase?lat=${location.latitude.toFixed(4)}&lon=${location.longitude.toFixed(4)}&name=${encodeURIComponent(location.name)}`
+                      : '/chase'
+                  }
+                  className="chip-btn nav-chip chaser-nav-btn"
+                  title="Storm chasers desk"
+                >
+                  <span aria-hidden>🌪</span>
+                  <span className="chaser-nav-label">Chasers</span>
+                </Link>
+              )}
               <Link to={radarPath} className="chip-btn icon-chip nav-chip" title="Full-page radar" aria-label="Radar">
                 📡
               </Link>
-              <Link
-                to="/widget"
-                className="chip-btn icon-chip nav-chip hide-sm"
-                title="Rain widget"
-                aria-label="Rain widget"
-              >
-                ☔
-              </Link>
+              {!simpleMode && (
+                <Link
+                  to="/widget"
+                  className="chip-btn icon-chip nav-chip hide-sm"
+                  title="Home rain widget"
+                  aria-label="Rain widget"
+                >
+                  ☔
+                </Link>
+              )}
             </nav>
             <SettingsBar
               units={units}
@@ -397,16 +461,33 @@ export default function DashboardPage() {
               density={density}
               severeMode={severeMode}
               stormMode={stormMode}
+              simpleMode={simpleMode}
               notifyAlerts={notifyAlerts}
               isFavorite={isFavorite(location)}
               cloudSynced={cloudSynced}
+              hasHome={Boolean(homeLocation)}
+              isHome={isHome(location)}
               onUnits={setUnits}
               onTheme={setTheme}
               onDensity={setDensity}
               onSevereMode={setSevereMode}
               onStormMode={setStormMode}
+              onSimpleMode={setSimpleMode}
               onNotify={(v) => void setNotifyAlerts(v)}
               onToggleFavorite={() => location && toggleFavorite(location)}
+              onGoHome={() => goHome()}
+              onSetHome={() => {
+                if (!location) return
+                if (isHome(location)) setHomeLocation(null)
+                else {
+                  setHomeLocation({
+                    ...location,
+                    name: location.name?.includes('Home')
+                      ? location.name
+                      : `${location.name} (Home)`,
+                  })
+                }
+              }}
               onShare={() => void onShare()}
               onRefresh={() => refresh()}
               onCloudSync={() => void syncNow()}
@@ -415,6 +496,18 @@ export default function DashboardPage() {
             />
           </div>
         </header>
+
+        {simpleMode && !stormMode && (
+          <div className="simple-mode-banner" role="status">
+            <div>
+              <strong>◎ Simple mode</strong>
+              <span>Basics only — current, rain, hourly &amp; 14-day</span>
+            </div>
+            <button type="button" className="chip-btn" onClick={() => setSimpleMode(false)}>
+              Show full
+            </button>
+          </div>
+        )}
 
         {stormMode && (
           <div className="storm-mode-banner" role="status">
@@ -453,6 +546,15 @@ export default function DashboardPage() {
 
         {/* Mobile: saved places first — pick a location, then scroll into weather */}
         <div className="favorites-mobile-slot" id="favorites">
+          <HomeLocationPanel
+            home={homeLocation}
+            current={location}
+            geoLoading={geoLoading}
+            onSetHome={setHomeLocation}
+            onGoHome={goHome}
+            signedIn={!!user}
+            accountSynced={cloudSynced}
+          />
           <Favorites
             favorites={favorites}
             current={location}
@@ -486,7 +588,9 @@ export default function DashboardPage() {
         {loading && !weather && <DashboardSkeleton />}
 
         {weather && location && (
-          <main className={`dashboard ${stormMode ? 'dashboard-storm' : ''}`}>
+          <main
+            className={`dashboard ${stormMode ? 'dashboard-storm' : ''} ${simpleMode ? 'dashboard-simple' : ''}`}
+          >
             <div className="col main-col">
               <div className="priority-stack">
                 <CurrentWeather
@@ -495,15 +599,38 @@ export default function DashboardPage() {
                   units={units}
                   isFavorite={isFavorite(location)}
                   onToggleFavorite={() => toggleFavorite(location)}
+                  isHome={isHome(location)}
+                  onSetHome={() => {
+                    if (isHome(location)) {
+                      setHomeLocation(null)
+                    } else {
+                      setHomeLocation({
+                        ...location,
+                        name: location.name?.includes('Home')
+                          ? location.name
+                          : `${location.name} (Home)`,
+                      })
+                    }
+                  }}
                   updatedAt={updatedAt}
                   refreshing={refreshing}
                   alertCount={alertsMinimized ? 0 : activeAlerts.length}
                   offline={offline}
+                  air={air}
                 />
 
                 <div id="alerts-panel">
                   {!alertsMinimized && <Alerts alerts={activeAlerts} />}
                 </div>
+
+                {!simpleMode && (
+                  <ForecastSummary
+                    weather={weather}
+                    units={units}
+                    placeName={location.name}
+                    air={air}
+                  />
+                )}
 
                 <RainNextHour weather={weather} units={units} />
               </div>
@@ -511,111 +638,164 @@ export default function DashboardPage() {
               <HourlyForecast weather={weather} units={units} />
               <WeekStrip weather={weather} units={units} />
 
-              <div className="daily-mobile-slot">
+              {/* 14-day list: always in simple mode; mobile slot in full mode */}
+              {simpleMode ? (
                 <DailyForecast weather={weather} units={units} />
-              </div>
-
-              {radarBlock}
-
-              <div className="outdoor-mobile-slot">
-                <SunMoon weather={weather} />
-                <AirQuality air={air} />
-                <PollenPanel air={air} />
-              </div>
-
-              <Deferred
-                force={!isMobile}
-                rootMargin="100px 0px"
-                minHeight={isMobile ? 72 : undefined}
-              >
-                <HazardBadges weather={weather} units={units} />
-                <UvWindPanel weather={weather} units={units} />
-                <OutdoorAirStrip weather={weather} air={air} />
-                <ActivityModes weather={weather} units={units} air={air} />
-              </Deferred>
-
-              {(!isMobile || rainWatch.snapshots.length > 0 || rainWatch.loading) && (
-                <HomePins
-                  snapshots={rainWatch.snapshots}
-                  loading={rainWatch.loading}
-                  units={units}
-                  currentKey={currentKey}
-                  onSelect={openPin}
-                  onRefresh={() => void rainWatch.refresh()}
-                />
+              ) : (
+                <div className="daily-mobile-slot">
+                  <DailyForecast weather={weather} units={units} />
+                </div>
               )}
 
-              <Deferred
-                force={!isMobile}
-                rootMargin="160px 0px"
-                minHeight={isMobile ? 64 : undefined}
-              >
-                <PrecipTotals weather={weather} units={units} />
-                <VisibilityPanel weather={weather} units={units} />
-                {!isMobile && <StormRisk weather={weather} profile={profile} />}
-              </Deferred>
+              {/* Allergies — simple + full (pollen, mold-friendly air, tips) */}
+              <AllergySection air={air} weather={weather} compact={simpleMode} />
 
-              {/* Dress advice — lower on the page */}
-              <DressForToday weather={weather} units={units} air={air} />
+              {!simpleMode && (
+                <GlanceModules weather={weather} units={units} air={air} />
+              )}
 
-              <Deferred
-                force={false}
-                rootMargin={isMobile ? '40px 0px' : '200px 0px'}
-                minHeight={isMobile ? 120 : 360}
-                placeholder={
-                  isMobile ? (
-                    <p className="muted-center">Scroll for fire map…</p>
-                  ) : (
-                    <MapChunkFallback label="Fire map loads near view…" />
-                  )
-                }
-              >
-                <Suspense fallback={<MapChunkFallback label="Loading fire map…" />}>
-                  <FireMapPanel
-                    lat={location.latitude}
-                    lon={location.longitude}
-                    placeName={location.name}
-                    weather={weather}
-                    air={air}
-                  />
-                </Suspense>
-              </Deferred>
+              {/* Radar: always available in storm mode; collapsed CTA in simple mode */}
+              {!simpleMode || stormMode ? (
+                radarBlock
+              ) : (
+                <section className="panel radar-cta-panel simple-radar-cta" aria-label="Radar">
+                  <div className="panel-header">
+                    <h2>📡 Radar</h2>
+                  </div>
+                  <div className="radar-cta-actions">
+                    <Link to={radarPath} className="primary-btn radar-view-btn">
+                      Open radar
+                    </Link>
+                    <button
+                      type="button"
+                      className="chip-btn"
+                      onClick={() => setSimpleMode(false)}
+                    >
+                      Full forecast
+                    </button>
+                  </div>
+                </section>
+              )}
 
-              <Deferred force={!isMobile} rootMargin="120px 0px" minHeight={isMobile ? 0 : 48}>
-                <AreaChat location={location} />
-              </Deferred>
-
-              <Deferred force={!isMobile} rootMargin="100px 0px">
-                <ShareWeatherCard weather={weather} location={location} units={units} />
-              </Deferred>
-
-              <AdvancedSection title="More details" defaultOpen={false}>
-                <div className="advanced-grid">
-                  <HourlyCharts weather={weather} units={units} />
-                  <PrecipChart weather={weather} units={units} />
-                  <ComfortPanel weather={weather} units={units} />
-                  <LifestyleScores weather={weather} units={units} />
-                  <WeatherDetails weather={weather} units={units} />
-                  {!isMobile && (
-                    <DayLastYear
-                      weather={weather}
-                      units={units}
-                      lat={location.latitude}
-                      lon={location.longitude}
-                    />
-                  )}
-                  {!isMobile && (
-                    <ModelCompare models={models} units={units} timezone={weather.timezone} />
-                  )}
-                  {!isMobile && (
-                    <CityCompare units={units} home={location} homeWeather={weather} />
-                  )}
+              {simpleMode && (
+                <div className="simple-more-cta">
+                  <button
+                    type="button"
+                    className="primary-btn"
+                    onClick={() => setSimpleMode(false)}
+                  >
+                    Show full forecast
+                  </button>
+                  <p className="muted-center">
+                    UV, air quality, radar map, videos, and planning tools
+                  </p>
                 </div>
-              </AdvancedSection>
+              )}
+
+              {!simpleMode && (
+                <>
+                  <div className="outdoor-mobile-slot">
+                    <SunMoon weather={weather} />
+                    <AirQuality air={air} />
+                  </div>
+
+                  <Deferred
+                    force={!isMobile}
+                    rootMargin="100px 0px"
+                    minHeight={isMobile ? 72 : undefined}
+                  >
+                    <HazardBadges weather={weather} units={units} air={air} />
+                    <UvWindPanel weather={weather} units={units} />
+                    <OutdoorAirStrip weather={weather} air={air} />
+                    <ActivityModes weather={weather} units={units} air={air} />
+                  </Deferred>
+
+                  <Deferred
+                    force={!isMobile}
+                    rootMargin="160px 0px"
+                    minHeight={isMobile ? 64 : undefined}
+                  >
+                    <PrecipTotals weather={weather} units={units} />
+                    <VisibilityPanel weather={weather} units={units} air={air} />
+                    {!isMobile && <StormRisk weather={weather} profile={profile} />}
+                  </Deferred>
+
+                  <DressForToday weather={weather} units={units} air={air} />
+
+                  <Deferred force={!isMobile} rootMargin="120px 0px" minHeight={isMobile ? 200 : 320}>
+                    <WeatherVideos />
+                  </Deferred>
+
+                  <Deferred
+                    force={false}
+                    rootMargin={isMobile ? '40px 0px' : '200px 0px'}
+                    minHeight={isMobile ? 120 : 360}
+                    placeholder={
+                      isMobile ? (
+                        <p className="muted-center">Scroll for fire map…</p>
+                      ) : (
+                        <MapChunkFallback label="Fire map loads near view…" />
+                      )
+                    }
+                  >
+                    <Suspense fallback={<MapChunkFallback label="Loading fire map…" />}>
+                      <FireMapPanel
+                        lat={location.latitude}
+                        lon={location.longitude}
+                        placeName={location.name}
+                        weather={weather}
+                        air={air}
+                        homeLocation={homeLocation}
+                      />
+                    </Suspense>
+                  </Deferred>
+
+                  <Deferred force={!isMobile} rootMargin="120px 0px" minHeight={isMobile ? 0 : 48}>
+                    <AreaChat location={location} />
+                  </Deferred>
+
+                  <Deferred force={!isMobile} rootMargin="100px 0px">
+                    <ShareWeatherCard weather={weather} location={location} units={units} />
+                  </Deferred>
+
+                  <AdvancedSection title="More details" defaultOpen={false}>
+                    <div className="advanced-grid">
+                      <HourlyCharts weather={weather} units={units} />
+                      <PrecipChart weather={weather} units={units} />
+                      <ComfortPanel weather={weather} units={units} />
+                      <LifestyleScores weather={weather} units={units} />
+                      <WeatherDetails weather={weather} units={units} />
+                      {!isMobile && (
+                        <DayLastYear
+                          weather={weather}
+                          units={units}
+                          lat={location.latitude}
+                          lon={location.longitude}
+                        />
+                      )}
+                      {!isMobile && (
+                        <ModelCompare models={models} units={units} timezone={weather.timezone} />
+                      )}
+                      {!isMobile && (
+                        <CityCompare units={units} home={location} homeWeather={weather} />
+                      )}
+                    </div>
+                  </AdvancedSection>
+                </>
+              )}
             </div>
 
-            <aside className="col side-col">
+            <aside className={`col side-col ${simpleMode ? 'side-col-simple' : ''}`}>
               <div className="favorites-desktop-slot">
+                <HomeLocationPanel
+                  home={homeLocation}
+                  current={location}
+                  geoLoading={geoLoading}
+                  onSetHome={setHomeLocation}
+                  onGoHome={goHome}
+                  signedIn={!!user}
+                  accountSynced={cloudSynced}
+                />
                 <Favorites
                   favorites={favorites}
                   current={location}
@@ -626,34 +806,35 @@ export default function DashboardPage() {
                 />
               </div>
 
-              {/* Full multi-day list — desktop sidebar (hidden on phones) */}
-              <div className="daily-desktop-slot">
-                <DailyForecast weather={weather} units={units} />
-              </div>
+              {!simpleMode && (
+                <>
+                  <div className="daily-desktop-slot">
+                    <DailyForecast weather={weather} units={units} />
+                  </div>
 
-              {/* Sun / air / pollen — desktop sidebar (mobile uses outdoor-mobile-slot) */}
-              <div className="outdoor-desktop-slot">
-                <SunMoon weather={weather} />
-                <AirQuality air={air} />
-                <PollenPanel air={air} />
-              </div>
+                  <div className="outdoor-desktop-slot">
+                    <SunMoon weather={weather} />
+                    <AirQuality air={air} />
+                  </div>
 
-              <AdvancedSection title="Planning & environment" defaultOpen={false} id="advanced-side">
-                <div className="advanced-grid">
-                  <ClimateCompare
-                    weather={weather}
-                    units={units}
-                    lat={location.latitude}
-                    lon={location.longitude}
-                  />
-                  <SnowOutlook weather={weather} units={units} />
-                  <TripPlanner weather={weather} units={units} placeName={location.name} />
-                  <OutlookTips weather={weather} units={units} />
-                  <FireSmoke weather={weather} air={air} />
-                  <Sounding profile={profile} units={units} timezone={weather.timezone} />
-                  <Tropical storms={storms} onFocus={openStorm} />
-                </div>
-              </AdvancedSection>
+                  <AdvancedSection title="Planning & environment" defaultOpen={false} id="advanced-side">
+                    <div className="advanced-grid">
+                      <ClimateCompare
+                        weather={weather}
+                        units={units}
+                        lat={location.latitude}
+                        lon={location.longitude}
+                      />
+                      <SnowOutlook weather={weather} units={units} />
+                      <TripPlanner weather={weather} units={units} placeName={location.name} />
+                      <OutlookTips weather={weather} units={units} />
+                      <FireSmoke weather={weather} air={air} />
+                      <Sounding profile={profile} units={units} timezone={weather.timezone} />
+                      <Tropical storms={storms} onFocus={openStorm} />
+                    </div>
+                  </AdvancedSection>
+                </>
+              )}
 
               <footer className="credits">
                 <p>

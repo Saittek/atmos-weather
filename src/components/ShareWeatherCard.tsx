@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import type { LocationResult, WeatherData } from '../api/types'
 import type { Units } from '../utils/format'
 import { formatTemp } from '../utils/format'
+import { isDaytimeNow } from '../utils/daylight'
 import { getWeatherInfo } from '../utils/weatherCodes'
 import { willIGetWet } from '../utils/wetSummary'
 import { shareUrl } from '../api/weather'
@@ -16,7 +17,7 @@ interface Props {
 export function ShareWeatherCard({ weather, location, units }: Props) {
   const [msg, setMsg] = useState<string | null>(null)
   const c = weather.current
-  const info = getWeatherInfo(c.weather_code, c.is_day === 1)
+  const info = getWeatherInfo(c.weather_code, isDaytimeNow(weather))
   const wet = willIGetWet(weather)
   const ti = todayDailyIndex(weather)
   const hi = weather.daily.temperature_2m_max[ti]

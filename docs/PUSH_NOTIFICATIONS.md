@@ -14,8 +14,18 @@
 1. **Sign in** (needed for server-side push).
 2. Turn on **Notify** in settings.
 3. Allow browser/system notification permission.
-4. Star places (favorites) and/or set last location.
-5. Every **10 minutes** the Worker checks NWS + ECCC for those places and pushes **Severe/Extreme** alerts (Moderate+ if severe mode is off).
+4. Set an **exact home** (GPS or coordinates) — highest priority for alerts.
+5. Star places (favorites) and/or use last location as extras.
+6. Every **10 minutes** the Worker checks NWS + ECCC for home + places and pushes **Severe/Extreme** alerts (Moderate+ if severe mode is off).
+
+### In-app / local extras (no APNs required)
+
+| Alert | When |
+|-------|------|
+| **Threat near you** | TOR/SVR/FF polygon near current place |
+| **Home escalation** | Watch near home upgrades to a warning |
+| **Morning brief** | Once per local day ~6–10am for home (when Notify or Alerts UI is on) |
+| **Rain watch** | Favorites / home precip timing |
 
 ## Server secrets
 
@@ -47,12 +57,29 @@ curl -X POST https://solaraweather.com/api/push/run-check \
   -H "x-cron-secret: YOUR_SECRET"
 ```
 
-## iOS App Store (later)
+## iOS APNs (remote when app closed)
+
+Device tokens already POST to `/api/push/device` when the user enables Notify on a signed-in native build.
+
+Worker send path is implemented (`worker/apns.js`) and runs from the 10‑minute alert cron **when these secrets exist**:
+
+```bash
+npx wrangler secret put APNS_KEY_ID        # e.g. AB12CD34EF
+npx wrangler secret put APNS_TEAM_ID       # Apple Team ID
+npx wrangler secret put APNS_BUNDLE_ID     # e.g. com.yourco.solara
+npx wrangler secret put APNS_PRIVATE_KEY   # full .p8 PEM including BEGIN/END lines
+# Production App Store / TestFlight builds:
+npx wrangler secret put APNS_PRODUCTION    # true
+```
+
+Also in Xcode / Apple Developer:
 
 1. `npx cap sync ios`
-2. Enable Push Notifications capability in Xcode
-3. Upload APNs key to a push provider (or implement APNs HTTP/2 send in Worker)
-4. Device tokens already POST to `/api/push/device`
+2. Enable **Push Notifications** capability
+3. Create an **APNs Auth Key** (.p8) and note Key ID + Team ID
+4. Use the same bundle id as `APNS_BUNDLE_ID`
+
+Until secrets are set, native still gets **local notifications** for in-app threat proximity (TOR/SVR polygons near you).
 
 ## Privacy
 

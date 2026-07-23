@@ -75,7 +75,7 @@ export function AuthModal({ open, onClose, onSuccess }: Props) {
           </button>
         </div>
         <p className="auth-sub">
-          Save favorites, last location, units, and theme to your Solara account.
+          Sync home pin, favorites, last place, units, and theme across desktop and phone.
         </p>
 
         <div className="auth-tabs">

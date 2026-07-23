@@ -37,10 +37,14 @@ export interface Prefs {
   theme: ThemeMode
   density: DensityMode
   lastLocation?: LocationResult
+  /** Exact home pin — full GPS/manual precision, not city center */
+  homeLocation?: LocationResult | null
   favorites: LocationResult[]
   severeMode: boolean
   /** Radar-first, intense UI — the signature “stand out” mode */
   stormMode: boolean
+  /** Basics only — hide advanced panels */
+  simpleMode: boolean
   notifyAlerts: boolean
 }
 
@@ -54,9 +58,12 @@ function loadPrefs(): Prefs {
         theme: p.theme ?? 'dark',
         density: p.density ?? 'comfortable',
         lastLocation: p.lastLocation,
+        homeLocation: p.homeLocation ?? null,
         favorites: Array.isArray(p.favorites) ? p.favorites : [],
         severeMode: p.severeMode ?? true,
         stormMode: p.stormMode ?? false,
+        // Default on when field missing — cleaner first experience
+        simpleMode: p.simpleMode ?? true,
         notifyAlerts: p.notifyAlerts ?? false,
       }
     }
@@ -68,9 +75,11 @@ function loadPrefs(): Prefs {
         theme: 'dark',
         density: 'comfortable',
         lastLocation: p.lastLocation,
+        homeLocation: null,
         favorites: [],
         severeMode: true,
         stormMode: false,
+        simpleMode: true,
         notifyAlerts: false,
       }
     }
@@ -81,9 +90,11 @@ function loadPrefs(): Prefs {
     units: 'imperial',
     theme: 'dark',
     density: 'comfortable',
+    homeLocation: null,
     favorites: [],
     severeMode: true,
     stormMode: false,
+    simpleMode: true,
     notifyAlerts: false,
   }
 }
@@ -114,9 +125,11 @@ function prefsToCloud(p: Prefs): CloudPrefs {
     theme: p.theme,
     density: p.density,
     lastLocation: p.lastLocation ?? null,
+    homeLocation: p.homeLocation ?? null,
     favorites: p.favorites,
     severeMode: p.severeMode,
     stormMode: p.stormMode,
+    simpleMode: p.simpleMode,
     notifyAlerts: p.notifyAlerts,
   }
 }
@@ -128,16 +141,36 @@ function cloudToPrefs(c: CloudPrefs, local: Prefs): Prefs {
       map.set(locationKey(f), f)
     }
   }
+  // Home: cloud wins when set; if account has no home yet, keep this device’s
+  // pin so the next push uploads it (desktop → phone after first sign-in).
+  const cloudHome = c.homeLocation
+  const homeLocation =
+    cloudHome != null &&
+    Number.isFinite(cloudHome.latitude) &&
+    Number.isFinite(cloudHome.longitude)
+      ? cloudHome
+      : (local.homeLocation ?? null)
   return {
     units: c.units ?? local.units,
     theme: c.theme ?? local.theme,
     density: c.density ?? local.density,
     lastLocation: c.lastLocation ?? local.lastLocation,
+    homeLocation,
     favorites: [...map.values()].slice(0, 12),
     severeMode: c.severeMode ?? local.severeMode,
     stormMode: c.stormMode ?? local.stormMode,
+    simpleMode: c.simpleMode ?? local.simpleMode,
     notifyAlerts: c.notifyAlerts ?? local.notifyAlerts,
   }
+}
+
+/** Same place within ~11 m (exact home match) */
+export function sameExactPlace(a: LocationResult | null | undefined, b: LocationResult | null | undefined): boolean {
+  if (!a || !b) return false
+  return (
+    Math.abs(a.latitude - b.latitude) < 0.0001 &&
+    Math.abs(a.longitude - b.longitude) < 0.0001
+  )
 }
 
 function loadNotified(): Set<string> {
@@ -503,10 +536,22 @@ export function useWeather() {
 
   const setStormMode = useCallback(
     (stormMode: boolean) => {
-      // Storm mode: radar-first + keep severe highlighting on
+      // Storm mode: radar-first + keep severe highlighting on; leave simple mode
       patchPrefs({
         stormMode,
         severeMode: stormMode ? true : prefsRef.current.severeMode,
+        simpleMode: stormMode ? false : prefsRef.current.simpleMode,
+      })
+    },
+    [patchPrefs],
+  )
+
+  const setSimpleMode = useCallback(
+    (simpleMode: boolean) => {
+      // Simple and storm are opposites for layout density
+      patchPrefs({
+        simpleMode,
+        stormMode: simpleMode ? false : prefsRef.current.stormMode,
       })
     },
     [patchPrefs],
@@ -576,13 +621,78 @@ export function useWeather() {
     [prefs.favorites],
   )
 
+  const setHomeLocation = useCallback(
+    (loc: LocationResult | null) => {
+      const p = prefsRef.current
+      if (!loc) {
+        commitPrefs({ ...p, homeLocation: null })
+        showStatus(
+          user
+            ? 'Home cleared · syncing to your account'
+            : 'Home cleared on this device · Sign in to sync phones',
+        )
+        return
+      }
+      // Preserve full precision — never round GPS/manual coords
+      const home: LocationResult = {
+        id: loc.id || 1,
+        name: (loc.name || 'Home').trim() || 'Home',
+        latitude: Number(loc.latitude),
+        longitude: Number(loc.longitude),
+        elevation: loc.elevation,
+        country_code: loc.country_code,
+        country: loc.country,
+        admin1: loc.admin1,
+        timezone: loc.timezone,
+        population: loc.population,
+      }
+      if (
+        !Number.isFinite(home.latitude) ||
+        !Number.isFinite(home.longitude) ||
+        Math.abs(home.latitude) > 90 ||
+        Math.abs(home.longitude) > 180
+      ) {
+        showStatus('Invalid coordinates for home')
+        return
+      }
+      commitPrefs({ ...p, homeLocation: home })
+      const coords = `${home.latitude.toFixed(5)}, ${home.longitude.toFixed(5)}`
+      showStatus(
+        user
+          ? `Home set · ${coords} · syncing to phone when signed in`
+          : `Home set · ${coords} · Sign in to use this home on your phone`,
+      )
+    },
+    [commitPrefs, showStatus, user],
+  )
+
+  const isHome = useCallback(
+    (loc: LocationResult | null) => sameExactPlace(loc, prefs.homeLocation),
+    [prefs.homeLocation],
+  )
+
+  const goHome = useCallback(() => {
+    const home = prefsRef.current.homeLocation
+    if (!home) {
+      showStatus('No home set yet')
+      return
+    }
+    void loadForLocation(home)
+  }, [loadForLocation, showStatus])
+
   const requestMyLocation = useCallback(() => {
     setGeoLoading(true)
     setError(null)
     void (async () => {
       try {
         const pos = await getCurrentPosition()
-        const loc = await reverseGeocode(pos.latitude, pos.longitude)
+        const labeled = await reverseGeocode(pos.latitude, pos.longitude)
+        // Keep device GPS precision — reverse geocode is only for the label
+        const loc: LocationResult = {
+          ...labeled,
+          latitude: pos.latitude,
+          longitude: pos.longitude,
+        }
         await loadForLocation(loc)
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Could not get your location'
@@ -607,12 +717,13 @@ export function useWeather() {
 
   const clearError = useCallback(() => setError(null), [])
 
-  // Initial load once
+  // Initial load once — prefer share link → exact home → last place → GPS
   useEffect(() => {
     if (initialLoadDone.current) return
     initialLoadDone.current = true
     const shared = parseShareParams()
     if (shared) void loadForLocation(shared)
+    else if (prefs.homeLocation) void loadForLocation(prefs.homeLocation)
     else if (prefs.lastLocation) void loadForLocation(prefs.lastLocation)
     else requestMyLocation()
     // Only on mount
@@ -669,8 +780,10 @@ export function useWeather() {
     resolvedTheme,
     density: prefs.density,
     favorites: prefs.favorites,
+    homeLocation: prefs.homeLocation ?? null,
     severeMode: prefs.severeMode,
     stormMode: prefs.stormMode,
+    simpleMode: prefs.simpleMode,
     notifyAlerts: prefs.notifyAlerts,
     severeActive,
     cloudSynced,
@@ -682,9 +795,13 @@ export function useWeather() {
     setDensity,
     setSevereMode,
     setStormMode,
+    setSimpleMode,
     setNotifyAlerts,
     toggleFavorite,
     isFavorite,
+    setHomeLocation,
+    isHome,
+    goHome,
     loadForLocation,
     requestMyLocation,
     /** @deprecated use requestMyLocation */

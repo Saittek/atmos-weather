@@ -1,7 +1,13 @@
 import type { WeatherData } from '../api/types'
 import type { Units } from './format'
 import { convertTemp, formatTemp, parseWeatherLocal } from './format'
-import { getWeatherInfo } from './weatherCodes'
+import {
+  displayOptsFromWeather,
+  effectiveWeatherCode,
+  getWeatherInfo,
+} from './weatherCodes'
+import { isDaytimeNow } from './daylight'
+import type { AirQualityData } from '../api/types'
 import { willIGetWet } from './wetSummary'
 
 /** Index of "today" in daily arrays when past_days may prepend history */
@@ -24,11 +30,20 @@ export function yesterdayDailyIndex(weather: WeatherData): number | null {
   return today > 0 ? today - 1 : null
 }
 
-export function weatherStory(weather: WeatherData, units: Units, placeName: string): string {
+export function weatherStory(
+  weather: WeatherData,
+  units: Units,
+  placeName: string,
+  air?: AirQualityData | null,
+): string {
   const ti = todayDailyIndex(weather)
   const d = weather.daily
   const c = weather.current
-  const info = getWeatherInfo(c.weather_code, c.is_day === 1)
+  const displayCode = effectiveWeatherCode(
+    c.weather_code,
+    displayOptsFromWeather(weather, air),
+  )
+  const info = getWeatherInfo(displayCode, isDaytimeNow(weather))
   const wet = willIGetWet(weather)
   const hi = formatTemp(d.temperature_2m_max[ti], units)
   const lo = formatTemp(d.temperature_2m_min[ti], units)

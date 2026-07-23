@@ -120,36 +120,65 @@ export async function unsubscribeWebPush(): Promise<void> {
 
 async function subscribeNativePush(): Promise<{ ok: boolean; reason?: string }> {
   try {
-    if (Notification.permission !== 'granted') {
-      const perm = await Notification.requestPermission()
-      if (perm !== 'granted') return { ok: false, reason: 'Permission denied' }
-    }
+    let remoteOk = false
 
-    // Capacitor Push Notifications (remote) — token stored for APNs/FCM later
+    // Capacitor Push Notifications (remote) — token stored for APNs send when secrets set
     try {
       const { PushNotifications } = await import('@capacitor/push-notifications')
       const perm = await PushNotifications.requestPermissions()
-      if (perm.receive !== 'granted') {
-        // Fall through to local notifications only
-      } else {
-        await PushNotifications.register()
-        PushNotifications.addListener('registration', (token) => {
-          if (!getToken() || !token?.value) return
+      if (perm.receive === 'granted') {
+        // Avoid duplicate listeners across re-subscribe
+        try {
+          await PushNotifications.removeAllListeners()
+        } catch {
+          /* ignore */
+        }
+        await PushNotifications.addListener('registration', (token) => {
+          if (!token?.value) return
+          const auth = getToken()
+          if (!auth) return
           void fetch(apiUrl('/api/push/device'), {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}) },
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${auth}`,
+            },
             body: JSON.stringify({
               token: token.value,
-              platform: /android/i.test(navigator.userAgent) ? 'android' : 'ios',
+              platform: isNativeApp() && /android/i.test(navigator.userAgent)
+                ? 'android'
+                : 'ios',
             }),
           }).catch(() => {})
         })
+        await PushNotifications.addListener('registrationError', (err) => {
+          console.warn('Solara APNs registration error', err)
+        })
+        await PushNotifications.addListener(
+          'pushNotificationActionPerformed',
+          (action) => {
+            const data = action.notification?.data as { url?: string } | undefined
+            const path = data?.url
+            if (path && typeof path === 'string') {
+              try {
+                const u = path.startsWith('http')
+                  ? new URL(path)
+                  : new URL(path, window.location.origin)
+                window.location.assign(u.pathname + u.search)
+              } catch {
+                /* ignore */
+              }
+            }
+          },
+        )
+        await PushNotifications.register()
+        remoteOk = true
       }
     } catch {
       /* plugin may be missing until cap sync */
     }
 
-    // Local notifications — works offline for immediate in-app triggers
+    // Local notifications — proximity threats + offline triggers
     try {
       const { LocalNotifications } = await import('@capacitor/local-notifications')
       await LocalNotifications.requestPermissions()
@@ -157,7 +186,20 @@ async function subscribeNativePush(): Promise<{ ok: boolean; reason?: string }> 
       /* optional */
     }
 
-    return { ok: true }
+    if (!getToken()) {
+      return {
+        ok: remoteOk,
+        reason: remoteOk
+          ? 'Signed out — device token not saved to server'
+          : 'Sign in to register for remote push',
+      }
+    }
+    return {
+      ok: true,
+      reason: remoteOk
+        ? undefined
+        : 'Local alerts on; remote APNs needs permission + Apple keys on server',
+    }
   } catch (e) {
     return {
       ok: false,

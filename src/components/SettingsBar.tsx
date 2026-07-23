@@ -11,16 +11,22 @@ interface Props {
   density: DensityMode
   severeMode: boolean
   stormMode: boolean
+  simpleMode?: boolean
   notifyAlerts: boolean
   isFavorite: boolean
   cloudSynced: boolean
+  hasHome?: boolean
+  isHome?: boolean
   onUnits: (u: Units) => void
   onTheme: (t: ThemeMode) => void
   onDensity: (d: DensityMode) => void
   onSevereMode: (v: boolean) => void
   onStormMode: (v: boolean) => void
+  onSimpleMode?: (v: boolean) => void
   onNotify: (v: boolean) => void
   onToggleFavorite: () => void
+  onGoHome?: () => void
+  onSetHome?: () => void
   onShare: () => void
   onRefresh: () => void
   onCloudSync: () => void
@@ -34,16 +40,22 @@ export function SettingsBar({
   density,
   severeMode,
   stormMode,
+  simpleMode,
   notifyAlerts,
   isFavorite,
   cloudSynced,
+  hasHome,
+  isHome,
   onUnits,
   onTheme,
   onDensity,
   onSevereMode,
   onStormMode,
+  onSimpleMode,
   onNotify,
   onToggleFavorite,
+  onGoHome,
+  onSetHome,
   onShare,
   onRefresh,
   onCloudSync,
@@ -123,6 +135,19 @@ export function SettingsBar({
       </div>
 
       <div className="settings-more-toggles">
+        {onSimpleMode && (
+          <label className="settings-more-row">
+            <input
+              type="checkbox"
+              checked={Boolean(simpleMode)}
+              onChange={(e) => onSimpleMode(e.target.checked)}
+            />
+            <span>
+              <strong>Simple mode</strong>
+              <em>Basics only — less scroll</em>
+            </span>
+          </label>
+        )}
         <label className="settings-more-row">
           <input
             type="checkbox"
@@ -156,6 +181,41 @@ export function SettingsBar({
             <em>Rain watch &amp; alerts</em>
           </span>
         </label>
+      </div>
+
+      <div className="settings-more-section">
+        <span className="settings-more-label">Home</span>
+        <div className="settings-home-actions">
+          {hasHome && onGoHome && (
+            <button
+              type="button"
+              className="chip-btn settings-more-action"
+              role="menuitem"
+              onClick={() => {
+                onGoHome()
+                setMoreOpen(false)
+              }}
+            >
+              🏠 Go to home
+            </button>
+          )}
+          {onSetHome && (
+            <button
+              type="button"
+              className="chip-btn settings-more-action"
+              role="menuitem"
+              onClick={() => {
+                onSetHome()
+                setMoreOpen(false)
+              }}
+            >
+              {isHome ? '🏡 Clear home for this place' : '🏠 Set this place as home'}
+            </button>
+          )}
+          {!hasHome && !onSetHome && (
+            <p className="settings-home-hint">Set home from the 🏠 Home panel or place card.</p>
+          )}
+        </div>
       </div>
 
       <button

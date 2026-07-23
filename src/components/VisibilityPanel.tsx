@@ -1,11 +1,18 @@
-import type { WeatherData } from '../api/types'
+import type { AirQualityData, WeatherData } from '../api/types'
 import type { Units } from '../utils/format'
 import { formatDistance, formatHour, parseWeatherLocal } from '../utils/format'
-import { getWeatherInfo } from '../utils/weatherCodes'
+import { isDaytimeNow } from '../utils/daylight'
+import {
+  displayOptsFromWeather,
+  effectiveWeatherCode,
+  getWeatherInfo,
+  WEATHER_CODE_SMOKE,
+} from '../utils/weatherCodes'
 
 interface Props {
   weather: WeatherData
   units: Units
+  air?: AirQualityData | null
 }
 
 function visLabel(m: number): string {
@@ -16,8 +23,8 @@ function visLabel(m: number): string {
   return 'Very poor'
 }
 
-/** Visibility + fog risk for drivers */
-export function VisibilityPanel({ weather, units }: Props) {
+/** Visibility + fog/smoke risk for drivers */
+export function VisibilityPanel({ weather, units, air = null }: Props) {
   const h = weather.hourly
   const tz = weather.timezone
   const now = Date.now()
@@ -42,13 +49,18 @@ export function VisibilityPanel({ weather, units }: Props) {
     }
   }
 
-  const foggy = weather.current.weather_code === 45 || weather.current.weather_code === 48
-  const info = getWeatherInfo(weather.current.weather_code, weather.current.is_day === 1)
+  const displayCode = effectiveWeatherCode(
+    weather.current.weather_code,
+    displayOptsFromWeather(weather, air),
+  )
+  const smoky = displayCode === WEATHER_CODE_SMOKE
+  const foggy = displayCode === 45 || displayCode === 48
+  const info = getWeatherInfo(displayCode, isDaytimeNow(weather))
 
   return (
     <section className="panel vis-panel">
       <div className="panel-header">
-        <h2>Visibility & fog</h2>
+        <h2>{smoky ? 'Visibility & smoke' : 'Visibility & fog'}</h2>
       </div>
       <div className="vis-main">
         <div>
@@ -58,7 +70,7 @@ export function VisibilityPanel({ weather, units }: Props) {
           </strong>
           <span className="muted">
             {nowVis != null ? visLabel(nowVis) : info.label}
-            {foggy ? ' · fog reported' : ''}
+            {smoky ? ' · smoke reported' : foggy ? ' · fog reported' : ''}
           </span>
         </div>
         <div>
@@ -76,7 +88,16 @@ export function VisibilityPanel({ weather, units }: Props) {
           <li key={n.t}>
             <span>{formatHour(n.t, tz)}</span>
             <span className={n.v < 2000 ? 'bad' : ''}>{formatDistance(n.v, units)}</span>
-            <span className="muted">{getWeatherInfo(n.code, true).label}</span>
+            <span className="muted">
+              {getWeatherInfo(
+                // Hourly rows: remap fog→smoke only when current air is smoky
+                // (hourly has no per-hour PM in this panel)
+                smoky && (n.code === 45 || n.code === 48)
+                  ? WEATHER_CODE_SMOKE
+                  : n.code,
+                true,
+              ).label}
+            </span>
           </li>
         ))}
       </ul>

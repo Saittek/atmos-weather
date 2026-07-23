@@ -1,4 +1,4 @@
-import type { WeatherData } from '../api/types'
+import type { AirQualityData, WeatherData } from '../api/types'
 import type { Units } from '../utils/format'
 import { formatPressure, formatTemp } from '../utils/format'
 import {
@@ -12,11 +12,12 @@ import { pressureTrend } from '../utils/weatherStory'
 interface Props {
   weather: WeatherData
   units: Units
+  air?: AirQualityData | null
 }
 
 /** Hazards + vs yesterday + pressure + dew point — core situational awareness */
-export function HazardBadges({ weather, units }: Props) {
-  const hazards = hazardBadges(weather, units)
+export function HazardBadges({ weather, units, air = null }: Props) {
+  const hazards = hazardBadges(weather, units, air)
   const vs = vsYesterday(weather, units)
   const pressure = pressureTrend(weather)
   const dew = currentDewPoint(weather)

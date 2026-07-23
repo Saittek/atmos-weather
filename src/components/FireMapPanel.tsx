@@ -7,7 +7,8 @@ import {
   useMap,
 } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
-import type { AirQualityData, WeatherData } from '../api/types'
+import type { AirQualityData, LocationResult, WeatherData } from '../api/types'
+import { HomeMapMarker } from './HomeMapMarker'
 import { fetchFiresNear, type FireHotspot } from '../api/fires'
 import {
   fetchSmokeGrid,
@@ -23,6 +24,7 @@ interface Props {
   placeName: string
   weather: WeatherData
   air: AirQualityData | null
+  homeLocation?: LocationResult | null
 }
 
 function MapFix() {
@@ -57,7 +59,14 @@ function Recenter({ lat, lon }: { lat: number; lon: number }) {
 }
 
 /** Dedicated fire & smoke map (NASA FIRMS + PM2.5 grid) */
-export function FireMapPanel({ lat, lon, placeName, weather, air }: Props) {
+export function FireMapPanel({
+  lat,
+  lon,
+  placeName,
+  weather,
+  air,
+  homeLocation = null,
+}: Props) {
   const [fires, setFires] = useState<FireHotspot[]>([])
   const [smoke, setSmoke] = useState<SmokePoint[]>([])
   const [loading, setLoading] = useState(true)
@@ -180,6 +189,8 @@ export function FireMapPanel({ lat, lon, placeName, weather, air }: Props) {
                 </Popup>
               </CircleMarker>
             ))}
+
+          <HomeMapMarker home={homeLocation} />
 
           <CircleMarker
             center={[lat, lon]}

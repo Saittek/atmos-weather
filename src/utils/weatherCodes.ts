@@ -1,3 +1,6 @@
+import type { AirQualityData, WeatherData } from '../api/types'
+import { parseWeatherLocal } from './format'
+
 export interface WeatherInfo {
   label: string
   icon: string
@@ -5,7 +8,141 @@ export interface WeatherInfo {
   gradient: string
 }
 
-/** WMO weather interpretation codes (Open-Meteo) */
+/**
+ * Solara extension: WMO skips 44 between overcast (3) and fog (45).
+ * We use 44 for wildfire/particle smoke so it is never labeled as fog.
+ */
+export const WEATHER_CODE_SMOKE = 44
+
+export type AirSmokeHint = {
+  pm2_5?: number | null
+  us_aqi?: number | null
+  european_aqi?: number | null
+} | null | undefined
+
+/** True when air quality points to smoke / haze particles, not water fog */
+export function isSmokeAtmosphere(air?: AirSmokeHint | AirQualityData | null): boolean {
+  if (!air) return false
+  const cur = 'current' in air && air.current ? air.current : (air as AirSmokeHint)
+  if (!cur) return false
+  const pm = cur.pm2_5
+  const aqi = cur.us_aqi ?? cur.european_aqi
+  // ~US AQI 100 / moderate-unhealthy particles — typical wildfire smoke signal
+  if (pm != null && Number.isFinite(pm) && pm >= 35) return true
+  if (aqi != null && Number.isFinite(aqi) && aqi >= 100) return true
+  return false
+}
+
+export function isFogWeatherCode(code: number): boolean {
+  return code === 45 || code === 48
+}
+
+export function isSmokeWeatherCode(code: number): boolean {
+  return code === WEATHER_CODE_SMOKE
+}
+
+/**
+ * Remap raw model/station codes for display:
+ * - ECCC/model may call smoke “fog” (45); if air is smoky, show smoke (44)
+ * - Only keep fog when humidity is high and particles are not elevated
+ */
+export function effectiveWeatherCode(
+  code: number,
+  opts?: {
+    air?: AirSmokeHint | AirQualityData | null
+    /** 0–100 relative humidity; fog needs moist air */
+    humidity?: number | null
+    /** metres; used when particles are high but code is not fog */
+    visibilityM?: number | null
+  },
+): number {
+  const air = opts?.air
+  const smoky = isSmokeAtmosphere(air)
+  const rh = opts?.humidity
+  const vis = opts?.visibilityM
+
+  // Explicit smoke code (ECCC icon 44, etc.)
+  if (code === WEATHER_CODE_SMOKE) return WEATHER_CODE_SMOKE
+
+  // Model “fog” (45): only call it fog when air is moist and particles are low.
+  // Smoky PM + fog code → Smoky (never “Foggy”).
+  if (code === 45) {
+    if (smoky) return WEATHER_CODE_SMOKE
+    // Dry air rarely supports true fog — if particles are borderline high, prefer smoke
+    const pm =
+      air && 'current' in air && air.current
+        ? air.current.pm2_5
+        : (air as AirSmokeHint | undefined)?.pm2_5
+    if (
+      rh != null &&
+      Number.isFinite(rh) &&
+      rh < 75 &&
+      pm != null &&
+      Number.isFinite(pm) &&
+      pm >= 20
+    ) {
+      return WEATHER_CODE_SMOKE
+    }
+    return 45
+  }
+
+  // Rime / freezing fog is real fog ice — keep unless smoke is clear
+  if (code === 48) {
+    if (smoky && (rh == null || rh < 88)) return WEATHER_CODE_SMOKE
+    return 48
+  }
+
+  // No fog code, but thick air + particles → smoky (not foggy)
+  if (
+    smoky &&
+    vis != null &&
+    Number.isFinite(vis) &&
+    vis < 5000 &&
+    code <= 3
+  ) {
+    return WEATHER_CODE_SMOKE
+  }
+
+  return code
+}
+
+/** Label/icon for a code after smoke-vs-fog correction */
+export function getDisplayWeatherInfo(
+  code: number,
+  isDay = true,
+  opts?: Parameters<typeof effectiveWeatherCode>[1],
+): WeatherInfo {
+  return getWeatherInfo(effectiveWeatherCode(code, opts), isDay)
+}
+
+/** Helpers for current conditions from full weather + air payloads */
+export function displayOptsFromWeather(
+  weather: WeatherData,
+  air?: AirQualityData | null,
+): Parameters<typeof effectiveWeatherCode>[1] {
+  const c = weather.current
+  let visibilityM: number | null = null
+  const h = weather.hourly
+  if (h?.visibility?.length && h.time?.length) {
+    visibilityM = h.visibility[0] ?? null
+    const now = Date.now()
+    for (let i = 0; i < h.time.length; i++) {
+      const t = parseWeatherLocal(h.time[i], weather.timezone)
+      if (!Number.isFinite(t)) continue
+      if (t + 45 * 60_000 >= now) {
+        visibilityM = h.visibility[i] ?? visibilityM
+        break
+      }
+    }
+  }
+  return {
+    air,
+    humidity: c.relative_humidity_2m,
+    visibilityM,
+  }
+}
+
+/** WMO weather interpretation codes (Open-Meteo) + Solara smoke (44) */
 export function getWeatherInfo(code: number, isDay = true): WeatherInfo {
   const night = !isDay
 
@@ -39,6 +176,13 @@ export function getWeatherInfo(code: number, isDay = true): WeatherInfo {
       icon: '☁️',
       description: 'Overcast',
       gradient: 'linear-gradient(160deg, #2a3340 0%, #4a5568 50%, #3d4654 100%)',
+    },
+    // Solara smoke (not WMO) — never label as fog
+    44: {
+      label: 'Smoky',
+      icon: '💨',
+      description: 'Smoke in the air',
+      gradient: 'linear-gradient(160deg, #3d3428 0%, #6b5a42 45%, #4a4030 100%)',
     },
     45: {
       label: 'Foggy',

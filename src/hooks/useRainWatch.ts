@@ -47,6 +47,7 @@ export function useRainWatch(
   favorites: LocationResult[],
   enabled: boolean,
   currentLoc: LocationResult | null,
+  homeLoc?: LocationResult | null,
 ) {
   const [snapshots, setSnapshots] = useState<LocationSnapshot[]>([])
   const [loading, setLoading] = useState(false)
@@ -65,6 +66,8 @@ export function useRainWatch(
     if (typeof document !== 'undefined' && document.hidden) return
 
     const map = new Map<string, LocationResult>()
+    // Exact home always watched when set
+    if (homeLoc) map.set(`home:${locationKey(homeLoc)}`, homeLoc)
     // Cap network fan-out on mobile
     const favCap = mobile ? 2 : 6
     for (const p of favorites.slice(0, favCap)) {
@@ -72,7 +75,7 @@ export function useRainWatch(
     }
     // Skip re-fetching current location on mobile — main weather already covers it
     if (currentLoc && !mobile) map.set(locationKey(currentLoc), currentLoc)
-    else if (currentLoc && mobile && !favorites.length) {
+    else if (currentLoc && mobile && !favorites.length && !homeLoc) {
       map.set(locationKey(currentLoc), currentLoc)
     }
     const places = [...map.values()]
@@ -120,7 +123,7 @@ export function useRainWatch(
     } finally {
       setLoading(false)
     }
-  }, [favorites, enabled, currentLoc])
+  }, [favorites, enabled, currentLoc, homeLoc])
 
   const currentLat = currentLoc?.latitude
   const currentLon = currentLoc?.longitude

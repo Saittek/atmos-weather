@@ -41,6 +41,7 @@ export function DailyForecast({ weather, units }: Props) {
       </div>
       <ul className="daily-list">
         {d.time.map((day, i) => {
+          // past_days=1 prepends yesterday — keep it, but label from calendar date
           const info = getWeatherInfo(d.weather_code[i], true)
           const lo = convertTemp(d.temperature_2m_min[i], units)
           const hi = convertTemp(d.temperature_2m_max[i], units)
@@ -48,23 +49,30 @@ export function DailyForecast({ weather, units }: Props) {
           const width = Math.max(((hi - lo) / span) * 100, 6)
           const isOpen = open === i
           const pop = d.precipitation_probability_max[i] ?? 0
+          const dayKey = day.slice(0, 10)
+          const weekday = formatWeekday(day, weather.timezone)
+          const relLabel =
+            i === todayIdx
+              ? 'Today'
+              : i === todayIdx + 1
+                ? 'Tomorrow'
+                : i === todayIdx - 1
+                  ? 'Yesterday'
+                  : null
 
           return (
-            <li key={day} className={isOpen ? 'open' : ''}>
+            <li key={dayKey || `${day}-${i}`} className={isOpen ? 'open' : ''}>
               <button
                 type="button"
                 className="daily-row"
                 onClick={() => setOpen(isOpen ? null : i)}
                 aria-expanded={isOpen}
               >
-                <span className="d-day">
-                  {i === todayIdx
-                    ? 'Today'
-                    : i === todayIdx + 1
-                      ? 'Tomorrow'
-                      : i === todayIdx - 1
-                        ? 'Yesterday'
-                        : formatWeekday(day, weather.timezone)}
+                <span className="d-day" title={formatDay(day, weather.timezone)}>
+                  {relLabel ?? weekday}
+                  {relLabel ? (
+                    <span className="d-day-sub">{weekday}</span>
+                  ) : null}
                 </span>
                 <span className="d-icon" title={info.label}>
                   <WeatherIcon3D code={d.weather_code[i]} isDay size="sm" forceAnimate />

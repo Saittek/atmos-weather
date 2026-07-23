@@ -11,6 +11,7 @@ import type {
   WeatherData,
 } from './types'
 import { filterActiveAlerts } from '../utils/activeAlerts'
+import { isDaytimeNow } from '../utils/daylight'
 import { blendWeatherData, pickModels, detectForecastRegion } from './forecastModels'
 import { fetchNearestEcccCityPage, mergeEcccIntoWeather } from './ecccCityPage'
 
@@ -168,7 +169,8 @@ function buildForecastParams(
     params.set('minutely_15', 'precipitation,weather_code,wind_speed_10m,temperature_2m')
     params.set('forecast_minutely_15', lite ? '12' : '16')
   } else {
-    params.set('forecast_days', lite ? '10' : '14')
+    // Always request 14 daily days (small payload); lite still trims hourly hours
+    params.set('forecast_days', '14')
     params.set('forecast_hours', lite ? '72' : '120')
     params.set('past_days', '1')
     // 15-min on long fetch too when single-model (global best_match)
@@ -393,10 +395,13 @@ export async function fetchAirQuality(
       ].join(','),
       timezone: 'auto',
     })
-    // Hourly AQI/pollen is only used by deeper panels (desktop)
+    // Hourly pollen for allergy peaks (lite still gets short horizon)
     if (!lite) {
       params.set('hourly', `us_aqi,pm10,pm2_5,${pollen}`)
       params.set('forecast_days', '3')
+    } else {
+      params.set('hourly', pollen)
+      params.set('forecast_days', '2')
     }
     const res = await fetch(`${AIR}?${params}`)
     if (!res.ok) {
@@ -484,7 +489,7 @@ export async function fetchLocationSnapshot(
       location: loc,
       temperature: w.current.temperature_2m,
       weatherCode: w.current.weather_code,
-      isDay: w.current.is_day === 1,
+      isDay: isDaytimeNow(w),
       precipNextHour,
       precipSoon,
       rainStartsInMin,
@@ -1011,6 +1016,127 @@ export function shareUrl(loc: LocationResult): string {
   if (loc.admin1) u.searchParams.set('region', loc.admin1)
   if (loc.country) u.searchParams.set('country', loc.country)
   return u.toString()
+}
+
+/** Storm-chaser share link always points at the /chase desk */
+export function shareChaseUrl(loc: LocationResult): string {
+  const u = new URL(window.location.origin + '/chase')
+  u.searchParams.set('lat', loc.latitude.toFixed(4))
+  u.searchParams.set('lon', loc.longitude.toFixed(4))
+  u.searchParams.set('name', loc.name)
+  if (loc.admin1) u.searchParams.set('region', loc.admin1)
+  if (loc.country) u.searchParams.set('country', loc.country)
+  return u.toString()
+}
+
+/** Open-Meteo instability fields for storm desk (CAPE / CIN / LI) */
+export interface StormEnvHourly {
+  time: string[]
+  cape: (number | null)[]
+  cin: (number | null)[]
+  liftedIndex: (number | null)[]
+}
+
+export interface StormEnvSnapshot {
+  now: {
+    cape: number | null
+    cin: number | null
+    liftedIndex: number | null
+  }
+  peak12h: {
+    cape: number | null
+    capeTime: string | null
+    cinMin: number | null
+    liMin: number | null
+  }
+  hourly: StormEnvHourly
+  fetchedAt: number
+}
+
+const stormEnvCache = new Map<string, StormEnvSnapshot>()
+const STORM_ENV_TTL_MS = 120_000
+
+/**
+ * Fetch CAPE, convective inhibition, and lifted index for storm environment analysis.
+ * Separate from main forecast to keep mobile payloads lean.
+ */
+export async function fetchStormEnv(lat: number, lon: number): Promise<StormEnvSnapshot | null> {
+  const key = cacheKey(lat, lon, 'stormenv')
+  const hit = stormEnvCache.get(key)
+  if (hit && Date.now() - hit.fetchedAt < STORM_ENV_TTL_MS) return hit
+
+  try {
+    const params = new URLSearchParams({
+      latitude: String(lat),
+      longitude: String(lon),
+      hourly: 'cape,convective_inhibition,lifted_index',
+      forecast_hours: '24',
+      timezone: 'auto',
+    })
+    const res = await fetch(`${FORECAST}?${params}`)
+    if (!res.ok) return hit ?? null
+    const data = (await res.json()) as {
+      hourly?: {
+        time?: string[]
+        cape?: (number | null)[]
+        convective_inhibition?: (number | null)[]
+        lifted_index?: (number | null)[]
+      }
+    }
+    const times = data.hourly?.time ?? []
+    if (!times.length) return hit ?? null
+
+    const cape = data.hourly?.cape ?? times.map(() => null)
+    const cin = data.hourly?.convective_inhibition ?? times.map(() => null)
+    const li = data.hourly?.lifted_index ?? times.map(() => null)
+
+    // Prefer first hour closest to now (index 0 is often current model hour)
+    const nowIdx = 0
+    let peakCape: number | null = null
+    let peakCapeTime: string | null = null
+    let cinMin: number | null = null
+    let liMin: number | null = null
+    const horizon = Math.min(times.length, 12)
+    for (let i = 0; i < horizon; i++) {
+      const c = cape[i]
+      if (c != null && Number.isFinite(c) && (peakCape == null || c > peakCape)) {
+        peakCape = c
+        peakCapeTime = times[i] ?? null
+      }
+      const cinV = cin[i]
+      if (cinV != null && Number.isFinite(cinV) && (cinMin == null || cinV < cinMin)) {
+        cinMin = cinV
+      }
+      const liV = li[i]
+      if (liV != null && Number.isFinite(liV) && (liMin == null || liV < liMin)) {
+        liMin = liV
+      }
+    }
+
+    const snap: StormEnvSnapshot = {
+      now: {
+        cape: cape[nowIdx] != null && Number.isFinite(cape[nowIdx]!) ? cape[nowIdx]! : null,
+        cin: cin[nowIdx] != null && Number.isFinite(cin[nowIdx]!) ? cin[nowIdx]! : null,
+        liftedIndex: li[nowIdx] != null && Number.isFinite(li[nowIdx]!) ? li[nowIdx]! : null,
+      },
+      peak12h: {
+        cape: peakCape,
+        capeTime: peakCapeTime,
+        cinMin,
+        liMin,
+      },
+      hourly: { time: times, cape, cin, liftedIndex: li },
+      fetchedAt: Date.now(),
+    }
+    if (stormEnvCache.size > 32) {
+      const first = stormEnvCache.keys().next().value
+      if (first != null) stormEnvCache.delete(first)
+    }
+    stormEnvCache.set(key, snap)
+    return snap
+  } catch {
+    return hit ?? null
+  }
 }
 
 export function parseShareParams(): LocationResult | null {

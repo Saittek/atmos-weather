@@ -1,6 +1,7 @@
 import type { WeatherData } from '../api/types'
 import type { Units } from './format'
 import { convertSpeed, convertTemp, parseWeatherLocal } from './format'
+import { isDaytimeNow } from './daylight'
 import { getWeatherInfo } from './weatherCodes'
 
 export interface ActivityTip {
@@ -62,7 +63,7 @@ export function activityTips(weather: WeatherData, units: Units): ActivityTip[] 
     ] ?? 0
   const code = weather.current.weather_code
   const storm = code >= 95
-  const info = getWeatherInfo(code, weather.current.is_day === 1)
+  const info = getWeatherInfo(code, isDaytimeNow(weather))
 
   const mildLow = units === 'metric' ? 8 : 46
   const mildHigh = units === 'metric' ? 28 : 82

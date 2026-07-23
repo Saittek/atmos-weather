@@ -1,9 +1,22 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
-import type { LocationResult, WeatherData } from '../api/types'
+import type { AirQualityData, LocationResult, WeatherData } from '../api/types'
 import { fetchClimateNormal, formatLocationLabel } from '../api/weather'
 import type { Units } from '../utils/format'
-import { formatSpeed, formatTemp, formatTime } from '../utils/format'
-import { getWeatherInfo } from '../utils/weatherCodes'
+import {
+  formatSpeed,
+  formatTemp,
+  formatTime,
+  parseWeatherLocal,
+} from '../utils/format'
+import {
+  aqiLabel,
+  displayOptsFromWeather,
+  effectiveWeatherCode,
+  getWeatherInfo,
+  uvLabel,
+  windDirection,
+} from '../utils/weatherCodes'
+import { isDaytimeNow } from '../utils/daylight'
 import { nextPrecipLabel, todayDailyIndex } from '../utils/weatherStory'
 import { vsNormalLine } from '../utils/severeTimeline'
 import { formatUpdatedAgo } from '../utils/relativeTime'
@@ -16,10 +29,13 @@ interface Props {
   units: Units
   isFavorite?: boolean
   onToggleFavorite?: () => void
+  isHome?: boolean
+  onSetHome?: () => void
   updatedAt?: number | null
   refreshing?: boolean
   alertCount?: number
   offline?: boolean
+  air?: AirQualityData | null
 }
 
 export function CurrentWeather({
@@ -28,18 +44,46 @@ export function CurrentWeather({
   units,
   isFavorite,
   onToggleFavorite,
+  isHome,
+  onSetHome,
   updatedAt,
   refreshing,
   alertCount = 0,
   offline = false,
+  air = null,
 }: Props) {
   const c = weather.current
-  const info = getWeatherInfo(c.weather_code, c.is_day === 1)
+  const condOpts = displayOptsFromWeather(weather, air)
+  const displayCode = effectiveWeatherCode(c.weather_code, condOpts)
+  // Sunrise/sunset at this location — never trust API is_day alone
+  const isDay = isDaytimeNow(weather)
+  const info = getWeatherInfo(displayCode, isDay)
   const ti = todayDailyIndex(weather)
   const today = weather.daily
   const high = today.temperature_2m_max[ti]
   const low = today.temperature_2m_min[ti]
   const rainLabel = nextPrecipLabel(weather)
+  const h = weather.hourly
+  const now = Date.now()
+  const hIdx = Math.max(
+    0,
+    h.time.findIndex(
+      (t) => parseWeatherLocal(t, weather.timezone) >= now - 30 * 60_000,
+    ),
+  )
+  const uv = h.uv_index[hIdx] ?? today.uv_index_max[ti] ?? 0
+  const uvInfo = uvLabel(uv)
+  const aqi = air?.current?.us_aqi ?? air?.current?.european_aqi
+  const aqiInfo = aqi != null ? aqiLabel(aqi) : null
+  const sunrise = today.sunrise[ti]
+  const sunset = today.sunset[ti]
+  const feelDiff = c.apparent_temperature - c.temperature_2m
+  const feelNote =
+    Math.abs(feelDiff) >= 2
+      ? feelDiff > 0
+        ? 'warmer than air'
+        : 'cooler than air'
+      : null
   const cardRef = useRef<HTMLElement>(null)
   const [vsNormal, setVsNormal] = useState<string | null>(null)
   const [nowTick, setNowTick] = useState(() => Date.now())
@@ -102,7 +146,25 @@ export function CurrentWeather({
         <div className="current-place">
           <p className="hero-kicker">Right now</p>
           <div className="place-row">
-            <h1 className="place-name">{location.name}</h1>
+            <h1 className="place-name">
+              {isHome ? '🏠 ' : ''}
+              {location.name}
+            </h1>
+            {onSetHome && (
+              <button
+                type="button"
+                className={`fav-inline home-inline ${isHome ? 'on' : ''}`}
+                onClick={onSetHome}
+                title={
+                  isHome
+                    ? 'This is your exact home pin'
+                    : 'Set this place as exact home'
+                }
+                aria-label={isHome ? 'Home location' : 'Set as home'}
+              >
+                {isHome ? '🏡' : '🏠'}
+              </button>
+            )}
             {onToggleFavorite && (
               <button
                 type="button"
@@ -118,6 +180,7 @@ export function CurrentWeather({
           <p className="place-meta">
             {[location.admin1, location.country].filter(Boolean).join(' · ') ||
               formatLocationLabel(location)}
+            {` · ${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}`}
           </p>
           <p className="local-time">
             Local {formatTime(c.time, weather.timezone)}
@@ -134,8 +197,8 @@ export function CurrentWeather({
 
         <div className="current-3d-wrap" title={info.description}>
           <WeatherIcon3D
-            code={c.weather_code}
-            isDay={c.is_day === 1}
+            code={displayCode}
+            isDay={isDay}
             size={mobile ? 'lg' : 'xl'}
             forceAnimate
           />
@@ -149,6 +212,7 @@ export function CurrentWeather({
             <span className="condition">{info.label}</span>
             <span className="feels">
               Feels like {formatTemp(c.apparent_temperature, units)}
+              {feelNote ? ` · ${feelNote}` : ''}
             </span>
             <span className="hi-lo">
               H {formatTemp(high, units)} · L {formatTemp(low, units)}
@@ -165,8 +229,26 @@ export function CurrentWeather({
             </span>
           )}
           {rainLabel && <span className="current-chip rain">{rainLabel}</span>}
-          <span className="current-chip">{formatSpeed(c.wind_speed_10m, units)}</span>
+          <span className="current-chip">
+            {formatSpeed(c.wind_speed_10m, units)} {windDirection(c.wind_direction_10m)}
+          </span>
           <span className="current-chip">{c.relative_humidity_2m}% humidity</span>
+          {uv >= 0.5 && (
+            <span className="current-chip" style={{ borderColor: uvInfo.color }}>
+              UV {uv.toFixed(0)} · {uvInfo.label}
+            </span>
+          )}
+          {aqiInfo && aqi != null && (
+            <span className="current-chip" style={{ borderColor: aqiInfo.color }}>
+              AQI {Math.round(aqi)} · {aqiInfo.label}
+            </span>
+          )}
+          {sunrise && sunset && (
+            <span className="current-chip">
+              ☀ {formatTime(sunrise, weather.timezone)} ·{' '}
+              {formatTime(sunset, weather.timezone)}
+            </span>
+          )}
         </div>
       </div>
     </section>

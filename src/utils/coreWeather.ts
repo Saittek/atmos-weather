@@ -1,13 +1,20 @@
-import type { WeatherData } from '../api/types'
+import type { AirQualityData, WeatherData } from '../api/types'
 import type { Units } from './format'
 import {
   convertTemp,
   formatPrecip,
   formatSpeed,
   formatTemp,
+  formatWeekday,
   parseWeatherLocal,
 } from './format'
-import { getWeatherInfo } from './weatherCodes'
+import {
+  displayOptsFromWeather,
+  effectiveWeatherCode,
+  getWeatherInfo,
+  isSmokeAtmosphere,
+  WEATHER_CODE_SMOKE,
+} from './weatherCodes'
 import { todayDailyIndex, yesterdayDailyIndex } from './weatherStory'
 
 export type DayPart = 'night' | 'morning' | 'afternoon' | 'evening'
@@ -182,7 +189,11 @@ export function todayDayParts(weather: WeatherData): DayPartSummary[] {
 }
 
 /** Actionable hazard chips from current + daily */
-export function hazardBadges(weather: WeatherData, units: Units): HazardBadge[] {
+export function hazardBadges(
+  weather: WeatherData,
+  units: Units,
+  air?: AirQualityData | null,
+): HazardBadge[] {
   const c = weather.current
   const ti = todayDailyIndex(weather)
   const d = weather.daily
@@ -191,6 +202,8 @@ export function hazardBadges(weather: WeatherData, units: Units): HazardBadge[] 
   const feels = c.apparent_temperature
   const wind = c.wind_speed_10m
   const gust = c.wind_gusts_10m
+  const condCode = effectiveWeatherCode(c.weather_code, displayOptsFromWeather(weather, air))
+  const smoky = condCode === WEATHER_CODE_SMOKE || isSmokeAtmosphere(air)
   const uvNow = (() => {
     const h = weather.hourly
     const now = Date.now()
@@ -250,19 +263,35 @@ export function hazardBadges(weather: WeatherData, units: Units): HazardBadge[] 
     })
   }
 
-  // Visibility / fog
-  if (vis != null && vis < 2000) {
+  // Visibility — smoke vs true fog (never call smoke “fog”)
+  const visDetail =
+    vis != null
+      ? `~${vis < 1000 ? `${Math.round(vis)} m` : `${(vis / 1000).toFixed(1)} km`}`
+      : 'Reduced visibility'
+  if (smoky && ((vis != null && vis < 5000) || condCode === WEATHER_CODE_SMOKE)) {
     badges.push({
-      id: 'fog',
-      label: vis < 500 ? 'Dense fog' : 'Low visibility',
-      detail: `~${vis < 1000 ? `${Math.round(vis)} m` : `${(vis / 1000).toFixed(1)} km`}`,
+      id: 'smoke',
+      label: vis != null && vis < 1000 ? 'Dense smoke' : 'Smoky',
+      detail: visDetail,
+      level: vis != null && vis < 1000 ? 'warn' : 'watch',
+    })
+  } else if (vis != null && vis < 2000) {
+    const fogCode = condCode === 45 || condCode === 48
+    badges.push({
+      id: fogCode ? 'fog' : 'vis',
+      label: fogCode
+        ? vis < 500
+          ? 'Dense fog'
+          : 'Foggy'
+        : 'Low visibility',
+      detail: visDetail,
       level: vis < 500 ? 'warn' : 'watch',
     })
-  } else if (c.weather_code === 45 || c.weather_code === 48) {
+  } else if (condCode === 45 || condCode === 48) {
     badges.push({
       id: 'fog',
-      label: 'Fog',
-      detail: 'Reduced visibility',
+      label: condCode === 48 ? 'Icy fog' : 'Fog',
+      detail: 'Water fog — reduced visibility',
       level: 'watch',
     })
   }
@@ -347,10 +376,12 @@ export function weekStrip(weather: WeatherData): WeekDayChip[] {
   for (let i = ti; i < d.time.length && chips.length < 7; i++) {
     chips.push({
       date: d.time[i],
-      weekday: i === ti ? 'Today' : new Date(d.time[i] + 'T12:00:00').toLocaleDateString(undefined, {
-        weekday: 'short',
-        timeZone: weather.timezone,
-      }),
+      weekday:
+        i === ti
+          ? 'Today'
+          : i === ti + 1
+            ? 'Tomorrow'
+            : formatWeekday(d.time[i], weather.timezone),
       code: d.weather_code[i],
       high: d.temperature_2m_max[i],
       low: d.temperature_2m_min[i],

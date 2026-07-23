@@ -1,6 +1,19 @@
+/**
+ * Horizontal hourly strip — Apple / AccuWeather style:
+ * time · icon · temp · precip bar · PoP · light wind when elevated
+ */
 import type { WeatherData } from '../api/types'
 import type { Units } from '../utils/format'
-import { formatHour, formatTemp, convertTemp, parseWeatherLocal } from '../utils/format'
+import {
+  convertTemp,
+  formatHour,
+  formatPrecipAmount,
+  formatSpeed,
+  formatTemp,
+  hasPrecipMm,
+  parseWeatherLocal,
+} from '../utils/format'
+import { isSunUpAt } from '../utils/daylight'
 import { getWeatherInfo } from '../utils/weatherCodes'
 import { WeatherIcon3D } from './WeatherIcon3D'
 
@@ -29,10 +42,10 @@ export function HourlyForecast({ weather, units }: Props) {
     (t) => parseWeatherLocal(t, timezone) >= now - 30 * 60 * 1000,
   )
   const idx = start < 0 ? 0 : start
-  // Fewer DOM cards on phones → smoother scroll
   const mobile =
     typeof window !== 'undefined' && window.matchMedia('(max-width: 720px)').matches
-  const count = mobile ? 16 : 48
+  // Competitors typically show 24–48h scroll
+  const count = mobile ? 24 : 48
   const items = Array.from({ length: count }, (_, i) => i + idx).filter(
     (i) => i < hourly.time.length,
   )
@@ -41,6 +54,10 @@ export function HourlyForecast({ weather, units }: Props) {
   const minT = Math.min(...temps)
   const maxT = Math.max(...temps)
   const range = Math.max(maxT - minT, 1)
+  const maxPrecip = Math.max(
+    0.3,
+    ...items.map((i) => hourly.precipitation[i] ?? 0),
+  )
 
   const endIso = items.length ? hourly.time[items[items.length - 1]] : null
 
@@ -51,21 +68,34 @@ export function HourlyForecast({ weather, units }: Props) {
         <span className="panel-hint">
           {endIso
             ? `${hourLabel(hourly.time[idx], timezone, true)} → ${hourLabel(endIso, timezone, false)}`
-            : 'Scroll for more →'}
+            : 'Scroll →'}
         </span>
       </div>
-      <div className="hourly-scroll">
+      <div className="hourly-scroll" role="list">
         {items.map((i) => {
           const t = hourly.temperature_2m[i]
           const code = hourly.weather_code[i]
-          const isDay = hourly.is_day[i] === 1
+          const hourMs = parseWeatherLocal(hourly.time[i], timezone)
+          const isDay = isSunUpAt(weather, hourMs)
           const info = getWeatherInfo(code, isDay)
           const pop = hourly.precipitation_probability[i] ?? 0
+          const precip = hourly.precipitation[i] ?? 0
+          const gust = hourly.wind_gusts_10m[i] ?? 0
+          const feel = hourly.apparent_temperature[i]
           const tempN = convertTemp(t, units)
-          const barH = 20 + ((tempN - minT) / range) * 48
+          const barH = 16 + ((tempN - minT) / range) * 44
+          const precipH = hasPrecipMm(precip)
+            ? Math.max(4, Math.round((precip / maxPrecip) * 28))
+            : 0
+          const wet = pop >= 30 || hasPrecipMm(precip)
 
           return (
-            <div className="hourly-card" key={hourly.time[i]}>
+            <div
+              className={`hourly-card ${wet ? 'is-wet' : ''} ${i === idx ? 'is-now' : ''}`}
+              key={hourly.time[i]}
+              role="listitem"
+              title={`${hourLabel(hourly.time[i], timezone, i === idx)}: ${formatTemp(t, units)} (feels ${formatTemp(feel, units)}) · ${info.label}${pop ? ` · ${pop}%` : ''}${hasPrecipMm(precip) ? ` · ${formatPrecipAmount(precip, units)}` : ''}${gust >= 40 ? ` · gusts ${formatSpeed(gust, units)}` : ''}`}
+            >
               <span className="h-time">
                 {hourLabel(hourly.time[i], timezone, i === idx)}
               </span>
@@ -73,17 +103,35 @@ export function HourlyForecast({ weather, units }: Props) {
                 <WeatherIcon3D code={code} isDay={isDay} size="sm" forceAnimate />
               </span>
               <span className="h-temp">{formatTemp(t, units)}</span>
-              <div className="h-bar-wrap" aria-hidden>
+              <div className="h-temp-track" aria-hidden>
                 <div className="h-bar" style={{ height: `${barH}px` }} />
               </div>
+              <div className="h-precip-col" aria-hidden>
+                {precipH > 0 ? (
+                  <div className="h-precip-bar" style={{ height: `${precipH}px` }} />
+                ) : (
+                  <div className="h-precip-empty" />
+                )}
+              </div>
               <span className={`h-pop ${pop >= 30 ? 'wet' : ''}`}>
-                {pop > 0 ? `${pop}%` : '—'}
+                {pop > 0 ? `${Math.round(pop)}%` : '—'}
               </span>
-              <span className="h-label">rain</span>
+              {gust >= 45 ? (
+                <span className="h-wind">{formatSpeed(gust, units)}</span>
+              ) : (
+                <span className="h-wind muted">
+                  {hasPrecipMm(precip) ? formatPrecipAmount(precip, units) : ''}
+                </span>
+              )}
             </div>
           )
         })}
       </div>
+      <p className="hourly-legend">
+        <span>Temp bars</span>
+        <span className="hourly-legend-rain">Rain amount</span>
+        <span>% chance</span>
+      </p>
     </section>
   )
 }

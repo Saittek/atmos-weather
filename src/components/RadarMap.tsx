@@ -19,14 +19,24 @@ import {
   defaultSourceForLocation,
   prefersMapboxBasemap,
   usesChaserColors,
+  isNexradMosaicRegion,
   RADAR_SOURCES,
   type RadarFrame,
   type RadarSourceId,
 } from '../api/radar'
 import { formatRadarTime } from '../utils/format'
 import type { Units } from '../utils/format'
+import type { LocationResult } from '../api/types'
+import type { StormWarning } from '../api/severeLayers'
 import { MapOverlays, OVERLAY_OPTIONS, type OverlayMode } from './MapOverlays'
 import { FireSmokeLayers } from './FireSmokeLayers'
+import { HomeMapMarker } from './HomeMapMarker'
+import {
+  SevereMapLayers,
+  type MapFocusRequest,
+  type SevereLayerStats,
+  type SevereLayerToggles,
+} from './SevereMapLayers'
 import { isConstrainedDevice as detectConstrained } from '../utils/device'
 
 interface Props {
@@ -37,6 +47,14 @@ interface Props {
   severeMode?: boolean
   mapId?: string
   pageMode?: boolean
+  /** Default-on severe overlays (Storm Chasers desk) */
+  chaserOverlays?: boolean
+  /** Fly map to threat */
+  focusRequest?: MapFocusRequest | null
+  /** Optional preloaded warning polygons */
+  threatPolygons?: StormWarning[] | null
+  /** Exact home pin on the map */
+  homeLocation?: LocationResult | null
 }
 
 type Basemap = 'dark' | 'street' | 'sat' | 'mapbox_dark' | 'mapbox_streets' | 'mapbox_sat'
@@ -419,6 +437,10 @@ export function RadarMap({
   severeMode,
   mapId = 'radar-map',
   pageMode = false,
+  chaserOverlays = false,
+  focusRequest = null,
+  threatPolygons = null,
+  homeLocation = null,
 }: Props) {
   void _units
   const lite = useMemo(() => isConstrainedDevice(), [])
@@ -450,6 +472,16 @@ export function RadarMap({
   const wrapRef = useRef<HTMLElement>(null)
   /** Remember play intent across tab hide / off-screen */
   const wantPlayRef = useRef(playing)
+
+  const usRegion = isNexradMosaicRegion(lat, lon)
+  const [severeToggles, setSevereToggles] = useState<SevereLayerToggles>(() => ({
+    warnings: chaserOverlays || Boolean(severeMode),
+    reports: chaserOverlays || Boolean(severeMode),
+    outlook: chaserOverlays,
+    velocity: false,
+  }))
+  const [severeStats, setSevereStats] = useState<SevereLayerStats | null>(null)
+  const onSevereStats = useCallback((s: SevereLayerStats) => setSevereStats(s), [])
 
   const meta = getSourceMeta(sourceId)
   const base = BASEMAPS[basemap] ?? BASEMAPS.dark
@@ -763,6 +795,22 @@ export function RadarMap({
                 showSmoke={false}
               />
 
+              {(severeToggles.warnings ||
+                severeToggles.reports ||
+                severeToggles.outlook ||
+                severeToggles.velocity ||
+                focusRequest) && (
+                <SevereMapLayers
+                  lat={lat}
+                  lon={lon}
+                  toggles={severeToggles}
+                  wide={pageMode || chaserOverlays}
+                  onStats={onSevereStats}
+                  focus={focusRequest}
+                  externalWarnings={threatPolygons}
+                />
+              )}
+
               <CircleMarker
                 center={[lat, lon]}
                 radius={7}
@@ -775,6 +823,7 @@ export function RadarMap({
               >
                 <Popup>{placeName}</Popup>
               </CircleMarker>
+              <HomeMapMarker home={homeLocation} />
               <MapRecenter lat={lat} lon={lon} />
               <MapSizeFix />
             </MapContainer>
@@ -932,6 +981,51 @@ export function RadarMap({
             />
             🔥 Fires
           </label>
+
+          <label className="toggle" title="NWS storm-based warning polygons (IEM)">
+            <input
+              type="checkbox"
+              checked={severeToggles.warnings}
+              onChange={(e) =>
+                setSevereToggles((t) => ({ ...t, warnings: e.target.checked }))
+              }
+            />
+            ⚠ Warn/Watch
+          </label>
+          <label className="toggle" title="SPC tornado / hail / wind reports">
+            <input
+              type="checkbox"
+              checked={severeToggles.reports}
+              onChange={(e) =>
+                setSevereToggles((t) => ({ ...t, reports: e.target.checked }))
+              }
+            />
+            📍 Reports
+          </label>
+          <label className="toggle" title="SPC Day 1 tornado risk (or categorical)">
+            <input
+              type="checkbox"
+              checked={severeToggles.outlook}
+              onChange={(e) =>
+                setSevereToggles((t) => ({ ...t, outlook: e.target.checked }))
+              }
+            />
+            🗺 SPC risk
+          </label>
+          <label
+            className="toggle"
+            title="Nearest NEXRAD storm-relative velocity (rotation couplets, US)"
+          >
+            <input
+              type="checkbox"
+              checked={severeToggles.velocity}
+              onChange={(e) =>
+                setSevereToggles((t) => ({ ...t, velocity: e.target.checked }))
+              }
+              disabled={!usRegion}
+            />
+            🌀 Velocity
+          </label>
         </div>
 
         <p className="radar-product-hint">
@@ -939,6 +1033,27 @@ export function RadarMap({
             ? 'Interactive model fields from Ventusky — pan, zoom, and scrub time inside the map.'
             : meta.desc}
           {showFires ? ' · NASA FIRMS 24h fires' : ''}
+          {severeToggles.warnings || severeToggles.reports || severeToggles.outlook
+            ? ` · Layers: ${[
+                severeToggles.warnings
+                  ? `${severeStats?.warnings ?? '…'} warn`
+                  : null,
+                severeToggles.reports
+                  ? `${severeStats?.reports ?? '…'} rpts`
+                  : null,
+                severeToggles.outlook
+                  ? severeStats?.outlook
+                    ? 'SPC outlook'
+                    : 'SPC quiet'
+                  : null,
+                severeToggles.velocity ? 'velocity' : null,
+              ]
+                .filter(Boolean)
+                .join(' · ')}`
+            : ''}
+          {severeToggles.velocity
+            ? ' · Velocity shows storm-relative motion from nearest NEXRAD — red/green couplets can indicate rotation; not a tornado detector.'
+            : ''}
         </p>
       </div>
     </section>

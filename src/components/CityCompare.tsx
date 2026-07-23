@@ -7,6 +7,7 @@ import {
   formatPrecip,
   formatSpeed,
 } from '../utils/format'
+import { isDaytimeNow } from '../utils/daylight'
 import { getWeatherInfo } from '../utils/weatherCodes'
 import { willIGetWet } from '../utils/wetSummary'
 
@@ -61,7 +62,7 @@ export function CityCompare({ units, home, homeWeather }: Props) {
 
   const card = (side: Side, label: string) => {
     const c = side.weather.current
-    const info = getWeatherInfo(c.weather_code, c.is_day === 1)
+    const info = getWeatherInfo(c.weather_code, isDaytimeNow(side.weather))
     const wet = willIGetWet(side.weather)
     const d = side.weather.daily
     return (

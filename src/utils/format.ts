@@ -80,6 +80,13 @@ export function formatPressure(hpa: number, units: Units): string {
 }
 
 function toMs(iso: string, timezone?: string): number {
+  // Date-only (YYYY-MM-DD) from Open-Meteo daily.time — never use Date(iso):
+  // that is UTC midnight and shifts the calendar day west of UTC (e.g. "Thu"
+  // becomes "Wed" in America/*), so "Tomorrow" and the next row can both look
+  // like the same weekday with different weather.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso.trim())) {
+    return parseWeatherLocal(`${iso.trim()}T12:00:00`, timezone)
+  }
   // Open-Meteo wall-clock strings need timezone-aware parse when TZ is known
   if (timezone && !/[zZ]|[+-]\d{2}:?\d{2}$/.test(iso)) {
     return parseWeatherLocal(iso, timezone)

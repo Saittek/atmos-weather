@@ -85,9 +85,27 @@ npx cap open ios
    - **Signing & Capabilities** → your Team
    - Bundle Identifier = `com.solara.weather` (or yours)
    - Add **Location When In Use** (Capacitor Geolocation usually injects this)
-   - Optional: **Push Notifications** if you add APNs later
+   - **Push Notifications** capability (required for closed-app alerts)
+   - Background Modes → Remote notifications (optional but recommended)
 
 6. Run on a Simulator or device (cable + “Trust”).
+
+### APNs (remote push when app is closed)
+
+Solara already registers device tokens to `/api/push/device` and the Worker can send APNs when secrets are set:
+
+```bash
+# From weather-app/ on a machine with wrangler auth
+npx wrangler secret put APNS_KEY_ID
+npx wrangler secret put APNS_TEAM_ID
+npx wrangler secret put APNS_BUNDLE_ID      # e.g. com.solara.weather
+npx wrangler secret put APNS_PRIVATE_KEY    # full .p8 PEM
+npx wrangler secret put APNS_PRODUCTION     # true for TestFlight / App Store
+```
+
+Until secrets are set, users still get **in-app / local** alerts (threat proximity, morning home brief, rain watch).
+
+See also `docs/PUSH_NOTIFICATIONS.md`.
 
 ### Info.plist permission strings (verify)
 
@@ -114,6 +132,14 @@ Xcode → Info (or `ios/App/App/Info.plist`):
 4. Archive in Xcode: **Product → Archive → Distribute App → App Store Connect**
 5. Submit for review
 
+### Screenshot ideas (home-centric)
+
+1. Dashboard with **exact home** + current conditions  
+2. Radar with **🏠 home pin** + severe warning polygons  
+3. Storm Chasers desk (CAPE / threat bar)  
+4. Rain widget (`/widget`) locked to home  
+5. Morning / severe notification mock (or in-app banner)
+
 ### Review tips (avoid rejection)
 
 Apple sometimes rejects “thin” WebView wrappers (**Guideline 4.2**). You already have:
@@ -122,6 +148,7 @@ Apple sometimes rejects “thin” WebView wrappers (**Guideline 4.2**). You alr
 - Status bar / splash  
 - Offline-capable shell  
 - Real weather utility  
+- Exact home pin, radar, severe products  
 
 Still help your case:
 
@@ -129,6 +156,7 @@ Still help your case:
 - Don’t market it as “just a website”  
 - Keep location purpose string accurate  
 - Test radar + alerts offline network failure UX  
+- Mention **home alerts** and **radar** in the review notes 
 
 ---
 

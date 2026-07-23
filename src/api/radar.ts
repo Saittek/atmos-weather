@@ -157,9 +157,9 @@ export function isNexradMosaicRegion(lat?: number, lon?: number): boolean {
   return lat >= 24 && lat <= 50 && lon >= -125 && lon <= -66
 }
 
-/** Default: WeatherWise-style storm chaser radar everywhere */
+/** Default: global RainViewer loop (works worldwide); switch source for US NEXRAD */
 export function defaultSourceForLocation(_lat?: number, _lon?: number): RadarSourceId {
-  return 'storm_chaser'
+  return 'global_loop'
 }
 
 /** Prefer Mapbox dark basemap for chaser-style sources when token exists */
