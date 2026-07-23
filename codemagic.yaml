@@ -24,11 +24,9 @@ workflows:
           npm run build
           npx cap sync ios
 
-      - name: Fetch signing files
+            - name: Set up code signing
         script: |
-          app-store-connect fetch-signing-files "$BUNDLE_ID" \
-            --type IOS_APP_STORE \
-            --create
+          xcode-project use-profiles
 
       - name: Build IPA
         script: |
