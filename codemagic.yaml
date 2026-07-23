@@ -27,7 +27,7 @@ workflows:
           echo 'CODE_SIGN_STYLE = Automatic' >> ios/App/Release.xcconfig
 
       - name: Build IPA
-        script: xcode-project build-ipa --project ios/App/App.xcodeproj --scheme "$XCODE_SCHEME" --build-configuration Release --export-method app-store
+        script: xcode-project build-ipa --project ios/App/App.xcodeproj --scheme "$XCODE_SCHEME"e
 
     artifacts:
       - ios/App/build/ios/ipa/*.ipa
