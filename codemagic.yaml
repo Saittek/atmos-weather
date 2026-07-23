@@ -24,12 +24,10 @@ workflows:
           npx cap sync ios
 
       - name: Set up code signing
-        script: |
-          xcode-project use-profiles
-          xcode-project set-profile --bundle-id com.solara.weather --profile-name "weatherapp"
+        script: xcode-project use-profiles
 
       - name: Build IPA
-        script: xcode-project build-ipa --project ios/App/App.xcodeproj --scheme "$XCODE_SCHEME"
+        script: xcode-project build-ipa --project ios/App/App.xcodeproj --scheme "$XCODE_SCHEME" --archive-method ad-hoc
 
     artifacts:
       - ios/App/build/ios/ipa/*.ipa
