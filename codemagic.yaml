@@ -57,7 +57,7 @@ workflows:
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
 
     # Upload IPA to App Store Connect / TestFlight after a successful build
-    publishing:
+     publishing:
       email:
         recipients:
           - Yellowknife1989@gmail.com
@@ -65,17 +65,7 @@ workflows:
           success: true
           failure: true
 
-      app_store_connect:
-        # Use the API key from integrations.app_store_connect above
-        auth: integration
-
-        # Upload the IPA and submit the build to TestFlight
-        # (post-processing; does not consume extra build minutes)
-        submit_to_testflight: true
-
-        # Do not auto-submit for App Store review
-        submit_to_app_store: false
-
+  
         # Optional: add TestFlight beta group names once you create them
         # beta_groups:
         #   - Internal Testers
