@@ -23,18 +23,13 @@ workflows:
           npx cap sync ios
 
       - name: Set up code signing
-        script: |
-          xcode-project use-profiles
-          echo "=== Available provisioning profiles ==="
-          ls -la ~/Library/MobileDevice/Provisioning\ Profiles/
+        script: xcode-project use-profiles
 
       - name: Build IPA
         script: xcode-project build-ipa --project ios/App/App.xcodeproj --scheme "$XCODE_SCHEME"
 
     artifacts:
       - ios/App/build/ios/ipa/*.ipa
-      - /tmp/xcodebuild_logs/*.log
-      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
 
     publishing:
       email:
@@ -43,4 +38,3 @@ workflows:
         notify:
           success: true
           failure: true
-          
