@@ -1,25 +1,9 @@
 # Codemagic CI — Solara iOS → TestFlight
-# https://docs.codemagic.io/
-#
-# Prerequisites (Codemagic UI):
-# 1. Connect this repo
-# 2. Team integrations → Developer Portal / App Store Connect API key
-#    - Name the key exactly as integrations.app_store_connect below (Solara)
-#    - Key needs App Manager access
-# 3. App exists in App Store Connect with bundle id com.solara.weather
-# 4. Optional Application → Environment variables:
-#      VITE_API_BASE = https://solaraweather.com
-#
-# After each successful ios-app-store build, the IPA is uploaded to
-# App Store Connect / TestFlight via the connected integration.
-
 workflows:
   ios-app-store:
     name: Solara iOS → TestFlight
     max_build_duration: 60
     instance_type: mac_mini_m2
-
-    # Must match the App Store Connect API key name in Codemagic integrations
 
     environment:
       vars:
@@ -56,8 +40,7 @@ workflows:
       - /tmp/xcodebuild_logs/*.log
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
 
-    # Upload IPA to App Store Connect / TestFlight after a successful build
-     publishing:
+    publishing:
       email:
         recipients:
           - Yellowknife1989@gmail.com
@@ -65,12 +48,6 @@ workflows:
           success: true
           failure: true
 
-  
-        # Optional: add TestFlight beta group names once you create them
-        # beta_groups:
-        #   - Internal Testers
-
-  # Compile-only check (no signing / no upload)
   ios-simulator-check:
     name: Solara iOS compile check
     max_build_duration: 45
