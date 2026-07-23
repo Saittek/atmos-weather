@@ -25,7 +25,7 @@ workflows:
       - name: Set up code signing
         script: |
           xcode-project use-profiles
-          echo "=== Available profiles ==="
+          echo "=== Available provisioning profiles ==="
           ls -la ~/Library/MobileDevice/Provisioning\ Profiles/
 
       - name: Build IPA
@@ -34,6 +34,7 @@ workflows:
     artifacts:
       - ios/App/build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
 
     publishing:
       email:
@@ -42,3 +43,4 @@ workflows:
         notify:
           success: true
           failure: true
+          
