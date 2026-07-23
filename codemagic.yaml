@@ -20,7 +20,7 @@ workflows:
           npm run build
           npx cap sync ios
 
-     - name: Set up code signing
+      - name: Set up code signing
         script: |
           xcode-project use-profiles --team-id "$CM_TEAM_ID"
           cat > export_options.plist << EOF
@@ -34,10 +34,10 @@ workflows:
               <string>$CM_TEAM_ID</string>
           </dict>
           </plist>
-          EOFg
+          EOF
 
       - name: Build IPA
-        script: xcode-project build-ipa --project ios/App/App.xcodeproj --scheme "$XCODE_SCHEME"e
+        script: xcode-project build-ipa --project ios/App/App.xcodeproj --scheme "$XCODE_SCHEME" --export-options-plist export_options.plist
 
     artifacts:
       - ios/App/build/ios/ipa/*.ipa
