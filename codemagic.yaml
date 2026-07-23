@@ -7,6 +7,7 @@ workflows:
     environment:
       vars:
         XCODE_SCHEME: App
+        CM_TEAM_ID: 94Y9ZFUHFD
       node: v22
       xcode: latest
 
@@ -20,11 +21,13 @@ workflows:
           npx cap sync ios
 
       - name: Set up code signing
-        script: xcode-project use-profiles
+        script: |
+          xcode-project use-profiles --team-id "$CM_TEAM_ID"
+          echo 'CODE_SIGN_STYLE = Automatic' >> ios/App/Debug.xcconfig
+          echo 'CODE_SIGN_STYLE = Automatic' >> ios/App/Release.xcconfig
 
       - name: Build IPA
-        script: xcode-project build-ipa --project ios/App/App.xcodeproj --scheme "$XCODE_SCHEME"
+        script: xcode-project build-ipa --project ios/App/App.xcodeproj --scheme "$XCODE_SCHEME" --build-configuration Release --export-method app-store
 
     artifacts:
       - ios/App/build/ios/ipa/*.ipa
-      
