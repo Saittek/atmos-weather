@@ -128,14 +128,63 @@ app-store-connect fetch-signing-files com.solara.weather --type IOS_APP_STORE --
 
 ---
 
+## Fix: “Cannot save Signing Certificates without certificate private key”
+
+Apple **never** re-downloads a certificate’s private key. Codemagic must create
+the Distribution certificate using a private key you store as a secure variable.
+
+### One-time: create `CERTIFICATE_PRIVATE_KEY`
+
+**Windows (Git Bash or WSL):**
+```bash
+openssl genrsa 2048
+```
+
+**Or PowerShell (if OpenSSL installed):**
+```powershell
+openssl genrsa 2048
+```
+
+Copy the **entire** output, including:
+```text
+-----BEGIN RSA PRIVATE KEY-----
+...
+-----END RSA PRIVATE KEY-----
+```
+
+### Add it in Codemagic
+
+1. Codemagic → your **Solara / atmos-weather** application  
+2. **Environment variables**  
+3. Add:
+   - **Variable name:** `CERTIFICATE_PRIVATE_KEY`  
+   - **Variable value:** paste the full PEM  
+   - **Secure:** ON  
+4. Save  
+
+### If Apple says too many certificates
+
+You may only have **3** iOS Distribution certificates.
+
+1. Open https://developer.apple.com/account/resources/certificates/list  
+2. Revoke old **Apple Distribution** certs you don’t use / don’t have keys for  
+3. Re-run **`ios-testflight`**
+
+### Re-run
+
+Codemagic → **Start new build** → workflow **`ios-testflight`**
+
+---
+
 ## Common failures
 
 | Error | Fix |
 |-------|-----|
+| **Cannot save Signing Certificates without certificate private key** | Add secure env `CERTIFICATE_PRIVATE_KEY` (see above); revoke orphan Distribution certs |
 | Integration `Solara` not found | Rename the API key in Codemagic UI to exactly `Solara` |
 | Bundle ID not found | Register `com.solara.weather` under Apple Developer → Identifiers |
 | No app record | Create the app in App Store Connect first |
-| Signing / certificate limit | You can only have a few Distribution certs — revoke unused ones or reuse |
+| Signing / certificate limit (max 3) | Revoke unused Distribution certs in Apple Developer |
 | Build number already used | Codemagic increments with `PROJECT_BUILD_NUMBER`; re-run the workflow |
 | Rejected for privacy | Ensure privacy URL works and location purpose strings match real use |
 
