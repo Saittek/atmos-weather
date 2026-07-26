@@ -29,9 +29,11 @@ workflows:
       app_store_connect: Solara
 
     environment:
-      # Import group that holds CERTIFICATE_PRIVATE_KEY (create group in Codemagic UI)
-      groups:
-        - app_store_credentials
+      # No required group name — add CERTIFICATE_PRIVATE_KEY_B64 as an
+      # Application environment variable (Secure) so all workflows can see it.
+      # Optional group (if you use one, import it here):
+      # groups:
+      #   - app_store_credentials
       vars:
         XCODE_WORKSPACE_DIR: ios/App
         XCODE_PROJECT: App.xcodeproj
@@ -62,31 +64,47 @@ workflows:
           set -euo pipefail
           KEY_FILE="$CM_BUILD_DIR/ios_distribution.key.pem"
 
-          if [ -z "${CERTIFICATE_PRIVATE_KEY:-}" ] && [ -z "${CERTIFICATE_PRIVATE_KEY_B64:-}" ]; then
-            echo "MISSING CERTIFICATE_PRIVATE_KEY or CERTIFICATE_PRIVATE_KEY_B64"
-            echo "Prefer CERTIFICATE_PRIVATE_KEY_B64 (single-line base64) — see docs/CODEMAGIC_APP_STORE.md"
+          # Debug: which secrets are visible (lengths only, never print secrets)
+          echo "Env check:"
+          echo "  CERTIFICATE_PRIVATE_KEY_B64 length: ${#CERTIFICATE_PRIVATE_KEY_B64}"
+          echo "  CERTIFICATE_PRIVATE_KEY length: ${#CERTIFICATE_PRIVATE_KEY}"
+
+          if [ -z "${CERTIFICATE_PRIVATE_KEY_B64:-}" ] && [ -z "${CERTIFICATE_PRIVATE_KEY:-}" ]; then
+            echo ""
+            echo "============================================================"
+            echo "Codemagic cannot see your signing secret."
+            echo ""
+            echo "FIX (Application variables — not Team-only, not GitHub):"
+            echo "  1. codemagic.io → open THIS app (atmos-weather)"
+            echo "  2. Environment variables"
+            echo "  3. Add variable to the APPLICATION (not only a Team group"
+            echo "     unless that group is listed under environment.groups)"
+            echo "  4. Name exactly: CERTIFICATE_PRIVATE_KEY_B64"
+            echo "  5. Value: one line from"
+            echo "     .codemagic-secrets/certificate_private_key.b64.txt"
+            echo "  6. Secure: YES"
+            echo "  7. Save, then Start a NEW build"
+            echo "============================================================"
             exit 1
           fi
 
-          # Prefer base64 (Codemagic secure vars often mangle multiline PEM)
           if [ -n "${CERTIFICATE_PRIVATE_KEY_B64:-}" ]; then
             echo "Using CERTIFICATE_PRIVATE_KEY_B64..."
-            echo "$CERTIFICATE_PRIVATE_KEY_B64" | base64 --decode > "$KEY_FILE"
+            # strip whitespace/newlines that UI sometimes adds
+            echo "$CERTIFICATE_PRIVATE_KEY_B64" | tr -d '\r\n\t ' | base64 --decode > "$KEY_FILE"
           else
             echo "Using CERTIFICATE_PRIVATE_KEY (normalizing newlines)..."
-            # Handle real newlines, Windows CRLF, or literal \n from single-line paste
             printf '%s' "$CERTIFICATE_PRIVATE_KEY" \
               | sed 's/\r//g' \
               | sed 's/\\n/\n/g' \
               > "$KEY_FILE"
-            # Ensure trailing newline
             echo >> "$KEY_FILE"
           fi
 
           echo "Key file header: $(head -n 1 "$KEY_FILE")"
           if ! openssl rsa -in "$KEY_FILE" -check -noout 2>/dev/null; then
             if ! openssl pkey -in "$KEY_FILE" -check -noout 2>/dev/null; then
-              echo "Invalid private key after write. Re-copy CERTIFICATE_PRIVATE_KEY_B64 from certificate_private_key.b64.txt"
+              echo "Decoded key is invalid. Re-paste CERTIFICATE_PRIVATE_KEY_B64 from the .b64.txt file."
               exit 1
             fi
           fi
@@ -141,8 +159,6 @@ workflows:
       app_store_connect: Solara
 
     environment:
-      groups:
-        - app_store_credentials
       vars:
         XCODE_WORKSPACE_DIR: ios/App
         XCODE_PROJECT: App.xcodeproj
@@ -173,13 +189,14 @@ workflows:
           set -euo pipefail
           KEY_FILE="$CM_BUILD_DIR/ios_distribution.key.pem"
 
-          if [ -z "${CERTIFICATE_PRIVATE_KEY:-}" ] && [ -z "${CERTIFICATE_PRIVATE_KEY_B64:-}" ]; then
-            echo "MISSING CERTIFICATE_PRIVATE_KEY or CERTIFICATE_PRIVATE_KEY_B64"
+          echo "Env check: B64 len=${#CERTIFICATE_PRIVATE_KEY_B64} PEM len=${#CERTIFICATE_PRIVATE_KEY}"
+          if [ -z "${CERTIFICATE_PRIVATE_KEY_B64:-}" ] && [ -z "${CERTIFICATE_PRIVATE_KEY:-}" ]; then
+            echo "MISSING secrets — add CERTIFICATE_PRIVATE_KEY_B64 on the Application"
             exit 1
           fi
 
           if [ -n "${CERTIFICATE_PRIVATE_KEY_B64:-}" ]; then
-            echo "$CERTIFICATE_PRIVATE_KEY_B64" | base64 --decode > "$KEY_FILE"
+            echo "$CERTIFICATE_PRIVATE_KEY_B64" | tr -d '\r\n\t ' | base64 --decode > "$KEY_FILE"
           else
             printf '%s' "$CERTIFICATE_PRIVATE_KEY" | sed 's/\r//g' | sed 's/\\n/\n/g' > "$KEY_FILE"
             echo >> "$KEY_FILE"
