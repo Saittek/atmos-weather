@@ -133,34 +133,29 @@ app-store-connect fetch-signing-files com.solara.weather --type IOS_APP_STORE --
 Apple **never** re-downloads a certificate’s private key. Codemagic must create
 the Distribution certificate using a private key you store as a secure variable.
 
-### One-time: create `CERTIFICATE_PRIVATE_KEY`
+### One-time: use base64 key (recommended — PEM paste often fails)
 
-**Windows (Git Bash or WSL):**
-```bash
-openssl genrsa 2048
-```
+Codemagic often corrupts multiline PEM when you paste it (“is not valid”).
+Use a **single-line base64** secret instead.
 
-**Or PowerShell (if OpenSSL installed):**
-```powershell
-openssl genrsa 2048
-```
+Ready file on your PC (not in GitHub):
 
-Copy the **entire** output, including:
-```text
------BEGIN RSA PRIVATE KEY-----
-...
------END RSA PRIVATE KEY-----
-```
+`C:\Users\yello\weather-app\.codemagic-secrets\certificate_private_key.b64.txt`
+
+1. Open that file  
+2. **Ctrl+A** → **Ctrl+C** (one long line)
 
 ### Add it in Codemagic
 
 1. Codemagic → your **Solara / atmos-weather** application  
 2. **Environment variables**  
-3. Add:
-   - **Variable name:** `CERTIFICATE_PRIVATE_KEY`  
-   - **Variable value:** paste the full PEM  
+3. Group: **`app_store_credentials`**  
+4. **Delete** the old `CERTIFICATE_PRIVATE_KEY` if it failed  
+5. **Add variable:**
+   - **Name:** `CERTIFICATE_PRIVATE_KEY_B64`  
+   - **Value:** paste the **one line** from the `.b64.txt` file  
    - **Secure:** ON  
-4. Save  
+6. Save  
 
 ### If Apple says too many certificates
 
