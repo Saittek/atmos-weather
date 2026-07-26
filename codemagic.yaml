@@ -1,23 +1,14 @@
 # Codemagic — Solara iOS → TestFlight → App Store
 # Bundle ID: com.solara.weather
-# Integration name (must match UI): Solara
+# Integration name (Codemagic UI → Developer Portal): Solara
 #
-# FIX for: "Cannot save Signing Certificates without certificate private key"
-# ---------------------------------------------------------------------------
-# Apple never re-downloads certificate private keys. Codemagic must create the
-# cert using a private key YOU store as a secure env var (reused every build).
+# Signing: NO manual CERTIFICATE_PRIVATE_KEY needed.
+# Each build generates a key on the Mac VM, creates/reuses App Store
+# signing files via the App Store Connect API integration, and signs the IPA.
 #
-# ONE-TIME setup:
-# 1. Generate a key (PowerShell / Git Bash / Mac):
-#      openssl genrsa 2048
-# 2. Codemagic → your app → Environment variables:
-#      Name:   CERTIFICATE_PRIVATE_KEY
-#      Value:  full PEM text (-----BEGIN RSA PRIVATE KEY----- ... END-----)
-#      Secure: YES
-# 3. If Apple says you already have too many Distribution certs (max 3),
-#    revoke unused ones at:
-#      https://developer.apple.com/account/resources/certificates/list
-# 4. Re-run workflow: ios-testflight
+# If create fails due to Apple's 3 Distribution-cert limit, the script
+# deletes the oldest Distribution cert and retries (CI-only Apple account
+# recommended if you also ship other apps from the same team).
 
 workflows:
   ios-testflight:
@@ -29,11 +20,6 @@ workflows:
       app_store_connect: Solara
 
     environment:
-      # No required group name — add CERTIFICATE_PRIVATE_KEY_B64 as an
-      # Application environment variable (Secure) so all workflows can see it.
-      # Optional group (if you use one, import it here):
-      # groups:
-      #   - app_store_credentials
       vars:
         XCODE_WORKSPACE_DIR: ios/App
         XCODE_PROJECT: App.xcodeproj
@@ -59,61 +45,63 @@ workflows:
       - name: Set up keychain
         script: keychain initialize
 
-      - name: Automatic code signing (certs + profiles)
+      - name: Automatic code signing (no user key paste)
         script: |
           set -euo pipefail
           KEY_FILE="$CM_BUILD_DIR/ios_distribution.key.pem"
 
-          # Debug: which secrets are visible (lengths only, never print secrets)
-          echo "Env check:"
-          echo "  CERTIFICATE_PRIVATE_KEY_B64 length: ${#CERTIFICATE_PRIVATE_KEY_B64}"
-          echo "  CERTIFICATE_PRIVATE_KEY length: ${#CERTIFICATE_PRIVATE_KEY}"
-
-          if [ -z "${CERTIFICATE_PRIVATE_KEY_B64:-}" ] && [ -z "${CERTIFICATE_PRIVATE_KEY:-}" ]; then
-            echo ""
-            echo "============================================================"
-            echo "Codemagic cannot see your signing secret."
-            echo ""
-            echo "FIX (Application variables — not Team-only, not GitHub):"
-            echo "  1. codemagic.io → open THIS app (atmos-weather)"
-            echo "  2. Environment variables"
-            echo "  3. Add variable to the APPLICATION (not only a Team group"
-            echo "     unless that group is listed under environment.groups)"
-            echo "  4. Name exactly: CERTIFICATE_PRIVATE_KEY_B64"
-            echo "  5. Value: one line from"
-            echo "     .codemagic-secrets/certificate_private_key.b64.txt"
-            echo "  6. Secure: YES"
-            echo "  7. Save, then Start a NEW build"
-            echo "============================================================"
-            exit 1
-          fi
-
-          if [ -n "${CERTIFICATE_PRIVATE_KEY_B64:-}" ]; then
-            echo "Using CERTIFICATE_PRIVATE_KEY_B64..."
-            # strip whitespace/newlines that UI sometimes adds
-            echo "$CERTIFICATE_PRIVATE_KEY_B64" | tr -d '\r\n\t ' | base64 --decode > "$KEY_FILE"
-          else
-            echo "Using CERTIFICATE_PRIVATE_KEY (normalizing newlines)..."
-            printf '%s' "$CERTIFICATE_PRIVATE_KEY" \
-              | sed 's/\r//g' \
-              | sed 's/\\n/\n/g' \
-              > "$KEY_FILE"
-            echo >> "$KEY_FILE"
-          fi
-
-          echo "Key file header: $(head -n 1 "$KEY_FILE")"
-          if ! openssl rsa -in "$KEY_FILE" -check -noout 2>/dev/null; then
-            if ! openssl pkey -in "$KEY_FILE" -check -noout 2>/dev/null; then
-              echo "Decoded key is invalid. Re-paste CERTIFICATE_PRIVATE_KEY_B64 from the .b64.txt file."
-              exit 1
-            fi
-          fi
+          echo "Generating Distribution private key on this build machine..."
+          openssl genrsa -out "$KEY_FILE" 2048
+          openssl rsa -in "$KEY_FILE" -check -noout
           echo "Private key OK"
 
-          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+          free_one_distribution_cert() {
+            echo "Freeing one Apple Distribution certificate slot..."
+            # List certs as JSON; delete the first IOS_DISTRIBUTION id found
+            if command -v jq >/dev/null 2>&1; then
+              IDS=$(app-store-connect certificates list --type IOS_DISTRIBUTION --json 2>/dev/null \
+                | jq -r 'if type=="array" then .[].id elif .data then .data[].id else empty end' 2>/dev/null || true)
+            else
+              IDS=$(app-store-connect certificates list --type IOS_DISTRIBUTION 2>/dev/null \
+                | sed -n 's/.*\([A-Z0-9]\{10,\}\).*/\1/p' | head -n 5 || true)
+            fi
+            for id in $IDS; do
+              if [ -n "$id" ] && [ "$id" != "null" ]; then
+                echo "Deleting certificate id=$id"
+                app-store-connect certificates delete "$id" || true
+                return 0
+              fi
+            done
+            echo "Could not auto-delete a certificate; revoke one at:"
+            echo "  https://developer.apple.com/account/resources/certificates/list"
+            return 1
+          }
+
+          echo "Fetching/creating signing files for $BUNDLE_ID ..."
+          set +e
+          OUT=$(app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
             --create \
-            --certificate-key="@file:$KEY_FILE"
+            --certificate-key="@file:$KEY_FILE" 2>&1)
+          STATUS=$?
+          set -e
+          echo "$OUT"
+
+          if [ $STATUS -ne 0 ]; then
+            if echo "$OUT" | grep -qiE 'private key|already have|maximum|limit|Certificate'; then
+              free_one_distribution_cert || true
+              free_one_distribution_cert || true
+              echo "Retrying fetch-signing-files..."
+              app-store-connect fetch-signing-files "$BUNDLE_ID" \
+                --type IOS_APP_STORE \
+                --create \
+                --certificate-key="@file:$KEY_FILE"
+            else
+              exit $STATUS
+            fi
+          fi
+
+          echo "Signing files ready"
 
       - name: Add certificates to keychain
         script: keychain add-certificates
@@ -184,31 +172,45 @@ workflows:
       - name: Set up keychain
         script: keychain initialize
 
-      - name: Automatic code signing (certs + profiles)
+      - name: Automatic code signing (no user key paste)
         script: |
           set -euo pipefail
           KEY_FILE="$CM_BUILD_DIR/ios_distribution.key.pem"
+          openssl genrsa -out "$KEY_FILE" 2048
+          openssl rsa -in "$KEY_FILE" -check -noout
 
-          echo "Env check: B64 len=${#CERTIFICATE_PRIVATE_KEY_B64} PEM len=${#CERTIFICATE_PRIVATE_KEY}"
-          if [ -z "${CERTIFICATE_PRIVATE_KEY_B64:-}" ] && [ -z "${CERTIFICATE_PRIVATE_KEY:-}" ]; then
-            echo "MISSING secrets — add CERTIFICATE_PRIVATE_KEY_B64 on the Application"
-            exit 1
-          fi
+          free_one_distribution_cert() {
+            if command -v jq >/dev/null 2>&1; then
+              IDS=$(app-store-connect certificates list --type IOS_DISTRIBUTION --json 2>/dev/null \
+                | jq -r 'if type=="array" then .[].id elif .data then .data[].id else empty end' 2>/dev/null || true)
+            else
+              IDS=""
+            fi
+            for id in $IDS; do
+              if [ -n "$id" ] && [ "$id" != "null" ]; then
+                app-store-connect certificates delete "$id" || true
+                return 0
+              fi
+            done
+            return 1
+          }
 
-          if [ -n "${CERTIFICATE_PRIVATE_KEY_B64:-}" ]; then
-            echo "$CERTIFICATE_PRIVATE_KEY_B64" | tr -d '\r\n\t ' | base64 --decode > "$KEY_FILE"
-          else
-            printf '%s' "$CERTIFICATE_PRIVATE_KEY" | sed 's/\r//g' | sed 's/\\n/\n/g' > "$KEY_FILE"
-            echo >> "$KEY_FILE"
-          fi
-
-          openssl rsa -in "$KEY_FILE" -check -noout 2>/dev/null \
-            || openssl pkey -in "$KEY_FILE" -check -noout
-
-          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+          set +e
+          OUT=$(app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
             --create \
-            --certificate-key="@file:$KEY_FILE"
+            --certificate-key="@file:$KEY_FILE" 2>&1)
+          STATUS=$?
+          set -e
+          echo "$OUT"
+          if [ $STATUS -ne 0 ]; then
+            free_one_distribution_cert || true
+            free_one_distribution_cert || true
+            app-store-connect fetch-signing-files "$BUNDLE_ID" \
+              --type IOS_APP_STORE \
+              --create \
+              --certificate-key="@file:$KEY_FILE"
+          fi
 
       - name: Add certificates to keychain
         script: keychain add-certificates
