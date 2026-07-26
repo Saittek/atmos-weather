@@ -1,10 +1,12 @@
 /**
  * Exact home location — GPS, current place, or manual lat/lon (full precision).
+ * On mobile: collapses to a compact bar after first set, or when minimized.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { LocationResult } from '../api/types'
 import { reverseGeocode } from '../api/weather'
 import { getCurrentPosition } from '../lib/native'
+import { isMobileViewport } from '../utils/device'
 
 interface Props {
   home: LocationResult | null
@@ -18,8 +20,27 @@ interface Props {
   signedIn?: boolean
 }
 
+const COMPACT_KEY = 'solara-home-panel-compact'
+
 function fmtCoord(n: number, digits = 5): string {
   return Number.isFinite(n) ? n.toFixed(digits) : ''
+}
+
+function loadCompactPref(): boolean {
+  try {
+    return localStorage.getItem(COMPACT_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function saveCompactPref(v: boolean) {
+  try {
+    if (v) localStorage.setItem(COMPACT_KEY, '1')
+    else localStorage.removeItem(COMPACT_KEY)
+  } catch {
+    /* ignore */
+  }
 }
 
 export function HomeLocationPanel({
@@ -37,6 +58,14 @@ export function HomeLocationPanel({
   const [lonStr, setLonStr] = useState(home ? fmtCoord(home.longitude, 6) : '')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  /** Mobile: small bar once home is set / user minimized */
+  const [compact, setCompact] = useState(() => {
+    if (typeof window === 'undefined') return false
+    if (!isMobileViewport()) return false
+    // Already have home + user minimized (or auto after first set)
+    return loadCompactPref()
+  })
+  const hadHomeRef = useRef(Boolean(home))
 
   useEffect(() => {
     if (!editing && home) {
@@ -45,6 +74,49 @@ export function HomeLocationPanel({
       setLonStr(fmtCoord(home.longitude, 6))
     }
   }, [home, editing])
+
+  // After first-time home set on mobile → collapse automatically
+  useEffect(() => {
+    const had = hadHomeRef.current
+    hadHomeRef.current = Boolean(home)
+    if (!home) {
+      // Cleared home — show full setup again next time
+      return
+    }
+    if (had) return
+    // Transition null → set
+    if (isMobileViewport()) {
+      setCompact(true)
+      saveCompactPref(true)
+      setEditing(false)
+    }
+  }, [home])
+
+  const minimize = () => {
+    setCompact(true)
+    saveCompactPref(true)
+    setEditing(false)
+    setErr(null)
+  }
+
+  const expand = () => {
+    setCompact(false)
+    // Expanding does not clear the pref forever — re-minimize still works
+    // Prefer keeping pref so next visit stays compact unless they clear home
+  }
+
+  const setHomeAndMaybeCompact = (loc: LocationResult | null) => {
+    onSetHome(loc)
+    if (loc && isMobileViewport()) {
+      setCompact(true)
+      saveCompactPref(true)
+      setEditing(false)
+    }
+    if (!loc) {
+      setCompact(false)
+      saveCompactPref(false)
+    }
+  }
 
   const saveManual = async () => {
     setErr(null)
@@ -73,7 +145,7 @@ export function HomeLocationPanel({
       } catch {
         /* keep manual label */
       }
-      onSetHome({
+      setHomeAndMaybeCompact({
         id: 1,
         name: named,
         latitude: lat,
@@ -92,7 +164,6 @@ export function HomeLocationPanel({
     setBusy(true)
     try {
       const pos = await getCurrentPosition()
-      // Full GPS precision — reverse geocode only for a friendly name
       let name = (label || 'Home').trim() || 'Home'
       let admin1: string | undefined
       let country: string | undefined
@@ -104,7 +175,7 @@ export function HomeLocationPanel({
       } catch {
         /* ignore */
       }
-      onSetHome({
+      setHomeAndMaybeCompact({
         id: 1,
         name,
         latitude: pos.latitude,
@@ -135,22 +206,64 @@ export function HomeLocationPanel({
         : current.name?.includes('Home')
           ? current.name
           : `${current.name} (Home)`) || 'Home'
-    onSetHome({
+    setHomeAndMaybeCompact({
       ...current,
       id: current.id || 1,
       name,
-      // Keep whatever precision the current place already has
       latitude: current.latitude,
       longitude: current.longitude,
     })
     setEditing(false)
   }
 
+  // Compact strip (mobile, home already set)
+  if (home && compact && !editing) {
+    return (
+      <section className="panel home-location-panel home-location-compact" aria-label="Home">
+        <div className="home-compact-row">
+          <button type="button" className="home-compact-go" onClick={onGoHome} title="Go home">
+            <span className="home-compact-emoji" aria-hidden>
+              🏠
+            </span>
+            <span className="home-compact-text">
+              <strong>{home.name || 'Home'}</strong>
+              <span className="home-compact-coords">
+                {fmtCoord(home.latitude, 4)}, {fmtCoord(home.longitude, 4)}
+              </span>
+            </span>
+          </button>
+          <button
+            type="button"
+            className="chip-btn home-compact-expand"
+            onClick={expand}
+            aria-label="Expand home settings"
+            title="Expand"
+          >
+            ▾
+          </button>
+        </div>
+      </section>
+    )
+  }
+
   return (
     <section className="panel home-location-panel">
       <div className="panel-header">
         <h2>🏠 Home</h2>
-        <span className="panel-hint">Exact pin</span>
+        <div className="home-header-actions">
+          <span className="panel-hint">Exact pin</span>
+          {home && (
+            <button
+              type="button"
+              className="chip-btn home-minimize-btn"
+              onClick={minimize}
+              title="Minimize home card"
+              aria-label="Minimize home card"
+            >
+              ▴
+            </button>
+          )}
+        </div>
       </div>
 
       {home && !editing ? (
@@ -176,10 +289,18 @@ export function HomeLocationPanel({
             <button
               type="button"
               className="chip-btn"
-              onClick={() => onSetHome(null)}
+              onClick={() => setHomeAndMaybeCompact(null)}
               title="Clear home"
             >
               Clear
+            </button>
+            <button
+              type="button"
+              className="chip-btn home-minimize-btn-inline"
+              onClick={minimize}
+              title="Minimize"
+            >
+              Minimize
             </button>
           </div>
         </div>

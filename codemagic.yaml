@@ -1,0 +1,119 @@
+# Codemagic CI — Solara iOS → TestFlight
+# https://docs.codemagic.io/
+#
+# Automatic code signing:
+#   Uses your App Store Connect integration to create/manage
+#   Apple Distribution certificates and App Store provisioning profiles.
+# Bundle ID: com.solara.weather (matches capacitor.config.ts)
+#
+# Prerequisites (Codemagic UI):
+# 1. Connect this repo
+# 2. Team integrations → Developer Portal → App Store Connect API key
+#    named exactly: Solara  (App Manager access)
+# 3. App record in App Store Connect with bundle id com.solara.weather
+# 4. Optional env: VITE_API_BASE = https://solaraweather.com
+
+workflows:
+  ios-app-store:
+    name: Solara iOS → TestFlight
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+
+    # App Store Connect API key — enables automatic certs + profiles + publish
+    integrations:
+      app_store_connect: Solara
+
+    environment:
+      vars:
+        XCODE_SCHEME: App
+        # Existing Solara bundle id (capacitor.config.ts appId)
+        BUNDLE_ID: com.solara.weather
+      node: v22.14.0
+      xcode: latest
+      cocoapods: default
+
+    scripts:
+      - name: Install JS dependencies
+        script: |
+          npm ci || npm install
+
+      - name: Build web app + Capacitor iOS sync
+        script: |
+          export VITE_API_BASE="${VITE_API_BASE:-https://solaraweather.com}"
+          npm run build
+          npx cap sync ios
+
+      - name: Set up keychain
+        script: |
+          keychain initialize
+
+      - name: Automatic code signing — fetch or create certs & profiles
+        script: |
+          # Creates Apple Distribution certificate + App Store provisioning
+          # profile for $BUNDLE_ID when missing; reuses existing when present.
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create
+
+      - name: Add certificates to keychain
+        script: |
+          keychain add-certificates
+
+      - name: Apply signing settings to Xcode project
+        script: |
+          xcode-project use-profiles
+
+      - name: Build IPA
+        script: |
+          cd ios/App
+          xcode-project build-ipa \
+            --project "App.xcodeproj" \
+            --scheme "$XCODE_SCHEME"
+
+    artifacts:
+      - ios/App/build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+
+    publishing:
+      email:
+        recipients:
+          - Yellowknife1989@gmail.com
+        notify:
+          success: true
+          failure: true
+
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        submit_to_app_store: false
+        # beta_groups:
+        #   - Internal Testers
+
+  ios-simulator-check:
+    name: Solara iOS compile check
+    max_build_duration: 45
+    instance_type: mac_mini_m2
+    environment:
+      node: v22.14.0
+      xcode: latest
+    scripts:
+      - name: Install and build web + sync
+        script: |
+          export VITE_API_BASE="${VITE_API_BASE:-https://solaraweather.com}"
+          npm ci || npm install
+          npm run build
+          npx cap sync ios
+      - name: Compile for iOS Simulator
+        script: |
+          cd ios/App
+          xcodebuild \
+            -project App.xcodeproj \
+            -scheme App \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+    artifacts:
+      - /tmp/xcodebuild_logs/*.log

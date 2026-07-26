@@ -7483,6 +7483,81 @@ html.mobile-perf .panel {
 .home-location-panel {
   margin-bottom: 0.65rem;
 }
+.home-location-panel.home-location-compact {
+  margin-bottom: 0.4rem;
+  padding: 0.4rem 0.5rem;
+}
+.home-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.home-minimize-btn {
+  min-width: 2rem;
+  padding: 0.2rem 0.45rem !important;
+  font-size: 0.85rem;
+  line-height: 1;
+}
+.home-compact-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.home-compact-go {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.16), rgba(15, 23, 42, 0.5));
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+.home-compact-go:hover {
+  border-color: rgba(56, 189, 248, 0.55);
+}
+.home-compact-emoji {
+  font-size: 1.05rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.home-compact-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+}
+.home-compact-text strong {
+  font-size: 0.84rem;
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-compact-coords {
+  font-size: 0.68rem;
+  color: var(--text-mute, rgba(148, 163, 184, 0.95));
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-compact-expand {
+  flex-shrink: 0;
+  min-width: 2.1rem;
+  padding: 0.35rem 0.45rem !important;
+}
+@media (min-width: 721px) {
+  /* Desktop keeps full card; compact is mobile-first */
+  .home-minimize-btn-inline {
+    display: none;
+  }
+}
 .home-set-row {
   display: flex;
   flex-direction: column;
