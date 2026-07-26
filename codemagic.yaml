@@ -121,6 +121,55 @@ workflows:
             --project "$XCODE_PROJECT" \
             --scheme "$XCODE_SCHEME"
 
+      - name: Ensure App Store Connect app exists
+        script: |
+          set -euo pipefail
+          # altool error 19 = no app for this bundle id on this team
+          echo "Looking for App Store Connect app with bundle id $BUNDLE_ID ..."
+          set +e
+          LIST=$(app-store-connect apps list 2>&1)
+          STATUS=$?
+          set -e
+          echo "$LIST" | head -n 80
+
+          if echo "$LIST" | grep -qi "$BUNDLE_ID"; then
+            echo "App record found for $BUNDLE_ID"
+          else
+            echo "No app matched $BUNDLE_ID in list output."
+            echo "Trying to create App Store Connect app 'Solara'..."
+            set +e
+            CREATE=$(app-store-connect apps create \
+              --name "Solara" \
+              --bundle-id-sku "solara-weather" \
+              --primary-locale "en-US" \
+              --bundle-id "$BUNDLE_ID" \
+              2>&1)
+            CSTATUS=$?
+            set -e
+            echo "$CREATE"
+            if [ $CSTATUS -ne 0 ]; then
+              echo ""
+              echo "============================================================"
+              echo "Create the app once in App Store Connect (required):"
+              echo "  1. https://appstoreconnect.apple.com → My Apps → +"
+              echo "  2. Platforms: iOS"
+              echo "  3. Name: Solara"
+              echo "  4. Bundle ID: com.solara.weather"
+              echo "     (register Identifier first if missing:"
+              echo "      developer.apple.com → Identifiers → App IDs)"
+              echo "  5. SKU: solara-weather-001"
+              echo "  6. Create, then re-run this Codemagic build"
+              echo ""
+              echo "Optional: set Application env APP_STORE_APPLE_ID to the"
+              echo "numeric id from the app URL:"
+              echo "  appstoreconnect.apple.com/apps/XXXXXXXXXX/..."
+              echo "============================================================"
+              # Don't fail the build if IPA is already built — publishing will
+              # still fail with a clear ASC message. Prefer explicit fail:
+              exit 1
+            fi
+          fi
+
     artifacts:
       - ios/App/build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
@@ -135,6 +184,9 @@ workflows:
           failure: true
       app_store_connect:
         auth: integration
+        # Optional numeric App Store Connect Apple ID (from app URL / App Information).
+        # Set as Codemagic Application env var APP_STORE_APPLE_ID if bundle-id lookup fails.
+        # apple_id: $APP_STORE_APPLE_ID
         submit_to_testflight: true
         submit_to_app_store: false
 
