@@ -38,3 +38,7 @@ ios/App/Pods/
 ios/App/build/
 ios/DerivedData/
 *.xcuserstate
+
+# Codemagic signing secrets (never commit)
+.codemagic-secrets/
+

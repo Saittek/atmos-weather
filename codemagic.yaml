@@ -29,6 +29,9 @@ workflows:
       app_store_connect: Solara
 
     environment:
+      # Import group that holds CERTIFICATE_PRIVATE_KEY (create group in Codemagic UI)
+      groups:
+        - app_store_credentials
       vars:
         XCODE_WORKSPACE_DIR: ios/App
         XCODE_PROJECT: App.xcodeproj
@@ -59,23 +62,20 @@ workflows:
           set -e
           if [ -z "${CERTIFICATE_PRIVATE_KEY:-}" ]; then
             echo "============================================================"
-            echo "MISSING secure env var: CERTIFICATE_PRIVATE_KEY"
+            echo "MISSING: CERTIFICATE_PRIVATE_KEY"
             echo ""
-            echo "Generate once:"
-            echo "  openssl genrsa 2048"
-            echo ""
-            echo "Codemagic → Application → Environment variables:"
-            echo "  Name: CERTIFICATE_PRIVATE_KEY"
-            echo "  Value: entire PEM block"
-            echo "  Secure: ON"
-            echo ""
-            echo "This fixes: Cannot save Signing Certificates without"
-            echo "certificate private key"
+            echo "In Codemagic UI (not in GitHub):"
+            echo "  1. Open your app → Environment variables"
+            echo "  2. Variable group name: app_store_credentials"
+            echo "  3. Add variable:"
+            echo "       Name: CERTIFICATE_PRIVATE_KEY"
+            echo "       Secure: YES"
+            echo "       Value: contents of certificate_private_key.pem"
+            echo "  4. Ensure group is available to this workflow"
             echo "============================================================"
             exit 1
           fi
 
-          # Reuse the same private key every build so Apple certs stay usable
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
             --create \
@@ -125,6 +125,8 @@ workflows:
       app_store_connect: Solara
 
     environment:
+      groups:
+        - app_store_credentials
       vars:
         XCODE_WORKSPACE_DIR: ios/App
         XCODE_PROJECT: App.xcodeproj
