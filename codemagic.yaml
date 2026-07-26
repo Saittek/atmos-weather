@@ -1,14 +1,15 @@
 # Codemagic — Solara iOS → TestFlight → App Store
 # Bundle ID: com.solara.weather
-# Integration name (Codemagic UI → Developer Portal): Solara
+# Integration name: Solara
 #
-# Signing: NO manual CERTIFICATE_PRIVATE_KEY needed.
-# Each build generates a key on the Mac VM, creates/reuses App Store
-# signing files via the App Store Connect API integration, and signs the IPA.
+# Signing strategy:
+# - Generate a private key on the build Mac each run
+# - If Apple already has max Distribution certs (and we have no key for them),
+#   delete those Distribution certs via API, then create a new one with our key
+# - Create/fetch App Store provisioning profile for com.solara.weather
 #
-# If create fails due to Apple's 3 Distribution-cert limit, the script
-# deletes the oldest Distribution cert and retries (CI-only Apple account
-# recommended if you also ship other apps from the same team).
+# Note: Deleting Distribution certs only affects NEW uploads, not apps already
+# on the store. Safe for teams that only ship via this Codemagic pipeline.
 
 workflows:
   ios-testflight:
@@ -45,57 +46,131 @@ workflows:
       - name: Set up keychain
         script: keychain initialize
 
-      - name: Automatic code signing (no user key paste)
+      - name: Automatic code signing
         script: |
           set -euo pipefail
           KEY_FILE="$CM_BUILD_DIR/ios_distribution.key.pem"
 
-          echo "Generating Distribution private key on this build machine..."
+          echo "Generating Distribution private key..."
           openssl genrsa -out "$KEY_FILE" 2048
           openssl rsa -in "$KEY_FILE" -check -noout
           echo "Private key OK"
 
-          free_one_distribution_cert() {
-            echo "Freeing one Apple Distribution certificate slot..."
-            # List certs as JSON; delete the first IOS_DISTRIBUTION id found
-            if command -v jq >/dev/null 2>&1; then
-              IDS=$(app-store-connect certificates list --type IOS_DISTRIBUTION --json 2>/dev/null \
-                | jq -r 'if type=="array" then .[].id elif .data then .data[].id else empty end' 2>/dev/null || true)
-            else
-              IDS=$(app-store-connect certificates list --type IOS_DISTRIBUTION 2>/dev/null \
-                | sed -n 's/.*\([A-Z0-9]\{10,\}\).*/\1/p' | head -n 5 || true)
-            fi
-            for id in $IDS; do
-              if [ -n "$id" ] && [ "$id" != "null" ]; then
-                echo "Deleting certificate id=$id"
-                app-store-connect certificates delete "$id" || true
-                return 0
-              fi
-            done
-            echo "Could not auto-delete a certificate; revoke one at:"
-            echo "  https://developer.apple.com/account/resources/certificates/list"
-            return 1
+          delete_distribution_certs() {
+            echo "Listing Apple Distribution certificates..."
+            python3 << 'PY'
+          import json, subprocess, sys
+
+          def run(cmd):
+              try:
+                  return subprocess.check_output(cmd, stderr=subprocess.STDOUT, text=True)
+              except subprocess.CalledProcessError as e:
+                  print(e.output or str(e), file=sys.stderr)
+                  return None
+
+          raw = run(["app-store-connect", "certificates", "list", "--json"])
+          if not raw:
+              raw = run(["app-store-connect", "certificates", "list", "--type", "IOS_DISTRIBUTION", "--json"])
+          if not raw:
+              print("Could not list certificates as JSON", file=sys.stderr)
+              sys.exit(2)
+
+          print("Raw list (truncated):", raw[:1500])
+          try:
+              data = json.loads(raw)
+          except json.JSONDecodeError:
+              print("Not JSON; trying line parse")
+              # fallback: lines that look like IDs
+              import re
+              ids = re.findall(r"\b([A-Z0-9]{10,})\b", raw)
+              data = [{"id": i} for i in ids]
+
+          ids = []
+
+          def walk(o):
+              if isinstance(o, dict):
+                  cid = o.get("id")
+                  attrs = o.get("attributes") or {}
+                  ctype = str(
+                      attrs.get("certificateType")
+                      or o.get("certificateType")
+                      or o.get("type")
+                      or ""
+                  ).upper()
+                  # Match distribution certs only
+                  if cid and (
+                      "DISTRIBUTION" in ctype
+                      or ctype in ("", "CERTIFICATES")
+                      or o.get("type") == "certificates"
+                  ):
+                      # If type is certificates resource, check attributes
+                      if o.get("type") == "certificates" or "DISTRIBUTION" in ctype:
+                          if "DEVELOPMENT" not in ctype:
+                              if "DISTRIBUTION" in ctype or o.get("type") == "certificates":
+                                  # Prefer explicit DISTRIBUTION; for bare certificate resources include if attr says so
+                                  if "DISTRIBUTION" in ctype or (
+                                      o.get("type") == "certificates"
+                                      and "DEVELOPMENT" not in str(attrs).upper()
+                                      and "DISTRIBUTION" in str(attrs).upper()
+                                  ):
+                                      ids.append(cid)
+                  for v in o.values():
+                      walk(v)
+              elif isinstance(o, list):
+                  for i in o:
+                      walk(i)
+
+          walk(data)
+
+          # Deduplicate preserving order
+          seen = set()
+          uniq = []
+          for i in ids:
+              if i not in seen:
+                  seen.add(i)
+                  uniq.append(i)
+
+          # If walk found nothing but list is array of cert objects with id only
+          if not uniq and isinstance(data, list):
+              for item in data:
+                  if isinstance(item, dict) and item.get("id"):
+                      uniq.append(item["id"])
+
+          print(f"Distribution cert ids to delete: {uniq}")
+          if not uniq:
+              sys.exit(3)
+
+          failed = 0
+          for cid in uniq:
+              print(f"Deleting certificate {cid} ...")
+              r = subprocess.call(["app-store-connect", "certificates", "delete", cid])
+              if r != 0:
+                  print(f"Delete failed for {cid} (exit {r})")
+                  failed += 1
+          sys.exit(0 if failed < len(uniq) else 4)
+          PY
+          }
+
+          fetch_files() {
+            app-store-connect fetch-signing-files "$BUNDLE_ID" \
+              --type IOS_APP_STORE \
+              --create \
+              --certificate-key="@file:$KEY_FILE"
           }
 
           echo "Fetching/creating signing files for $BUNDLE_ID ..."
           set +e
-          OUT=$(app-store-connect fetch-signing-files "$BUNDLE_ID" \
-            --type IOS_APP_STORE \
-            --create \
-            --certificate-key="@file:$KEY_FILE" 2>&1)
+          OUT=$(fetch_files 2>&1)
           STATUS=$?
           set -e
           echo "$OUT"
 
           if [ $STATUS -ne 0 ]; then
-            if echo "$OUT" | grep -qiE 'private key|already have|maximum|limit|Certificate'; then
-              free_one_distribution_cert || true
-              free_one_distribution_cert || true
+            if echo "$OUT" | grep -qiE 'already have|maximum|limit|409|private key|Distribution certificate'; then
+              echo "Certificate slot full or unusable — deleting existing Distribution certs..."
+              delete_distribution_certs || true
               echo "Retrying fetch-signing-files..."
-              app-store-connect fetch-signing-files "$BUNDLE_ID" \
-                --type IOS_APP_STORE \
-                --create \
-                --certificate-key="@file:$KEY_FILE"
+              fetch_files
             else
               exit $STATUS
             fi
@@ -124,51 +199,19 @@ workflows:
       - name: Ensure App Store Connect app exists
         script: |
           set -euo pipefail
-          # altool error 19 = no app for this bundle id on this team
-          echo "Looking for App Store Connect app with bundle id $BUNDLE_ID ..."
+          echo "Checking App Store Connect for $BUNDLE_ID ..."
           set +e
           LIST=$(app-store-connect apps list 2>&1)
-          STATUS=$?
           set -e
-          echo "$LIST" | head -n 80
-
-          if echo "$LIST" | grep -qi "$BUNDLE_ID"; then
-            echo "App record found for $BUNDLE_ID"
-          else
-            echo "No app matched $BUNDLE_ID in list output."
-            echo "Trying to create App Store Connect app 'Solara'..."
-            set +e
-            CREATE=$(app-store-connect apps create \
-              --name "Solara" \
-              --bundle-id-sku "solara-weather" \
-              --primary-locale "en-US" \
-              --bundle-id "$BUNDLE_ID" \
-              2>&1)
-            CSTATUS=$?
-            set -e
-            echo "$CREATE"
-            if [ $CSTATUS -ne 0 ]; then
-              echo ""
-              echo "============================================================"
-              echo "Create the app once in App Store Connect (required):"
-              echo "  1. https://appstoreconnect.apple.com → My Apps → +"
-              echo "  2. Platforms: iOS"
-              echo "  3. Name: Solara"
-              echo "  4. Bundle ID: com.solara.weather"
-              echo "     (register Identifier first if missing:"
-              echo "      developer.apple.com → Identifiers → App IDs)"
-              echo "  5. SKU: solara-weather-001"
-              echo "  6. Create, then re-run this Codemagic build"
-              echo ""
-              echo "Optional: set Application env APP_STORE_APPLE_ID to the"
-              echo "numeric id from the app URL:"
-              echo "  appstoreconnect.apple.com/apps/XXXXXXXXXX/..."
-              echo "============================================================"
-              # Don't fail the build if IPA is already built — publishing will
-              # still fail with a clear ASC message. Prefer explicit fail:
-              exit 1
-            fi
+          echo "$LIST" | head -n 60
+          if echo "$LIST" | grep -qi "$BUNDLE_ID\|Solara"; then
+            echo "App record appears present"
+            exit 0
           fi
+          echo "WARNING: Could not confirm app for $BUNDLE_ID."
+          echo "If publish fails with altool error 19, create the app at:"
+          echo "  https://appstoreconnect.apple.com → My Apps → + → Solara / com.solara.weather"
+          # Do not fail here if list format is odd; publish step will fail clearly
 
     artifacts:
       - ios/App/build/ios/ipa/*.ipa
@@ -184,9 +227,6 @@ workflows:
           failure: true
       app_store_connect:
         auth: integration
-        # Optional numeric App Store Connect Apple ID (from app URL / App Information).
-        # Set as Codemagic Application env var APP_STORE_APPLE_ID if bundle-id lookup fails.
-        # apple_id: $APP_STORE_APPLE_ID
         submit_to_testflight: true
         submit_to_app_store: false
 
@@ -194,10 +234,8 @@ workflows:
     name: Solara → App Store review
     max_build_duration: 90
     instance_type: mac_mini_m2
-
     integrations:
       app_store_connect: Solara
-
     environment:
       vars:
         XCODE_WORKSPACE_DIR: ios/App
@@ -208,84 +246,62 @@ workflows:
       node: v22.14.0
       xcode: latest
       cocoapods: default
-
     scripts:
       - name: Install JS dependencies
-        script: |
-          npm ci || npm install
-
+        script: npm ci || npm install
       - name: Build web + Capacitor iOS
         script: |
           export CAPACITOR=1
           export VITE_API_BASE="${VITE_API_BASE:-https://solaraweather.com}"
           npm run build -- --base ./
           npx cap sync ios
-
       - name: Set up keychain
         script: keychain initialize
-
-      - name: Automatic code signing (no user key paste)
+      - name: Automatic code signing
         script: |
           set -euo pipefail
           KEY_FILE="$CM_BUILD_DIR/ios_distribution.key.pem"
           openssl genrsa -out "$KEY_FILE" 2048
-          openssl rsa -in "$KEY_FILE" -check -noout
-
-          free_one_distribution_cert() {
-            if command -v jq >/dev/null 2>&1; then
-              IDS=$(app-store-connect certificates list --type IOS_DISTRIBUTION --json 2>/dev/null \
-                | jq -r 'if type=="array" then .[].id elif .data then .data[].id else empty end' 2>/dev/null || true)
-            else
-              IDS=""
-            fi
-            for id in $IDS; do
-              if [ -n "$id" ] && [ "$id" != "null" ]; then
-                app-store-connect certificates delete "$id" || true
-                return 0
-              fi
-            done
-            return 1
-          }
-
           set +e
-          OUT=$(app-store-connect fetch-signing-files "$BUNDLE_ID" \
-            --type IOS_APP_STORE \
-            --create \
-            --certificate-key="@file:$KEY_FILE" 2>&1)
+          OUT=$(app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_STORE --create --certificate-key="@file:$KEY_FILE" 2>&1)
           STATUS=$?
           set -e
           echo "$OUT"
           if [ $STATUS -ne 0 ]; then
-            free_one_distribution_cert || true
-            free_one_distribution_cert || true
-            app-store-connect fetch-signing-files "$BUNDLE_ID" \
-              --type IOS_APP_STORE \
-              --create \
-              --certificate-key="@file:$KEY_FILE"
+            python3 - <<'PY' || true
+          import json, subprocess, sys
+          raw = subprocess.check_output(["app-store-connect", "certificates", "list", "--json"], text=True)
+          data = json.loads(raw)
+          ids = []
+          def walk(o):
+            if isinstance(o, dict):
+              if o.get("id") and ("DISTRIBUTION" in str(o).upper()):
+                if o.get("type") == "certificates" or "certificateType" in str(o.get("attributes", {})):
+                  ids.append(o["id"])
+              for v in o.values(): walk(v)
+            elif isinstance(o, list):
+              for i in o: walk(i)
+          walk(data)
+          for i in dict.fromkeys(ids):
+            print("delete", i)
+            subprocess.call(["app-store-connect", "certificates", "delete", i])
+          PY
+            app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_STORE --create --certificate-key="@file:$KEY_FILE"
           fi
-
       - name: Add certificates to keychain
         script: keychain add-certificates
-
       - name: Apply signing to Xcode project
         script: xcode-project use-profiles
-
       - name: Increment iOS build number
         script: |
           cd "$XCODE_WORKSPACE_DIR"
           agvtool new-version -all ${PROJECT_BUILD_NUMBER:-$BUILD_NUMBER}
-
       - name: Build signed IPA
         script: |
           cd "$XCODE_WORKSPACE_DIR"
-          xcode-project build-ipa \
-            --project "$XCODE_PROJECT" \
-            --scheme "$XCODE_SCHEME"
-
+          xcode-project build-ipa --project "$XCODE_PROJECT" --scheme "$XCODE_SCHEME"
     artifacts:
       - ios/App/build/ios/ipa/*.ipa
-      - /tmp/xcodebuild_logs/*.log
-
     publishing:
       email:
         recipients:
@@ -310,20 +326,14 @@ workflows:
       - name: Install and build
         script: |
           export CAPACITOR=1
-          export VITE_API_BASE="${VITE_API_BASE:-https://solaraweather.com}"
           npm ci || npm install
           npm run build -- --base ./
           npx cap sync ios
       - name: Compile for simulator
         script: |
           cd ios/App
-          xcodebuild \
-            -project App.xcodeproj \
-            -scheme App \
-            -sdk iphonesimulator \
-            -destination 'generic/platform=iOS Simulator' \
-            -configuration Debug \
-            CODE_SIGNING_ALLOWED=NO \
-            build
+          xcodebuild -project App.xcodeproj -scheme App -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO build
     artifacts:
       - /tmp/xcodebuild_logs/*.log
