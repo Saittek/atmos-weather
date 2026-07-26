@@ -59,27 +59,43 @@ workflows:
 
       - name: Automatic code signing (certs + profiles)
         script: |
-          set -e
-          if [ -z "${CERTIFICATE_PRIVATE_KEY:-}" ]; then
-            echo "============================================================"
-            echo "MISSING: CERTIFICATE_PRIVATE_KEY"
-            echo ""
-            echo "In Codemagic UI (not in GitHub):"
-            echo "  1. Open your app → Environment variables"
-            echo "  2. Variable group name: app_store_credentials"
-            echo "  3. Add variable:"
-            echo "       Name: CERTIFICATE_PRIVATE_KEY"
-            echo "       Secure: YES"
-            echo "       Value: contents of certificate_private_key.pem"
-            echo "  4. Ensure group is available to this workflow"
-            echo "============================================================"
+          set -euo pipefail
+          KEY_FILE="$CM_BUILD_DIR/ios_distribution.key.pem"
+
+          if [ -z "${CERTIFICATE_PRIVATE_KEY:-}" ] && [ -z "${CERTIFICATE_PRIVATE_KEY_B64:-}" ]; then
+            echo "MISSING CERTIFICATE_PRIVATE_KEY or CERTIFICATE_PRIVATE_KEY_B64"
+            echo "Prefer CERTIFICATE_PRIVATE_KEY_B64 (single-line base64) — see docs/CODEMAGIC_APP_STORE.md"
             exit 1
           fi
+
+          # Prefer base64 (Codemagic secure vars often mangle multiline PEM)
+          if [ -n "${CERTIFICATE_PRIVATE_KEY_B64:-}" ]; then
+            echo "Using CERTIFICATE_PRIVATE_KEY_B64..."
+            echo "$CERTIFICATE_PRIVATE_KEY_B64" | base64 --decode > "$KEY_FILE"
+          else
+            echo "Using CERTIFICATE_PRIVATE_KEY (normalizing newlines)..."
+            # Handle real newlines, Windows CRLF, or literal \n from single-line paste
+            printf '%s' "$CERTIFICATE_PRIVATE_KEY" \
+              | sed 's/\r//g' \
+              | sed 's/\\n/\n/g' \
+              > "$KEY_FILE"
+            # Ensure trailing newline
+            echo >> "$KEY_FILE"
+          fi
+
+          echo "Key file header: $(head -n 1 "$KEY_FILE")"
+          if ! openssl rsa -in "$KEY_FILE" -check -noout 2>/dev/null; then
+            if ! openssl pkey -in "$KEY_FILE" -check -noout 2>/dev/null; then
+              echo "Invalid private key after write. Re-copy CERTIFICATE_PRIVATE_KEY_B64 from certificate_private_key.b64.txt"
+              exit 1
+            fi
+          fi
+          echo "Private key OK"
 
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
             --create \
-            --certificate-key="@env:CERTIFICATE_PRIVATE_KEY"
+            --certificate-key="@file:$KEY_FILE"
 
       - name: Add certificates to keychain
         script: keychain add-certificates
@@ -154,15 +170,28 @@ workflows:
 
       - name: Automatic code signing (certs + profiles)
         script: |
-          set -e
-          if [ -z "${CERTIFICATE_PRIVATE_KEY:-}" ]; then
-            echo "MISSING CERTIFICATE_PRIVATE_KEY — see ios-testflight workflow comments"
+          set -euo pipefail
+          KEY_FILE="$CM_BUILD_DIR/ios_distribution.key.pem"
+
+          if [ -z "${CERTIFICATE_PRIVATE_KEY:-}" ] && [ -z "${CERTIFICATE_PRIVATE_KEY_B64:-}" ]; then
+            echo "MISSING CERTIFICATE_PRIVATE_KEY or CERTIFICATE_PRIVATE_KEY_B64"
             exit 1
           fi
+
+          if [ -n "${CERTIFICATE_PRIVATE_KEY_B64:-}" ]; then
+            echo "$CERTIFICATE_PRIVATE_KEY_B64" | base64 --decode > "$KEY_FILE"
+          else
+            printf '%s' "$CERTIFICATE_PRIVATE_KEY" | sed 's/\r//g' | sed 's/\\n/\n/g' > "$KEY_FILE"
+            echo >> "$KEY_FILE"
+          fi
+
+          openssl rsa -in "$KEY_FILE" -check -noout 2>/dev/null \
+            || openssl pkey -in "$KEY_FILE" -check -noout
+
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
             --create \
-            --certificate-key="@env:CERTIFICATE_PRIVATE_KEY"
+            --certificate-key="@file:$KEY_FILE"
 
       - name: Add certificates to keychain
         script: keychain add-certificates
