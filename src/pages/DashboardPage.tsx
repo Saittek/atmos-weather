@@ -1,54 +1,33 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react'
 import { Link } from 'react-router-dom'
 import { SearchBar } from '../components/SearchBar'
 import { CurrentWeather } from '../components/CurrentWeather'
 import { HourlyForecast } from '../components/HourlyForecast'
 import { DailyForecast } from '../components/DailyForecast'
-import { WeatherDetails } from '../components/WeatherDetails'
 import { AirQuality } from '../components/AirQuality'
 import { Alerts } from '../components/Alerts'
 import { SunMoon } from '../components/SunMoon'
-import { PrecipChart } from '../components/PrecipChart'
 import { Favorites } from '../components/Favorites'
-import { HomeLocationPanel } from '../components/HomeLocationPanel'
-import { RainNextHour } from '../components/RainNextHour'
-import { HourlyCharts } from '../components/HourlyCharts'
-import { OutlookTips } from '../components/OutlookTips'
-import { ModelCompare } from '../components/ModelCompare'
-import { Sounding } from '../components/Sounding'
-import { Tropical } from '../components/Tropical'
 import { SettingsBar } from '../components/SettingsBar'
-
 import { AllergySection } from '../components/AllergySection'
-import { FireSmoke } from '../components/FireSmoke'
-import { TripPlanner } from '../components/TripPlanner'
-import { CityCompare } from '../components/CityCompare'
 import { InstallPrompt } from '../components/InstallPrompt'
 import { Onboarding } from '../components/Onboarding'
-import { DressForToday } from '../components/DressForToday'
 import { ForecastSummary } from '../components/ForecastSummary'
 import { GlanceModules } from '../components/GlanceModules'
-import { WeatherVideos } from '../components/WeatherVideos'
 import { AlertTopBar } from '../components/AlertTopBar'
-import { ComfortPanel } from '../components/ComfortPanel'
-import { ClimateCompare } from '../components/ClimateCompare'
-import { SnowOutlook } from '../components/SnowOutlook'
-import { LifestyleScores } from '../components/LifestyleScores'
 import { AmbientOrbs } from '../components/AmbientOrbs'
 import { AdvancedSection } from '../components/AdvancedSection'
 import { isMobileViewport } from '../utils/device'
 import { DashboardSkeleton } from '../components/Skeleton'
 import { WeekStrip } from '../components/WeekStrip'
-import { HazardBadges } from '../components/HazardBadges'
-import { PrecipTotals } from '../components/PrecipTotals'
-import { AreaChat } from '../components/AreaChat'
-import { UvWindPanel } from '../components/UvWindPanel'
-import { VisibilityPanel } from '../components/VisibilityPanel'
-import { ActivityModes } from '../components/ActivityModes'
-import { ShareWeatherCard } from '../components/ShareWeatherCard'
-import { OutdoorAirStrip } from '../components/OutdoorAirStrip'
-import { StormRisk } from '../components/StormRisk'
-import { DayLastYear } from '../components/DayLastYear'
 import { Deferred } from '../components/Deferred'
 import { useWeather } from '../hooks/useWeather'
 import { useThreatProximity } from '../hooks/useThreatProximity'
@@ -65,13 +44,95 @@ import { filterActiveAlerts } from '../utils/activeAlerts'
 import { willIGetWet } from '../utils/wetSummary'
 import { usePullToRefresh } from '../hooks/usePullToRefresh'
 
-/** Leaflet + radar engine — large; load only when needed */
+/** Heavy / below-fold — code-split off the critical path */
 const RadarMap = lazy(() =>
   import('../components/RadarMap').then((m) => ({ default: m.RadarMap })),
 )
 const FireMapPanel = lazy(() =>
   import('../components/FireMapPanel').then((m) => ({ default: m.FireMapPanel })),
 )
+const WeatherVideos = lazy(() =>
+  import('../components/WeatherVideos').then((m) => ({ default: m.WeatherVideos })),
+)
+const HazardBadges = lazy(() =>
+  import('../components/HazardBadges').then((m) => ({ default: m.HazardBadges })),
+)
+const UvWindPanel = lazy(() =>
+  import('../components/UvWindPanel').then((m) => ({ default: m.UvWindPanel })),
+)
+const OutdoorAirStrip = lazy(() =>
+  import('../components/OutdoorAirStrip').then((m) => ({ default: m.OutdoorAirStrip })),
+)
+const ActivityModes = lazy(() =>
+  import('../components/ActivityModes').then((m) => ({ default: m.ActivityModes })),
+)
+const PrecipTotals = lazy(() =>
+  import('../components/PrecipTotals').then((m) => ({ default: m.PrecipTotals })),
+)
+const VisibilityPanel = lazy(() =>
+  import('../components/VisibilityPanel').then((m) => ({ default: m.VisibilityPanel })),
+)
+const StormRisk = lazy(() =>
+  import('../components/StormRisk').then((m) => ({ default: m.StormRisk })),
+)
+const DressForToday = lazy(() =>
+  import('../components/DressForToday').then((m) => ({ default: m.DressForToday })),
+)
+const AreaChat = lazy(() =>
+  import('../components/AreaChat').then((m) => ({ default: m.AreaChat })),
+)
+const ShareWeatherCard = lazy(() =>
+  import('../components/ShareWeatherCard').then((m) => ({ default: m.ShareWeatherCard })),
+)
+const HourlyCharts = lazy(() =>
+  import('../components/HourlyCharts').then((m) => ({ default: m.HourlyCharts })),
+)
+const PrecipChart = lazy(() =>
+  import('../components/PrecipChart').then((m) => ({ default: m.PrecipChart })),
+)
+const ComfortPanel = lazy(() =>
+  import('../components/ComfortPanel').then((m) => ({ default: m.ComfortPanel })),
+)
+const LifestyleScores = lazy(() =>
+  import('../components/LifestyleScores').then((m) => ({ default: m.LifestyleScores })),
+)
+const WeatherDetails = lazy(() =>
+  import('../components/WeatherDetails').then((m) => ({ default: m.WeatherDetails })),
+)
+const DayLastYear = lazy(() =>
+  import('../components/DayLastYear').then((m) => ({ default: m.DayLastYear })),
+)
+const ModelCompare = lazy(() =>
+  import('../components/ModelCompare').then((m) => ({ default: m.ModelCompare })),
+)
+const CityCompare = lazy(() =>
+  import('../components/CityCompare').then((m) => ({ default: m.CityCompare })),
+)
+const ClimateCompare = lazy(() =>
+  import('../components/ClimateCompare').then((m) => ({ default: m.ClimateCompare })),
+)
+const SnowOutlook = lazy(() =>
+  import('../components/SnowOutlook').then((m) => ({ default: m.SnowOutlook })),
+)
+const TripPlanner = lazy(() =>
+  import('../components/TripPlanner').then((m) => ({ default: m.TripPlanner })),
+)
+const OutlookTips = lazy(() =>
+  import('../components/OutlookTips').then((m) => ({ default: m.OutlookTips })),
+)
+const FireSmoke = lazy(() =>
+  import('../components/FireSmoke').then((m) => ({ default: m.FireSmoke })),
+)
+const Sounding = lazy(() =>
+  import('../components/Sounding').then((m) => ({ default: m.Sounding })),
+)
+const Tropical = lazy(() =>
+  import('../components/Tropical').then((m) => ({ default: m.Tropical })),
+)
+
+function LazyPanel({ children }: { children: ReactNode }) {
+  return <Suspense fallback={null}>{children}</Suspense>
+}
 
 function MapChunkFallback({ label }: { label: string }) {
   return (
@@ -546,15 +607,6 @@ export default function DashboardPage() {
 
         {/* Mobile: saved places first — pick a location, then scroll into weather */}
         <div className="favorites-mobile-slot" id="favorites">
-          <HomeLocationPanel
-            home={homeLocation}
-            current={location}
-            geoLoading={geoLoading}
-            onSetHome={setHomeLocation}
-            onGoHome={goHome}
-            signedIn={!!user}
-            accountSynced={cloudSynced}
-          />
           <Favorites
             favorites={favorites}
             current={location}
@@ -562,6 +614,10 @@ export default function DashboardPage() {
             onRemove={toggleFavorite}
             signedIn={!!user}
             accountSynced={cloudSynced}
+            home={homeLocation}
+            geoLoading={geoLoading}
+            onSetHome={setHomeLocation}
+            onGoHome={goHome}
           />
         </div>
 
@@ -619,6 +675,9 @@ export default function DashboardPage() {
                   air={air}
                 />
 
+                {/* Directly under “Right now” */}
+                <GlanceModules weather={weather} units={units} air={air} />
+
                 <div id="alerts-panel">
                   {!alertsMinimized && <Alerts alerts={activeAlerts} />}
                 </div>
@@ -631,8 +690,6 @@ export default function DashboardPage() {
                     air={air}
                   />
                 )}
-
-                <RainNextHour weather={weather} units={units} />
               </div>
 
               <HourlyForecast weather={weather} units={units} />
@@ -649,10 +706,6 @@ export default function DashboardPage() {
 
               {/* Allergies — simple + full (pollen, mold-friendly air, tips) */}
               <AllergySection air={air} weather={weather} compact={simpleMode} />
-
-              {!simpleMode && (
-                <GlanceModules weather={weather} units={units} air={air} />
-              )}
 
               {/* Radar: always available in storm mode; collapsed CTA in simple mode */}
               {!simpleMode || stormMode ? (
@@ -704,10 +757,12 @@ export default function DashboardPage() {
                     rootMargin="100px 0px"
                     minHeight={isMobile ? 72 : undefined}
                   >
-                    <HazardBadges weather={weather} units={units} air={air} />
-                    <UvWindPanel weather={weather} units={units} />
-                    <OutdoorAirStrip weather={weather} air={air} />
-                    <ActivityModes weather={weather} units={units} air={air} />
+                    <LazyPanel>
+                      <HazardBadges weather={weather} units={units} air={air} />
+                      <UvWindPanel weather={weather} units={units} />
+                      <OutdoorAirStrip weather={weather} air={air} />
+                      <ActivityModes weather={weather} units={units} air={air} />
+                    </LazyPanel>
                   </Deferred>
 
                   <Deferred
@@ -715,15 +770,21 @@ export default function DashboardPage() {
                     rootMargin="160px 0px"
                     minHeight={isMobile ? 64 : undefined}
                   >
-                    <PrecipTotals weather={weather} units={units} />
-                    <VisibilityPanel weather={weather} units={units} air={air} />
-                    {!isMobile && <StormRisk weather={weather} profile={profile} />}
+                    <LazyPanel>
+                      <PrecipTotals weather={weather} units={units} />
+                      <VisibilityPanel weather={weather} units={units} air={air} />
+                      {!isMobile && <StormRisk weather={weather} profile={profile} />}
+                    </LazyPanel>
                   </Deferred>
 
-                  <DressForToday weather={weather} units={units} air={air} />
+                  <LazyPanel>
+                    <DressForToday weather={weather} units={units} air={air} />
+                  </LazyPanel>
 
                   <Deferred force={!isMobile} rootMargin="120px 0px" minHeight={isMobile ? 200 : 320}>
-                    <WeatherVideos />
+                    <LazyPanel>
+                      <WeatherVideos />
+                    </LazyPanel>
                   </Deferred>
 
                   <Deferred
@@ -751,34 +812,40 @@ export default function DashboardPage() {
                   </Deferred>
 
                   <Deferred force={!isMobile} rootMargin="120px 0px" minHeight={isMobile ? 0 : 48}>
-                    <AreaChat location={location} />
+                    <LazyPanel>
+                      <AreaChat location={location} />
+                    </LazyPanel>
                   </Deferred>
 
                   <Deferred force={!isMobile} rootMargin="100px 0px">
-                    <ShareWeatherCard weather={weather} location={location} units={units} />
+                    <LazyPanel>
+                      <ShareWeatherCard weather={weather} location={location} units={units} />
+                    </LazyPanel>
                   </Deferred>
 
                   <AdvancedSection title="More details" defaultOpen={false}>
                     <div className="advanced-grid">
-                      <HourlyCharts weather={weather} units={units} />
-                      <PrecipChart weather={weather} units={units} />
-                      <ComfortPanel weather={weather} units={units} />
-                      <LifestyleScores weather={weather} units={units} />
-                      <WeatherDetails weather={weather} units={units} />
-                      {!isMobile && (
-                        <DayLastYear
-                          weather={weather}
-                          units={units}
-                          lat={location.latitude}
-                          lon={location.longitude}
-                        />
-                      )}
-                      {!isMobile && (
-                        <ModelCompare models={models} units={units} timezone={weather.timezone} />
-                      )}
-                      {!isMobile && (
-                        <CityCompare units={units} home={location} homeWeather={weather} />
-                      )}
+                      <LazyPanel>
+                        <HourlyCharts weather={weather} units={units} />
+                        <PrecipChart weather={weather} units={units} />
+                        <ComfortPanel weather={weather} units={units} />
+                        <LifestyleScores weather={weather} units={units} />
+                        <WeatherDetails weather={weather} units={units} />
+                        {!isMobile && (
+                          <DayLastYear
+                            weather={weather}
+                            units={units}
+                            lat={location.latitude}
+                            lon={location.longitude}
+                          />
+                        )}
+                        {!isMobile && (
+                          <ModelCompare models={models} units={units} timezone={weather.timezone} />
+                        )}
+                        {!isMobile && (
+                          <CityCompare units={units} home={location} homeWeather={weather} />
+                        )}
+                      </LazyPanel>
                     </div>
                   </AdvancedSection>
                 </>
@@ -787,15 +854,6 @@ export default function DashboardPage() {
 
             <aside className={`col side-col ${simpleMode ? 'side-col-simple' : ''}`}>
               <div className="favorites-desktop-slot">
-                <HomeLocationPanel
-                  home={homeLocation}
-                  current={location}
-                  geoLoading={geoLoading}
-                  onSetHome={setHomeLocation}
-                  onGoHome={goHome}
-                  signedIn={!!user}
-                  accountSynced={cloudSynced}
-                />
                 <Favorites
                   favorites={favorites}
                   current={location}
@@ -803,6 +861,10 @@ export default function DashboardPage() {
                   onRemove={toggleFavorite}
                   signedIn={!!user}
                   accountSynced={cloudSynced}
+                  home={homeLocation}
+                  geoLoading={geoLoading}
+                  onSetHome={setHomeLocation}
+                  onGoHome={goHome}
                 />
               </div>
 
@@ -819,18 +881,20 @@ export default function DashboardPage() {
 
                   <AdvancedSection title="Planning & environment" defaultOpen={false} id="advanced-side">
                     <div className="advanced-grid">
-                      <ClimateCompare
-                        weather={weather}
-                        units={units}
-                        lat={location.latitude}
-                        lon={location.longitude}
-                      />
-                      <SnowOutlook weather={weather} units={units} />
-                      <TripPlanner weather={weather} units={units} placeName={location.name} />
-                      <OutlookTips weather={weather} units={units} />
-                      <FireSmoke weather={weather} air={air} />
-                      <Sounding profile={profile} units={units} timezone={weather.timezone} />
-                      <Tropical storms={storms} onFocus={openStorm} />
+                      <LazyPanel>
+                        <ClimateCompare
+                          weather={weather}
+                          units={units}
+                          lat={location.latitude}
+                          lon={location.longitude}
+                        />
+                        <SnowOutlook weather={weather} units={units} />
+                        <TripPlanner weather={weather} units={units} placeName={location.name} />
+                        <OutlookTips weather={weather} units={units} />
+                        <FireSmoke weather={weather} air={air} />
+                        <Sounding profile={profile} units={units} timezone={weather.timezone} />
+                        <Tropical storms={storms} onFocus={openStorm} />
+                      </LazyPanel>
                     </div>
                   </AdvancedSection>
                 </>

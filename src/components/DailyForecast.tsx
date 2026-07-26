@@ -41,7 +41,8 @@ export function DailyForecast({ weather, units }: Props) {
       </div>
       <ul className="daily-list">
         {d.time.map((day, i) => {
-          // past_days=1 prepends yesterday — keep it, but label from calendar date
+          // Skip past days (API may prepend yesterday) — fewer rows + icons
+          if (i < todayIdx) return null
           const info = getWeatherInfo(d.weather_code[i], true)
           const lo = convertTemp(d.temperature_2m_min[i], units)
           const hi = convertTemp(d.temperature_2m_max[i], units)
@@ -75,7 +76,12 @@ export function DailyForecast({ weather, units }: Props) {
                   ) : null}
                 </span>
                 <span className="d-icon" title={info.label}>
-                  <WeatherIcon3D code={d.weather_code[i]} isDay size="sm" forceAnimate />
+                  <WeatherIcon3D
+                    code={d.weather_code[i]}
+                    isDay
+                    size="sm"
+                    forceAnimate={i === todayIdx}
+                  />
                 </span>
                 <span className={`d-pop ${pop >= 40 ? 'wet' : ''}`}>
                   {pop > 0 ? `${pop}%` : ''}

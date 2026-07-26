@@ -825,17 +825,44 @@
   }
 }
 
-/* Mobile: keep icons animated but slightly calmer (no full freeze) */
-html.mobile-perf .w3d-sm .w3d-stage {
+/* List icons: static by default (no force) — huge mobile CPU win */
+.w3d-sm:not(.w3d-force) .w3d-stage,
+.w3d-sm:not(.w3d-force) .w3d-orbit,
+.w3d-sm:not(.w3d-force) .w3d-sun-rays,
+.w3d-sm:not(.w3d-force) .w3d-sun-svg,
+.w3d-sm:not(.w3d-force) .w3d-sun-corona,
+.w3d-sm:not(.w3d-force) .w3d-moon,
+.w3d-sm:not(.w3d-force) .w3d-cloud,
+.w3d-sm:not(.w3d-force) .w3d-clouds,
+.w3d-sm:not(.w3d-force) .w3d-precip span,
+.w3d-sm:not(.w3d-force) .w3d-snow span,
+.w3d-sm:not(.w3d-force) .w3d-hail span,
+.w3d-sm:not(.w3d-force) .w3d-bolt,
+.w3d-sm:not(.w3d-force) .w3d-flash,
+.w3d-sm:not(.w3d-force) .w3d-fog span,
+.w3d-sm:not(.w3d-force) .w3d-floor {
+  animation: none !important;
+}
+.w3d-sm:not(.w3d-force) .w3d-stage {
+  transform: rotateX(8deg) rotateY(-6deg);
+}
+.w3d-sm:not(.w3d-force) .w3d-precip span,
+.w3d-sm:not(.w3d-force) .w3d-snow span,
+.w3d-sm:not(.w3d-force) .w3d-hail span {
+  will-change: auto;
+}
+
+/* Mobile: force-animated sm icons stay calmer */
+html.mobile-perf .w3d-sm.w3d-force .w3d-stage {
   animation-duration: 3.6s;
 }
-html.mobile-perf .w3d-sm .w3d-orbit {
+html.mobile-perf .w3d-sm.w3d-force .w3d-orbit {
   animation-duration: 7s;
 }
-html.mobile-perf .w3d-sm .w3d-precip span {
+html.mobile-perf .w3d-sm.w3d-force .w3d-precip span {
   animation-duration: 0.7s;
 }
-html.mobile-perf .w3d-sm .w3d-sun-rays {
+html.mobile-perf .w3d-sm.w3d-force .w3d-sun-rays {
   animation-duration: 18s;
 }
 

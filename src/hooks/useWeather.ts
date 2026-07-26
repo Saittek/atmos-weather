@@ -735,8 +735,8 @@ export function useWeather() {
     if (!location) return
     const mobile =
       typeof window !== 'undefined' && window.matchMedia('(max-width: 720px)').matches
-    // More frequent so weather codes / animated icons stay current
-    const ms = (mobile ? 6 : 4) * 60 * 1000
+    // Soft refresh — less aggressive on mobile (battery + radio)
+    const ms = (mobile ? 12 : 7) * 60 * 1000
     const id = window.setInterval(() => {
       if (typeof document !== 'undefined' && document.hidden) return
       void loadForLocationRef.current?.(location, { soft: true })

@@ -356,8 +356,11 @@ export function WeatherIcon3D({
   isDay = true,
   size = 'md',
   className = '',
-  /** Keep CSS animations running (default on for lively icons) */
-  forceAnimate = true,
+  /**
+   * Full CSS animation. Default off — list icons (hourly/daily) stay static
+   * for CPU; set true only for hero / “now” cards.
+   */
+  forceAnimate = false,
 }: Props) {
   const uid = useId().replace(/:/g, '')
   const boltGradId = `boltGrad-${uid}`

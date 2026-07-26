@@ -450,9 +450,10 @@ export function RadarMap({
     defaultSourceForLocation(lat, lon),
   )
   const [frames, setFrames] = useState<RadarFrame[]>([])
+  /** Start on latest (current) frame — set after load */
   const [frameIdx, setFrameIdx] = useState(0)
-  // Don't autoplay on constrained devices — user taps play
-  const [playing, setPlaying] = useState(() => !isConstrainedDevice())
+  // Always start paused — user hits play to animate the loop
+  const [playing, setPlaying] = useState(false)
   const [speed, setSpeed] = useState<SpeedKey>(() =>
     isConstrainedDevice() ? 'slow' : 'normal',
   )
@@ -470,8 +471,8 @@ export function RadarMap({
   /** Pause tile loop when map is scrolled off-screen (big mobile battery win) */
   const [inView, setInView] = useState(true)
   const wrapRef = useRef<HTMLElement>(null)
-  /** Remember play intent across tab hide / off-screen */
-  const wantPlayRef = useRef(playing)
+  /** Remember play intent across tab hide / off-screen (false until user hits ▶) */
+  const wantPlayRef = useRef(false)
 
   const usRegion = isNexradMosaicRegion(lat, lon)
   const [severeToggles, setSevereToggles] = useState<SevereLayerToggles>(() => ({
@@ -545,7 +546,8 @@ export function RadarMap({
       })
       if (!next.length) throw new Error('No frames available for this source')
       setFrames(next)
-      setFrameIdx(0)
+      // Show the most recent frame (current time) while paused
+      setFrameIdx(next.length - 1)
     } catch (e) {
       setFrames([])
       setError(e instanceof Error ? e.message : 'Radar failed to load')
@@ -556,20 +558,22 @@ export function RadarMap({
 
   useEffect(() => {
     void reload()
-    const mins = lite ? 6 : 4
+    // Paused radar: rare refresh (latest frame only). Playing: fresher loop.
+    const mins = playing ? (lite ? 5 : 4) : lite ? 12 : 8
     const id = window.setInterval(() => {
-      if (!document.hidden) void reload()
+      if (document.hidden) return
+      if (!inView && !playing) return
+      void reload()
     }, mins * 60 * 1000)
     return () => window.clearInterval(id)
-  }, [reload, lite])
+  }, [reload, lite, playing, inView])
 
   // Keep global loop as the default; only auto-switch away if user never touched source
   // (no auto continent override — always open on global_loop)
 
   useEffect(() => {
+    // Severe mode: clearer radar only — still start paused on the latest frame
     if (severeMode) {
-      wantPlayRef.current = true
-      setPlaying(true)
       setOpacity((o) => Math.max(o, 0.8))
     }
   }, [severeMode])
@@ -866,6 +870,10 @@ export function RadarMap({
                 setPlaying((p) => {
                   const next = !p
                   wantPlayRef.current = next
+                  // Starting play from the latest frame → begin loop at the first frame
+                  if (next && frames.length > 1 && frameIdx >= frames.length - 1) {
+                    setFrameIdx(0)
+                  }
                   return next
                 })
               }}

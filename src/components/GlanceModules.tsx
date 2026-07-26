@@ -2,6 +2,7 @@
  * Apple Weather / AccuWeather-style at-a-glance modules.
  * Wind · UV · Humidity · Precipitation · Sun · Pressure
  */
+import { memo } from 'react'
 import type { AirQualityData, WeatherData } from '../api/types'
 import type { Units } from '../utils/format'
 import {
@@ -49,7 +50,7 @@ function pressureTrend(
   return 'Steady'
 }
 
-export function GlanceModules({ weather, units, air }: Props) {
+export const GlanceModules = memo(function GlanceModules({ weather, units, air }: Props) {
   const c = weather.current
   const h = weather.hourly
   const tz = weather.timezone
@@ -199,4 +200,4 @@ export function GlanceModules({ weather, units, air }: Props) {
       </div>
     </section>
   )
-}
+})

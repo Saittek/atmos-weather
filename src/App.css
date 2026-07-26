@@ -4638,6 +4638,15 @@ html.mobile-perf[data-theme='light'] .topbar {
   color: #facc15;
 }
 
+/* Below-fold panels: skip paint/layout until near viewport */
+.allergy-section,
+.advanced-section,
+.outdoor-mobile-slot,
+.outdoor-desktop-slot {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 220px;
+}
+
 /* ===== Allergies ===== */
 .allergy-section {
   border-color: rgba(167, 139, 250, 0.25);
@@ -7486,6 +7495,41 @@ html.mobile-perf .panel {
 .home-location-panel.home-location-compact {
   margin-bottom: 0.4rem;
   padding: 0.4rem 0.5rem;
+}
+/* Home nested inside ★ Saved places */
+.favorites-with-home .favorites-home-slot {
+  margin: 0 0 0.65rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+}
+.home-location-embedded {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+.home-location-embedded.home-location-compact {
+  margin: 0;
+  padding: 0;
+}
+.home-embedded-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  margin-bottom: 0.4rem;
+}
+.home-embedded-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-mute, rgba(148, 163, 184, 0.95));
+}
+.favorites-empty-msg {
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
 }
 .home-header-actions {
   display: flex;

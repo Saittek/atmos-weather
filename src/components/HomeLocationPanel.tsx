@@ -18,6 +18,8 @@ interface Props {
   /** When true, home is pushed to the Solara account (desktop ↔ phone) */
   accountSynced?: boolean
   signedIn?: boolean
+  /** Nested inside Saved places (no outer panel chrome) */
+  embedded?: boolean
 }
 
 const COMPACT_KEY = 'solara-home-panel-compact'
@@ -51,6 +53,7 @@ export function HomeLocationPanel({
   onGoHome,
   accountSynced = false,
   signedIn = false,
+  embedded = false,
 }: Props) {
   const [editing, setEditing] = useState(false)
   const [label, setLabel] = useState(home?.name || 'Home')
@@ -216,55 +219,88 @@ export function HomeLocationPanel({
     setEditing(false)
   }
 
+  const wrapClass = [
+    embedded ? 'home-location-embedded' : 'panel home-location-panel',
+    home && compact && !editing ? 'home-location-compact' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
   // Compact strip (mobile, home already set)
   if (home && compact && !editing) {
-    return (
-      <section className="panel home-location-panel home-location-compact" aria-label="Home">
-        <div className="home-compact-row">
-          <button type="button" className="home-compact-go" onClick={onGoHome} title="Go home">
-            <span className="home-compact-emoji" aria-hidden>
-              🏠
+    const body = (
+      <div className="home-compact-row">
+        <button type="button" className="home-compact-go" onClick={onGoHome} title="Go home">
+          <span className="home-compact-emoji" aria-hidden>
+            🏠
+          </span>
+          <span className="home-compact-text">
+            <strong>{home.name || 'Home'}</strong>
+            <span className="home-compact-coords">
+              {fmtCoord(home.latitude, 4)}, {fmtCoord(home.longitude, 4)}
             </span>
-            <span className="home-compact-text">
-              <strong>{home.name || 'Home'}</strong>
-              <span className="home-compact-coords">
-                {fmtCoord(home.latitude, 4)}, {fmtCoord(home.longitude, 4)}
-              </span>
-            </span>
-          </button>
-          <button
-            type="button"
-            className="chip-btn home-compact-expand"
-            onClick={expand}
-            aria-label="Expand home settings"
-            title="Expand"
-          >
-            ▾
-          </button>
-        </div>
+          </span>
+        </button>
+        <button
+          type="button"
+          className="chip-btn home-compact-expand"
+          onClick={expand}
+          aria-label="Expand home settings"
+          title="Expand"
+        >
+          ▾
+        </button>
+      </div>
+    )
+    return embedded ? (
+      <div className={wrapClass} aria-label="Home">
+        {body}
+      </div>
+    ) : (
+      <section className={wrapClass} aria-label="Home">
+        {body}
       </section>
     )
   }
 
+  const Tag = embedded ? 'div' : 'section'
+
   return (
-    <section className="panel home-location-panel">
-      <div className="panel-header">
-        <h2>🏠 Home</h2>
-        <div className="home-header-actions">
-          <span className="panel-hint">Exact pin</span>
+    <Tag className={wrapClass} aria-label={embedded ? 'Home pin' : undefined}>
+      {!embedded ? (
+        <div className="panel-header">
+          <h2>🏠 Home</h2>
+          <div className="home-header-actions">
+            <span className="panel-hint">Exact pin</span>
+            {home && (
+              <button
+                type="button"
+                className="chip-btn home-minimize-btn"
+                onClick={minimize}
+                title="Minimize home card"
+                aria-label="Minimize home card"
+              >
+                ▴
+              </button>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="home-embedded-head">
+          <span className="home-embedded-title">🏠 Home pin</span>
           {home && (
             <button
               type="button"
               className="chip-btn home-minimize-btn"
               onClick={minimize}
-              title="Minimize home card"
-              aria-label="Minimize home card"
+              title="Minimize"
+              aria-label="Minimize home"
             >
               ▴
             </button>
           )}
         </div>
-      </div>
+      )}
 
       {home && !editing ? (
         <div className="home-set-row">
@@ -431,13 +467,15 @@ export function HomeLocationPanel({
 
       {err && <p className="home-err">{err}</p>}
 
-      <p className="home-sync-hint muted-center">
-        {accountSynced
-          ? '☁ Home syncs to your account — open Solara on your phone while signed in to the same account.'
-          : signedIn
-            ? '☁ Signed in — home will upload to your account for other devices.'
-            : 'Sign in (menu) with the same account on desktop and phone so your home pin appears on both.'}
-      </p>
-    </section>
+      {!embedded && (
+        <p className="home-sync-hint muted-center">
+          {accountSynced
+            ? '☁ Home syncs to your account — open Solara on your phone while signed in to the same account.'
+            : signedIn
+              ? '☁ Signed in — home will upload to your account for other devices.'
+              : 'Sign in (menu) with the same account on desktop and phone so your home pin appears on both.'}
+        </p>
+      )}
+    </Tag>
   )
 }
