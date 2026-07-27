@@ -390,6 +390,7 @@ export default function StormChaserPage() {
                 units={units}
                 severeMode
                 chaserOverlays
+                initialSource="storm_chaser"
                 mapId="chaser-radar"
                 pageMode={false}
                 focusRequest={focusRequest}

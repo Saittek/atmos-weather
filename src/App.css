@@ -852,6 +852,16 @@ a:hover {
   box-sizing: border-box;
 }
 
+/* Brand + storm chaser sit together on the left (clear of settings cluster) */
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  flex-shrink: 0;
+  max-width: 100%;
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -859,7 +869,7 @@ a:hover {
   padding-left: 0.25rem;
   white-space: nowrap;
   min-width: 0;
-  flex-shrink: 0;
+  flex-shrink: 1;
 }
 
 .brand-mark {
@@ -3295,11 +3305,16 @@ select:focus-visible {
     align-items: center;
     overflow: visible;
   }
-  .brand {
+  .topbar-left {
     grid-area: brand;
-    padding-left: 0.1rem;
-    gap: 0.35rem;
-    max-width: 42%;
+    padding-left: 0.05rem;
+    max-width: min(52%, 14rem);
+  }
+  .brand {
+    padding-left: 0.05rem;
+    gap: 0.3rem;
+    max-width: none;
+    min-width: 0;
   }
   .brand-mark {
     width: 42px;
@@ -3314,7 +3329,7 @@ select:focus-visible {
     grid-area: actions;
     gap: 0.2rem;
     justify-self: end;
-    max-width: 58%;
+    max-width: min(48%, 12rem);
   }
   .search-bar {
     grid-area: search;
@@ -7077,42 +7092,45 @@ html.mobile-perf .panel {
   text-decoration: none !important;
   flex-shrink: 0;
 }
-/* Always in topbar (outside .quick-nav so it shows on iOS / narrow phones) */
+/* Next to logo — never competes with account/settings on the right */
 .chaser-nav-top {
-  order: -1;
-  z-index: 2;
-}
-.topbar-right {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  flex-wrap: nowrap;
-  min-width: 0;
+  position: relative;
+  z-index: 3;
+  margin-left: 0.1rem;
 }
 .chaser-nav-label {
   font-size: 0.78rem;
   letter-spacing: 0.02em;
 }
 @media (max-width: 720px) {
-  /* Keep tornado icon visible; short label on slightly wider phones */
+  .topbar-left {
+    grid-area: brand;
+    max-width: none;
+    gap: 0.3rem;
+  }
   .chaser-nav-top {
+    width: 2.35rem;
+    height: 2.35rem;
     min-width: 2.35rem;
     min-height: 2.35rem;
     justify-content: center;
-    padding: 0.4rem 0.5rem !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
   }
   .chaser-nav-label {
     display: none;
   }
-  .chaser-nav-btn {
-    padding: 0.4rem 0.5rem !important;
-  }
 }
-/* Very narrow: still show chaser before settings */
 @media (max-width: 380px) {
   .chaser-nav-top {
+    width: 2.2rem;
+    height: 2.2rem;
     min-width: 2.2rem;
     min-height: 2.2rem;
+  }
+  .brand-mark {
+    width: 38px;
+    height: 38px;
   }
 }
 

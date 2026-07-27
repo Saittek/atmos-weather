@@ -441,20 +441,36 @@ export default function DashboardPage() {
 
       {/* Fixed topbar lives outside .app-shell so overflow-x:clip never affects pin-to-viewport */}
       <header className="topbar">
-        <div className="brand">
-          <img
-            className="brand-mark"
-            src="/icons/solara-logo.png"
-            alt=""
-            width={48}
-            height={48}
-            decoding="async"
-          />
-          <div>
-            <strong>Solara</strong>
-            {simpleMode && !stormMode && <span className="brand-tag simple-tag">Simple</span>}
-            {stormMode && <span className="brand-tag">Storm mode</span>}
+        <div className="topbar-left">
+          <div className="brand">
+            <img
+              className="brand-mark"
+              src="/icons/solara-logo.png"
+              alt=""
+              width={48}
+              height={48}
+              decoding="async"
+            />
+            <div>
+              <strong>Solara</strong>
+              {simpleMode && !stormMode && <span className="brand-tag simple-tag">Simple</span>}
+              {stormMode && <span className="brand-tag">Storm mode</span>}
+            </div>
           </div>
+          {/* Storm chasers — sits with brand so it never stacks under account/settings */}
+          <Link
+            to={
+              location
+                ? `/chase?lat=${location.latitude.toFixed(4)}&lon=${location.longitude.toFixed(4)}&name=${encodeURIComponent(location.name)}`
+                : '/chase'
+            }
+            className="chip-btn nav-chip chaser-nav-btn chaser-nav-top"
+            title="Storm chasers desk"
+            aria-label="Storm chasers"
+          >
+            <span aria-hidden>🌪</span>
+            <span className="chaser-nav-label">Chasers</span>
+          </Link>
         </div>
         <SearchBar
           onSelect={loadForLocation}
@@ -462,20 +478,6 @@ export default function DashboardPage() {
           geoLoading={geoLoading}
         />
         <div className="topbar-right">
-          {/* Always visible — including iOS / simple mode (quick-nav is hidden on phones) */}
-            <Link
-              to={
-                location
-                  ? `/chase?lat=${location.latitude.toFixed(4)}&lon=${location.longitude.toFixed(4)}&name=${encodeURIComponent(location.name)}`
-                  : '/chase'
-              }
-              className="chip-btn nav-chip chaser-nav-btn chaser-nav-top"
-              title="Storm chasers desk"
-              aria-label="Storm chasers"
-            >
-              <span aria-hidden>🌪</span>
-              <span className="chaser-nav-label">Chasers</span>
-            </Link>
             <nav className="quick-nav" aria-label="App modes">
               <button
                 type="button"

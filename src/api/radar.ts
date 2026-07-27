@@ -204,9 +204,9 @@ export function isCanadaRadarRegion(lat?: number, lon?: number): boolean {
   return false
 }
 
-/** Prefer storm-chaser mode everywhere — it picks the best backend per region */
+/** Default: worldwide animated mosaic (user can switch to Storm chaser / regional layers) */
 export function defaultSourceForLocation(_lat?: number, _lon?: number): RadarSourceId {
-  return 'storm_chaser'
+  return 'global_loop'
 }
 
 /** Prefer Mapbox dark basemap for chaser-style sources when token exists */

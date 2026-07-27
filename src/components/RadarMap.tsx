@@ -53,6 +53,8 @@ interface Props {
   pageMode?: boolean
   /** Default-on severe overlays (Storm Chasers desk) */
   chaserOverlays?: boolean
+  /** Override starting radar layer (default: Global radar loop) */
+  initialSource?: RadarSourceId
   /** Fly map to threat */
   focusRequest?: MapFocusRequest | null
   /** Optional preloaded warning polygons */
@@ -589,6 +591,7 @@ export function RadarMap({
   mapId = 'radar-map',
   pageMode = false,
   chaserOverlays = false,
+  initialSource,
   focusRequest = null,
   threatPolygons = null,
   homeLocation = null,
@@ -598,7 +601,7 @@ export function RadarMap({
   const mapboxToken = useMemo(() => getMapboxToken(), [])
   const BASEMAPS = useMemo(() => buildBasemaps(mapboxToken), [mapboxToken])
   const [sourceId, setSourceId] = useState<RadarSourceId>(() =>
-    defaultSourceForLocation(lat, lon),
+    initialSource ?? defaultSourceForLocation(lat, lon),
   )
   const [frames, setFrames] = useState<RadarFrame[]>([])
   /** Start on latest (current) frame — set after load */
@@ -663,7 +666,7 @@ export function RadarMap({
     }
   }, [sourceId, mapboxToken])
 
-  // Region-aware auto source: keep storm_chaser (picks ECCC / NEXRAD / global)
+  // When place changes, re-apply default only for “auto” starter sources
   useEffect(() => {
     setSourceId((prev) => {
       if (
@@ -673,11 +676,11 @@ export function RadarMap({
         prev === 'eccc_radar' ||
         prev === 'us_nexrad_loop'
       ) {
-        return defaultSourceForLocation(lat, lon)
+        return initialSource ?? defaultSourceForLocation(lat, lon)
       }
       return prev
     })
-  }, [lat, lon])
+  }, [lat, lon, initialSource])
 
   // When chaser desk moves into / out of US coverage, refresh velocity/tracks defaults
   useEffect(() => {
