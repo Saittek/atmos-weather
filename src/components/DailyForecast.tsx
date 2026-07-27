@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { WeatherData } from '../api/types'
 import type { Units } from '../utils/format'
 import {
@@ -13,6 +13,9 @@ import { getWeatherInfo, windDirection } from '../utils/weatherCodes'
 import { todayDailyIndex } from '../utils/weatherStory'
 import { WeatherIcon3D } from './WeatherIcon3D'
 
+const COLLAPSED_DAYS = 7
+const EXPANDED_DAYS = 14
+
 interface Props {
   weather: WeatherData
   units: Units
@@ -22,27 +25,53 @@ export function DailyForecast({ weather, units }: Props) {
   const d = weather.daily
   const todayIdx = todayDailyIndex(weather)
   const [open, setOpen] = useState<number | null>(todayIdx)
+  const [expanded, setExpanded] = useState(false)
 
   useEffect(() => {
     setOpen(todayIdx)
+    setExpanded(false)
   }, [todayIdx, weather.latitude, weather.longitude])
 
-  const temps = [...d.temperature_2m_min, ...d.temperature_2m_max].map((t) =>
-    convertTemp(t, units),
-  )
-  const minAll = Math.min(...temps)
-  const maxAll = Math.max(...temps)
+  const futureIndices = useMemo(() => {
+    const all: number[] = []
+    for (let i = todayIdx; i < d.time.length; i++) all.push(i)
+    return all
+  }, [d.time.length, todayIdx])
+
+  const visibleLimit = expanded ? EXPANDED_DAYS : COLLAPSED_DAYS
+  const visibleIndices = futureIndices.slice(0, visibleLimit)
+  const canExpand = futureIndices.length > COLLAPSED_DAYS
+  const hiddenCount = Math.max(0, Math.min(futureIndices.length, EXPANDED_DAYS) - COLLAPSED_DAYS)
+
+  // Scale temp bars from only the days currently shown so the range stays useful
+  const temps = visibleIndices.flatMap((i) => [
+    convertTemp(d.temperature_2m_min[i], units),
+    convertTemp(d.temperature_2m_max[i], units),
+  ])
+  const minAll = temps.length ? Math.min(...temps) : 0
+  const maxAll = temps.length ? Math.max(...temps) : 1
   const span = Math.max(maxAll - minAll, 1)
+
+  const title = expanded ? '14-Day Outlook' : '7-Day Outlook'
 
   return (
     <section className="panel daily-panel">
       <div className="panel-header">
-        <h2>14-Day Outlook</h2>
+        <h2>{title}</h2>
+        {canExpand && (
+          <button
+            type="button"
+            className="chip-btn daily-expand-btn"
+            onClick={() => setExpanded((v) => !v)}
+            aria-expanded={expanded}
+          >
+            {expanded ? 'Show 7 days' : `Show full 14 days${hiddenCount ? ` (+${hiddenCount})` : ''}`}
+          </button>
+        )}
       </div>
       <ul className="daily-list">
-        {d.time.map((day, i) => {
-          // Skip past days (API may prepend yesterday) — fewer rows + icons
-          if (i < todayIdx) return null
+        {visibleIndices.map((i) => {
+          const day = d.time[i]
           const info = getWeatherInfo(d.weather_code[i], true)
           const lo = convertTemp(d.temperature_2m_min[i], units)
           const hi = convertTemp(d.temperature_2m_max[i], units)
@@ -155,6 +184,17 @@ export function DailyForecast({ weather, units }: Props) {
           )
         })}
       </ul>
+      {canExpand && !expanded && (
+        <div className="daily-expand-footer">
+          <button
+            type="button"
+            className="chip-btn daily-expand-btn daily-expand-btn-wide"
+            onClick={() => setExpanded(true)}
+          >
+            Show full 14-day outlook
+          </button>
+        </div>
+      )}
     </section>
   )
 }

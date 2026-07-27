@@ -90,17 +90,15 @@ export function InstallPrompt({ compact }: Props) {
         <span>
           {iosGuide
             ? compact
-              ? 'Safari → Share → Add to Home Screen for a rain widget icon.'
-              : 'On iPhone: tap Share, then Add to Home Screen. Or open the Rain Widget page for a compact icon.'
+              ? 'Safari → Share → Add to Home Screen for a home-screen weather icon.'
+              : 'On iPhone: tap Share, then Add to Home Screen. Use the Weather widget page for a compact home icon.'
             : compact
-              ? 'Add Rain Widget to your home screen for one-tap checks.'
-              : 'Home screen app with Radar & Rain Widget shortcuts.'}
+              ? 'Install to your home screen for one-tap weather checks.'
+              : 'Home screen app with weather widget, radar, and dashboard shortcuts.'}
         </span>
-        {iosGuide && (
-          <Link to="/widget" className="install-widget-link" onClick={dismiss}>
-            Open rain widget →
-          </Link>
-        )}
+        <Link to="/widget" className="install-widget-link" onClick={dismiss}>
+          Open weather widget →
+        </Link>
       </div>
       <div className="install-prompt-actions">
         {deferred && (

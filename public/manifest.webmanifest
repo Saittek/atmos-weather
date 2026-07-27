@@ -1,15 +1,19 @@
 {
-  "name": "Solara Weather Command",
+  "id": "/",
+  "name": "Solara Weather",
   "short_name": "Solara",
-  "description": "Full weather dashboard with HQ radar, rain widget, forecasts, and severe alerts.",
-  "start_url": "/",
+  "description": "Weather, radar, and home rain checks. Add to your phone home screen for one-tap weather.",
+  "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",
-  "display_override": ["standalone", "minimal-ui"],
+  "display_override": ["standalone", "minimal-ui", "browser"],
   "background_color": "#0b1220",
   "theme_color": "#0b1220",
-  "orientation": "any",
+  "orientation": "portrait-primary",
   "categories": ["weather", "utilities"],
+  "lang": "en",
+  "dir": "ltr",
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/icons/icon-192.png",
@@ -27,29 +31,35 @@
       "src": "/icons/solara-logo.png",
       "sizes": "960x960",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
     }
   ],
   "shortcuts": [
     {
-      "name": "Live Radar",
-      "short_name": "Radar",
-      "description": "Full-screen weather radar",
-      "url": "/radar",
+      "name": "Weather widget",
+      "short_name": "Widget",
+      "description": "Compact home weather and rain check",
+      "url": "/widget?source=shortcut",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
-      "name": "Rain Widget",
-      "short_name": "Rain",
-      "description": "Compact rain forecast and pin watch",
-      "url": "/widget",
+      "name": "Live Radar",
+      "short_name": "Radar",
+      "description": "Full-screen weather radar",
+      "url": "/radar?source=shortcut",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "Dashboard",
       "short_name": "Home",
       "description": "Full Solara weather dashboard",
-      "url": "/",
+      "url": "/?source=shortcut",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ]

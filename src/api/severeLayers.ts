@@ -4,6 +4,7 @@
  * - SPC local storm reports (tornado / hail / wind)
  * - SPC Day 1 tornado (and categorical) outlook GeoJSON
  * - Nearest NEXRAD site for optional storm-relative velocity tiles (IEM RIDGE)
+ * - NEXRAD storm attribute cells + motion vectors (IEM STI-like tracks)
  */
 
 // ── types ────────────────────────────────────────────────────────────
@@ -683,6 +684,118 @@ export function velocityTileUrl(siteId: string, product: VelocityProduct = 'n0s'
 
 export function baseVelocityTileUrl(siteId: string): string {
   return velocityTileUrl(siteId, 'n0u')
+}
+
+// ── NEXRAD storm attributes / tracks (IEM) ────────────────────────────
+
+export interface StormCellTrack {
+  id: string
+  nexrad: string
+  stormId: string
+  lat: number
+  lon: number
+  /** Motion direction degrees (meteorological from, 0=N) */
+  drct: number | null
+  /** Speed knots */
+  sknt: number | null
+  maxDbz: number | null
+  vil: number | null
+  topKft: number | null
+  tvs: string | null
+  meso: string | null
+  posh: number | null
+  poh: number | null
+  valid: string | null
+}
+
+const NEXRAD_ATTR_URL = 'https://mesonet.agron.iastate.edu/geojson/nexrad_attr.geojson'
+
+let stormAttrCache: { at: number; data: StormCellTrack[] } | null = null
+
+/**
+ * Live NEXRAD storm-attribute cells (position + motion) from IEM.
+ * Used as open-data “storm tracks” for chaser maps.
+ */
+export async function fetchNexradStormTracks(): Promise<StormCellTrack[]> {
+  if (stormAttrCache && Date.now() - stormAttrCache.at < 90_000) {
+    return stormAttrCache.data
+  }
+  try {
+    const res = await fetch(NEXRAD_ATTR_URL, {
+      headers: { Accept: 'application/geo+json, application/json' },
+    })
+    if (!res.ok) return stormAttrCache?.data ?? []
+    const data = (await res.json()) as {
+      features?: {
+        id?: string | number
+        properties?: Record<string, unknown>
+        geometry?: { type?: string; coordinates?: number[] } | null
+      }[]
+    }
+    const out: StormCellTrack[] = []
+    for (const f of data.features ?? []) {
+      const p = f.properties ?? {}
+      const coords = f.geometry?.coordinates
+      if (!coords || coords.length < 2) continue
+      const lon = Number(coords[0])
+      const lat = Number(coords[1])
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue
+      const nexrad = String(p.nexrad ?? '').toUpperCase()
+      const stormId = String(p.storm_id ?? p.stormid ?? '')
+      const maxDbz = p.max_dbz != null ? Number(p.max_dbz) : null
+      // Skip very weak clear-air clutter when possible
+      if (maxDbz != null && Number.isFinite(maxDbz) && maxDbz < 25) continue
+      out.push({
+        id: `${nexrad}-${stormId}-${lat.toFixed(3)}-${lon.toFixed(3)}-${f.id ?? out.length}`,
+        nexrad,
+        stormId,
+        lat,
+        lon,
+        drct: p.drct != null && Number.isFinite(Number(p.drct)) ? Number(p.drct) : null,
+        sknt: p.sknt != null && Number.isFinite(Number(p.sknt)) ? Number(p.sknt) : null,
+        maxDbz: maxDbz != null && Number.isFinite(maxDbz) ? maxDbz : null,
+        vil: p.vil != null && Number.isFinite(Number(p.vil)) ? Number(p.vil) : null,
+        topKft: p.top != null && Number.isFinite(Number(p.top)) ? Number(p.top) : null,
+        tvs: p.tvs != null ? String(p.tvs) : null,
+        meso: p.meso != null ? String(p.meso) : null,
+        posh: p.posh != null && Number.isFinite(Number(p.posh)) ? Number(p.posh) : null,
+        poh: p.poh != null && Number.isFinite(Number(p.poh)) ? Number(p.poh) : null,
+        valid: p.valid != null ? String(p.valid) : null,
+      })
+    }
+    stormAttrCache = { at: Date.now(), data: out }
+    return out
+  } catch {
+    return stormAttrCache?.data ?? []
+  }
+}
+
+/** Project a motion vector tip (km ahead along storm motion). */
+export function stormMotionTip(
+  lat: number,
+  lon: number,
+  drctDeg: number,
+  sknt: number,
+  minutes = 30,
+): [number, number] {
+  // drct = direction FROM which storm is coming? NEXRAD attributes are usually
+  // direction of motion (toward). IEM field `drct` is storm motion direction (degrees).
+  const speedKmh = sknt * 1.852
+  const distKm = (speedKmh * minutes) / 60
+  const rad = (drctDeg * Math.PI) / 180
+  const dLat = (distKm / 111.32) * Math.cos(rad)
+  const dLon =
+    (distKm / (111.32 * Math.max(0.2, Math.cos((lat * Math.PI) / 180)))) * Math.sin(rad)
+  return [lat + dLat, lon + dLon]
+}
+
+export function stormCellColor(cell: StormCellTrack): string {
+  if (cell.tvs && cell.tvs !== 'NONE') return '#ff00ff'
+  if (cell.meso && cell.meso !== 'NONE') return '#f472b6'
+  if ((cell.posh ?? 0) >= 50) return '#ef4444'
+  if ((cell.maxDbz ?? 0) >= 55) return '#f97316'
+  if ((cell.maxDbz ?? 0) >= 45) return '#fbbf24'
+  return '#38bdf8'
 }
 
 // ── geometry: point-in / distance ────────────────────────────────────

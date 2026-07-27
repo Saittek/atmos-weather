@@ -120,10 +120,15 @@ a:hover {
 /* Layout */
 .app {
   min-height: 100vh;
+  min-height: 100dvh;
   position: relative;
   transition: background 0.8s ease;
   background: var(--app-fallback-bg);
   color: var(--text);
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
+  box-sizing: border-box;
 }
 
 .app-severe .radar-panel.severe-radar {
@@ -225,9 +230,13 @@ a:hover {
 .app-shell {
   position: relative;
   z-index: 1;
-  max-width: 1280px;
+  max-width: min(1280px, 100%);
+  width: 100%;
   margin: 0 auto;
+  /* Base side/bottom padding; top padding set with fixed header offsets above */
   padding: var(--space-3, 1rem) 1.25rem 3.5rem;
+  box-sizing: border-box;
+  overflow-x: clip;
 }
 
 /* Brand promise + storm mode */
@@ -457,14 +466,37 @@ a:hover {
 
 /* ===== Location alerts â€” compact sticky strip (never full screen) ===== */
 .alert-top-bar {
-  position: sticky;
+  position: fixed;
   top: 0;
-  z-index: 60;
+  left: 0;
+  right: 0;
+  z-index: 80;
   width: 100%;
+  max-width: 100%;
   background: linear-gradient(180deg, rgba(127, 29, 29, 0.97), rgba(69, 10, 10, 0.94));
   border-bottom: 1px solid rgba(248, 113, 113, 0.45);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
   color: #fff;
+  box-sizing: border-box;
+}
+/* Fixed header offsets (alerts sit above topbar) */
+.app {
+  --alert-bar-h: 0px;
+  --topbar-offset: 0.45rem;
+  --topbar-h: 3.85rem;
+}
+.app.has-alerts {
+  --alert-bar-h: 3.35rem;
+}
+.app.has-alerts.alerts-minimized {
+  --alert-bar-h: 2.85rem;
+}
+/* Content clears fixed alert + fixed topbar */
+.app .app-shell {
+  padding-top: calc(
+    var(--space-3, 1rem) + var(--alert-bar-h, 0px) + var(--topbar-offset, 0.45rem) +
+      var(--topbar-h, 3.85rem)
+  );
 }
 .alert-top-inner {
   max-width: 1440px;
@@ -605,12 +637,17 @@ a:hover {
 .alert-hide-btn {
   margin-top: 0.65rem;
 }
-/* Minimized alerts = red pill in sticky top bar */
+/* Minimized alerts = red pill pinned at top of screen */
 .alert-top-bar-mini {
+  position: fixed !important;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 80;
   background: transparent !important;
   border-bottom: none !important;
   box-shadow: none !important;
-  padding: 0.35rem 0.75rem 0;
+  padding: max(0.35rem, env(safe-area-inset-top, 0px)) 0.75rem 0;
   pointer-events: none;
 }
 .alert-top-inner-mini {
@@ -618,6 +655,8 @@ a:hover {
   justify-content: flex-end;
   padding: 0 !important;
   pointer-events: none;
+  max-width: 1440px;
+  margin: 0 auto;
 }
 .alert-mini-btn {
   pointer-events: auto;
@@ -786,27 +825,31 @@ a:hover {
   font-size: 0.75rem;
 }
 
-.app.has-alerts .topbar {
-  top: 0.4rem;
-}
-
-/* Top bar â€” sticky, single compact row */
+/* Top bar — pinned to viewport; page content scrolls underneath */
 .topbar {
-  position: sticky;
-  top: 0.65rem;
-  z-index: 40;
+  position: fixed !important;
+  top: calc(var(--alert-bar-h, 0px) + var(--topbar-offset, 0.45rem));
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  width: min(calc(100% - 1.5rem), 1280px);
+  max-width: calc(100% - 1.5rem);
+  z-index: 70;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 0.5rem 0.75rem;
   align-items: center;
-  margin-bottom: 1rem;
+  margin: 0;
+  margin-bottom: 0;
   padding: 0.4rem 0.5rem 0.4rem 0.55rem;
   background: var(--glass-strong);
   border: 1px solid var(--border);
   border-radius: 18px;
   backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
   box-shadow: var(--shadow);
   min-height: 58px;
+  box-sizing: border-box;
 }
 
 .brand {
@@ -1635,6 +1678,9 @@ select:focus-visible {
   grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.85fr);
   gap: var(--space-4, 1.35rem);
   align-items: start;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .col {
@@ -1642,6 +1688,18 @@ select:focus-visible {
   flex-direction: column;
   gap: var(--space-3, 1rem);
   min-width: 0;
+  max-width: 100%;
+}
+
+/* Intentional inner carousels — never widen the page */
+.hourly-scroll,
+.week-strip-row,
+.favorites-mobile-slot .favorites-list,
+.ventusky-quick,
+.wxwise-sites {
+  max-width: 100%;
+  min-width: 0;
+  overscroll-behavior-x: contain;
 }
 
 .dashboard-storm .main-col .priority-radar {
@@ -1945,19 +2003,21 @@ select:focus-visible {
 
 .daily-row {
   width: 100%;
+  max-width: 100%;
   display: grid;
-  /* Day | icon | pop | lo | temp bar | hi */
-  grid-template-columns: minmax(4.6rem, 5.1rem) 2.85rem 2rem 2.2rem minmax(3.6rem, 1fr) 2.4rem;
+  /* Day | icon | pop | lo | temp bar | hi — fr tracks shrink on narrow phones */
+  grid-template-columns: minmax(3.4rem, 4.4rem) 2.4rem minmax(1.5rem, 2rem) minmax(1.8rem, 2.2rem) minmax(2rem, 1fr) minmax(1.9rem, 2.3rem);
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.4rem 0.4rem;
+  gap: 0.25rem;
+  padding: 0.4rem 0.2rem;
   min-height: 3rem;
   border: 0;
   background: transparent;
-  overflow: visible;
+  overflow: hidden;
   border-radius: 10px;
   cursor: pointer;
   text-align: left;
+  box-sizing: border-box;
 }
 .daily-row:hover {
   background: rgba(255, 255, 255, 0.05);
@@ -2007,12 +2067,17 @@ select:focus-visible {
   border: 0;
   box-shadow: none;
 }
-/* Natural sm size; no forced shrink/scale that made them look boxed */
+/* Natural sm size — clipped so icons never widen the row */
 .daily-row .w3d-sm {
-  --w3d-size: 44px;
+  --w3d-size: 36px;
+}
+.daily-row .d-icon {
+  width: 2.4rem;
+  height: 2.4rem;
+  overflow: hidden;
 }
 .daily-row .w3d {
-  overflow: visible;
+  overflow: hidden;
   isolation: auto;
   background: transparent;
 }
@@ -2082,6 +2147,24 @@ select:focus-visible {
 
 .daily-detail {
   padding: 0.2rem 0.5rem 0.8rem 0.5rem;
+}
+
+.daily-expand-btn {
+  flex-shrink: 0;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+.daily-expand-footer {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.55rem;
+  padding-top: 0.35rem;
+  border-top: 1px solid var(--border);
+}
+.daily-expand-btn-wide {
+  width: 100%;
+  max-width: 20rem;
+  justify-content: center;
 }
 
 .detail-grid.mini {
@@ -3136,14 +3219,40 @@ select:focus-visible {
 }
 
 @media (max-width: 980px) {
+  .app {
+    --topbar-h: 4.75rem; /* brand + search stack can wrap */
+  }
+  .topbar {
+    width: min(calc(100% - 1rem), 1280px);
+    max-width: calc(100% - 1rem);
+  }
+  .app-shell {
+    padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+    padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+    padding-bottom: max(2.25rem, calc(env(safe-area-inset-bottom, 0px) + 1rem));
+  }
   .dashboard {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+    max-width: 100%;
+  }
+  .panel,
+  .glance-modules,
+  .priority-stack,
+  .favorites-mobile-slot {
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
   }
   .topbar {
     grid-template-columns: auto minmax(0, 1fr) auto;
     border-radius: 16px;
     gap: 0.4rem 0.5rem;
-    top: 0.4rem;
+    /* Keep fixed offset under alert bar — do not override to a bare rem */
+    top: calc(var(--alert-bar-h, 0px) + var(--topbar-offset, 0.4rem));
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
   }
   .brand-tag {
     display: none;
@@ -3160,6 +3269,10 @@ select:focus-visible {
 }
 
 @media (max-width: 720px) {
+  .app {
+    /* Two-row mobile topbar: brand/actions + search */
+    --topbar-h: 6.1rem;
+  }
   /* More screen for weather — tagline is desktop-only */
   .brand-promise {
     display: none;
@@ -3307,16 +3420,98 @@ select:focus-visible {
 }
 
 @media (max-width: 560px) {
+  .app {
+    --topbar-h: 6rem;
+    --topbar-offset: 0.35rem;
+  }
+  .topbar {
+    width: min(calc(100% - 0.9rem), 1280px);
+    max-width: calc(100% - 0.9rem);
+    border-radius: 14px;
+  }
   .app-shell {
-    padding: 0.55rem 0.55rem 2rem;
+    padding-left: max(0.55rem, env(safe-area-inset-left, 0px));
+    padding-right: max(0.55rem, env(safe-area-inset-right, 0px));
+    padding-bottom: max(2rem, calc(env(safe-area-inset-bottom, 0px) + 1rem));
+    overflow-x: clip;
   }
   .panel {
-    padding: 0.9rem;
+    padding: 0.75rem 0.7rem;
+    max-width: 100%;
+    overflow-x: clip;
   }
   .topbar {
     padding: 0.4rem 0.45rem;
     gap: 0.4rem;
     border-radius: 14px;
+  }
+  /* Daily row: keep inside phone width */
+  .daily-row {
+    grid-template-columns: minmax(3rem, 3.8rem) 2.15rem 1.6rem 1.85rem minmax(1.5rem, 1fr) 2rem;
+    gap: 0.15rem;
+    padding: 0.35rem 0.1rem;
+    font-size: 0.82rem;
+  }
+  .daily-row .w3d-sm {
+    --w3d-size: 30px;
+  }
+  .daily-row .d-icon {
+    width: 2.15rem;
+    height: 2.15rem;
+  }
+  .d-day {
+    font-size: 0.78rem;
+  }
+  .d-day-sub {
+    font-size: 0.6rem;
+  }
+  .radar-options .opt {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .radar-options select {
+    max-width: min(100%, 11rem);
+  }
+  .radar-options .opt input[type='range'] {
+    width: min(80px, 28vw);
+  }
+  .current-weather,
+  .current-hero {
+    padding: 0.95rem 0.85rem 1rem;
+    max-width: 100%;
+  }
+  .current-main,
+  .current-top,
+  .temp-block {
+    max-width: 100%;
+    min-width: 0;
+  }
+  .glance-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0.45rem;
+  }
+  .glance-card {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+  }
+  .week-strip-row {
+    max-width: 100%;
+  }
+  .playback {
+    max-width: 100%;
+    flex-wrap: wrap;
+  }
+  .playback .timeline {
+    min-width: 0;
+    flex: 1 1 8rem;
+    max-width: 100%;
+  }
+  /* Avoid 100vw (includes scrollbar / causes sideways scroll on iOS) */
+  .settings-more-menu,
+  .settings-sheet {
+    max-width: min(100%, 100%) !important;
   }
   .account-label {
     display: none;
@@ -5260,14 +5455,73 @@ html.mobile-perf[data-theme='light'] .topbar {
   z-index: 500;
 }
 
+/* ===== Home screen widget guide ===== */
+.homescreen-widget-card {
+  border-color: rgba(56, 189, 248, 0.28);
+}
+.homescreen-widget-card.compact .homescreen-steps {
+  margin: 0.35rem 0 0.55rem;
+  padding-left: 1.15rem;
+  font-size: 0.82rem;
+}
+.homescreen-widget-lead {
+  margin: 0 0 0.55rem;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: var(--text-dim, rgba(226, 232, 240, 0.85));
+}
+.homescreen-steps {
+  margin: 0.35rem 0 0.75rem;
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.86rem;
+  line-height: 1.4;
+  color: var(--text, #f1f5f9);
+}
+.homescreen-steps li {
+  padding-left: 0.15rem;
+}
+.homescreen-widget-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+.homescreen-widget-cta {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.homescreen-url {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.82em;
+  word-break: break-all;
+}
+.homescreen-widget-card.is-installed {
+  border-color: rgba(34, 197, 94, 0.35);
+}
+
 /* ===== Rain widget page (/widget) ===== */
 .widget-page {
   min-height: 100vh;
   min-height: 100dvh;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
   background: linear-gradient(165deg, #0b1220 0%, #132238 50%, #0f1a2e 100%);
   color: #f1f5f9;
-  padding: 0 0 2rem;
+  padding: 0 0 max(2rem, env(safe-area-inset-bottom, 0px));
   font-family: var(--font);
+  box-sizing: border-box;
+}
+.widget-page.widget-standalone .widget-bar {
+  padding-top: max(0.65rem, env(safe-area-inset-top, 0px));
+}
+.widget-bar-spacer {
+  width: 2.5rem;
+  flex-shrink: 0;
 }
 .widget-bar {
   display: flex;
@@ -5281,6 +5535,11 @@ html.mobile-perf[data-theme='light'] .topbar {
   top: 0;
   z-index: 30;
   backdrop-filter: blur(12px);
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.widget-page .homescreen-widget-card {
+  margin: 0.65rem 0.75rem 0;
 }
 .widget-bar a {
   text-decoration: none;
@@ -6815,17 +7074,45 @@ html.mobile-perf .panel {
   border-color: rgba(248, 113, 113, 0.45) !important;
   color: #fecaca !important;
   padding: 0.35rem 0.55rem !important;
+  text-decoration: none !important;
+  flex-shrink: 0;
+}
+/* Always in topbar (outside .quick-nav so it shows on iOS / narrow phones) */
+.chaser-nav-top {
+  order: -1;
+  z-index: 2;
+}
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: nowrap;
+  min-width: 0;
 }
 .chaser-nav-label {
   font-size: 0.78rem;
   letter-spacing: 0.02em;
 }
 @media (max-width: 720px) {
+  /* Keep tornado icon visible; short label on slightly wider phones */
+  .chaser-nav-top {
+    min-width: 2.35rem;
+    min-height: 2.35rem;
+    justify-content: center;
+    padding: 0.4rem 0.5rem !important;
+  }
   .chaser-nav-label {
     display: none;
   }
   .chaser-nav-btn {
     padding: 0.4rem 0.5rem !important;
+  }
+}
+/* Very narrow: still show chaser before settings */
+@media (max-width: 380px) {
+  .chaser-nav-top {
+    min-width: 2.2rem;
+    min-height: 2.2rem;
   }
 }
 

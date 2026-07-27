@@ -20,6 +20,10 @@ import {
   prefersMapboxBasemap,
   usesChaserColors,
   isNexradMosaicRegion,
+  isCanadaRadarRegion,
+  frameUsesWms,
+  ecccWmsOptions,
+  ECCC_GEOMET_WMS,
   RADAR_SOURCES,
   type RadarFrame,
   type RadarSourceId,
@@ -251,6 +255,153 @@ function WeatherTileLayer({
 }
 
 /**
+ * Smooth ECCC MSC GeoMet WMS loop — dual L.tileLayer.wms with TIME + crossfade.
+ */
+function SmoothWmsRadarLoop({
+  frames,
+  frameIdx,
+  opacity,
+  attribution,
+  fadeMs,
+}: {
+  frames: RadarFrame[]
+  frameIdx: number
+  opacity: number
+  attribution: string
+  fadeMs: number
+}) {
+  const map = useMap()
+  const aRef = useRef<L.TileLayer.WMS | null>(null)
+  const bRef = useRef<L.TileLayer.WMS | null>(null)
+  const activeIsA = useRef(true)
+  const opacityRef = useRef(opacity)
+  const rafRef = useRef<number | null>(null)
+  const lastIdx = useRef(-1)
+  opacityRef.current = opacity
+
+  const cancelRaf = () => {
+    if (rafRef.current != null) {
+      cancelAnimationFrame(rafRef.current)
+      rafRef.current = null
+    }
+  }
+
+  const makeWms = (zIndex: number) =>
+    L.tileLayer.wms(ECCC_GEOMET_WMS, {
+      layers: 'RADAR_1KM_RRAI',
+      styles: 'RADARURPPRECIPR14-LINEAR',
+      format: 'image/png',
+      transparent: true,
+      version: '1.3.0',
+      opacity: 0,
+      zIndex,
+      maxZoom: 12,
+      maxNativeZoom: 9,
+      className: 'radar-tiles radar-chaser-colors',
+      attribution,
+      updateWhenIdle: true,
+      updateWhenZooming: false,
+      keepBuffer: 1,
+      errorTileUrl: EMPTY_TILE,
+    } as L.WMSOptions)
+
+  useEffect(() => {
+    const a = makeWms(200)
+    const b = makeWms(201)
+    a.addTo(map)
+    b.addTo(map)
+    aRef.current = a
+    bRef.current = b
+    activeIsA.current = true
+    lastIdx.current = -1
+    return () => {
+      cancelRaf()
+      try {
+        map.removeLayer(a)
+        map.removeLayer(b)
+      } catch {
+        /* ignore */
+      }
+      aRef.current = null
+      bRef.current = null
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, attribution])
+
+  useEffect(() => {
+    const a = aRef.current
+    const b = bRef.current
+    if (!a || !b || !frames.length) return
+    const frame = frames[frameIdx]
+    if (!frame) return
+    const opts = ecccWmsOptions(frame)
+    if (!opts) return
+    const targetOp = opacityRef.current
+
+    const apply = (layer: L.TileLayer.WMS) => {
+      layer.setParams({
+        layers: opts.layers,
+        styles: opts.styles,
+        time: opts.time,
+      } as L.WMSParams)
+    }
+
+    if (lastIdx.current < 0) {
+      cancelRaf()
+      apply(a)
+      a.setOpacity(targetOp)
+      a.setZIndex(210)
+      b.setOpacity(0)
+      b.setZIndex(200)
+      activeIsA.current = true
+      lastIdx.current = frameIdx
+      return
+    }
+    if (lastIdx.current === frameIdx) return
+
+    cancelRaf()
+    const incoming = activeIsA.current ? b : a
+    const outgoing = activeIsA.current ? a : b
+    apply(incoming)
+    incoming.setOpacity(0)
+    incoming.setZIndex(211)
+    outgoing.setZIndex(210)
+
+    const start = performance.now()
+    const duration = Math.max(80, fadeMs)
+
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / duration)
+      const e = easeInOut(t)
+      incoming.setOpacity(targetOp * e)
+      outgoing.setOpacity(targetOp * (1 - e))
+      if (t < 1) {
+        rafRef.current = requestAnimationFrame(tick)
+      } else {
+        outgoing.setOpacity(0)
+        incoming.setOpacity(targetOp)
+        activeIsA.current = !activeIsA.current
+        lastIdx.current = frameIdx
+        rafRef.current = null
+      }
+    }
+    rafRef.current = requestAnimationFrame(tick)
+  }, [frameIdx, frames, fadeMs])
+
+  useEffect(() => {
+    const a = aRef.current
+    const b = bRef.current
+    if (!a || !b) return
+    const active = activeIsA.current ? a : b
+    const idle = activeIsA.current ? b : a
+    active.setOpacity(opacity)
+    if (lastIdx.current >= 0) idle.setOpacity(0)
+  }, [opacity])
+
+  return null
+}
+
+/**
  * Smooth radar loop: dual tile layers with opacity crossfade (not hard cuts).
  * Preloads the next frame, then blends for a continuous video-like feel.
  */
@@ -475,11 +626,14 @@ export function RadarMap({
   const wantPlayRef = useRef(false)
 
   const usRegion = isNexradMosaicRegion(lat, lon)
+  const caRegion = isCanadaRadarRegion(lat, lon)
   const [severeToggles, setSevereToggles] = useState<SevereLayerToggles>(() => ({
     warnings: chaserOverlays || Boolean(severeMode),
     reports: chaserOverlays || Boolean(severeMode),
     outlook: chaserOverlays,
-    velocity: false,
+    // Aggressive chaser defaults: SRM + storm tracks on for US NEXRAD coverage
+    velocity: chaserOverlays && isNexradMosaicRegion(lat, lon),
+    tracks: chaserOverlays && isNexradMosaicRegion(lat, lon),
   }))
   const [severeStats, setSevereStats] = useState<SevereLayerStats | null>(null)
   const onSevereStats = useCallback((s: SevereLayerStats) => setSevereStats(s), [])
@@ -487,6 +641,7 @@ export function RadarMap({
   const meta = getSourceMeta(sourceId)
   const base = BASEMAPS[basemap] ?? BASEMAPS.dark
   const frame = frames[frameIdx] ?? null
+  const useWms = frameUsesWms(sourceId, frame)
   const fadeMs = lite ? Math.min(SPEED_FADE_MS[speed], 180) : SPEED_FADE_MS[speed]
   const holdMs = SPEED_HOLD_MS[speed]
 
@@ -508,15 +663,31 @@ export function RadarMap({
     }
   }, [sourceId, mapboxToken])
 
-  // When location jumps continents, refresh default source (keep if user already picked)
+  // Region-aware auto source: keep storm_chaser (picks ECCC / NEXRAD / global)
   useEffect(() => {
     setSourceId((prev) => {
-      if (prev === 'storm_chaser' || prev === 'global_loop' || prev === 'mapbox_radar') {
+      if (
+        prev === 'storm_chaser' ||
+        prev === 'global_loop' ||
+        prev === 'mapbox_radar' ||
+        prev === 'eccc_radar' ||
+        prev === 'us_nexrad_loop'
+      ) {
         return defaultSourceForLocation(lat, lon)
       }
       return prev
     })
   }, [lat, lon])
+
+  // When chaser desk moves into / out of US coverage, refresh velocity/tracks defaults
+  useEffect(() => {
+    if (!chaserOverlays) return
+    setSevereToggles((t) => ({
+      ...t,
+      velocity: usRegion ? true : false,
+      tracks: usRegion ? true : false,
+    }))
+  }, [chaserOverlays, usRegion])
 
   const reload = useCallback(async () => {
     setLoading(true)
@@ -525,10 +696,16 @@ export function RadarMap({
       const needsRv =
         sourceId === 'global_loop' ||
         sourceId === 'mapbox_radar' ||
-        sourceId === 'storm_chaser'
+        (sourceId === 'storm_chaser' &&
+          !isCanadaRadarRegion(lat, lon) &&
+          !isNexradMosaicRegion(lat, lon))
       if (needsRv) {
-        const maps = await fetchRainViewerMaps()
-        setRvHost(maps.host || 'https://tilecache.rainviewer.com')
+        try {
+          const maps = await fetchRainViewerMaps()
+          setRvHost(maps.host || 'https://tilecache.rainviewer.com')
+        } catch {
+          /* ECCC/NEXRAD path may still work */
+        }
       }
       if (prefersMapboxBasemap(sourceId) && !mapboxToken) {
         console.info(
@@ -540,7 +717,9 @@ export function RadarMap({
           lite &&
           sourceId !== 'global_loop' &&
           sourceId !== 'mapbox_radar' &&
-          sourceId !== 'storm_chaser',
+          sourceId !== 'storm_chaser' &&
+          sourceId !== 'eccc_radar' &&
+          sourceId !== 'us_nexrad_loop',
         lat,
         lon,
       })
@@ -568,15 +747,12 @@ export function RadarMap({
     return () => window.clearInterval(id)
   }, [reload, lite, playing, inView])
 
-  // Keep global loop as the default; only auto-switch away if user never touched source
-  // (no auto continent override — always open on global_loop)
-
   useEffect(() => {
-    // Severe mode: clearer radar only — still start paused on the latest frame
-    if (severeMode) {
-      setOpacity((o) => Math.max(o, 0.8))
+    // Severe / chaser: clearer radar — still start paused on the latest frame
+    if (severeMode || chaserOverlays) {
+      setOpacity((o) => Math.max(o, 0.82))
     }
-  }, [severeMode])
+  }, [severeMode, chaserOverlays])
 
   // Track whether the map is actually on screen
   useEffect(() => {
@@ -767,7 +943,15 @@ export function RadarMap({
                 />
               )}
 
-              {meta.animated && frames.length > 0 ? (
+              {meta.animated && frames.length > 0 && useWms ? (
+                <SmoothWmsRadarLoop
+                  frames={frames}
+                  frameIdx={frameIdx}
+                  opacity={opacity}
+                  attribution={meta.attribution}
+                  fadeMs={fadeMs}
+                />
+              ) : meta.animated && frames.length > 0 ? (
                 <SmoothRadarLoop
                   frames={frames}
                   frameIdx={frameIdx}
@@ -803,6 +987,7 @@ export function RadarMap({
                 severeToggles.reports ||
                 severeToggles.outlook ||
                 severeToggles.velocity ||
+                severeToggles.tracks ||
                 focusRequest) && (
                 <SevereMapLayers
                   lat={lat}
@@ -1034,14 +1219,38 @@ export function RadarMap({
             />
             🌀 Velocity
           </label>
+          <label
+            className="toggle"
+            title="NEXRAD storm cells + 30-min motion vectors (IEM storm attributes)"
+          >
+            <input
+              type="checkbox"
+              checked={severeToggles.tracks}
+              onChange={(e) =>
+                setSevereToggles((t) => ({ ...t, tracks: e.target.checked }))
+              }
+              disabled={!usRegion}
+            />
+            ↗ Tracks
+          </label>
         </div>
 
         <p className="radar-product-hint">
           {overlay !== 'none'
             ? 'Interactive model fields from Ventusky — pan, zoom, and scrub time inside the map.'
             : meta.desc}
+          {caRegion && (sourceId === 'storm_chaser' || sourceId === 'eccc_radar')
+            ? ' · Official ECCC MSC GeoMet composite'
+            : ''}
+          {usRegion && sourceId === 'storm_chaser'
+            ? ' · IEM national NEXRAD loop'
+            : ''}
           {showFires ? ' · NASA FIRMS 24h fires' : ''}
-          {severeToggles.warnings || severeToggles.reports || severeToggles.outlook
+          {severeToggles.warnings ||
+          severeToggles.reports ||
+          severeToggles.outlook ||
+          severeToggles.velocity ||
+          severeToggles.tracks
             ? ` · Layers: ${[
                 severeToggles.warnings
                   ? `${severeStats?.warnings ?? '…'} warn`
@@ -1054,13 +1263,23 @@ export function RadarMap({
                     ? 'SPC outlook'
                     : 'SPC quiet'
                   : null,
-                severeToggles.velocity ? 'velocity' : null,
+                severeToggles.tracks
+                  ? `${severeStats?.tracks ?? '…'} cells`
+                  : null,
+                severeToggles.velocity
+                  ? severeStats?.velocitySite
+                    ? `SRM ${severeStats.velocitySite}`
+                    : 'velocity'
+                  : null,
               ]
                 .filter(Boolean)
                 .join(' · ')}`
             : ''}
           {severeToggles.velocity
             ? ' · Velocity shows storm-relative motion from nearest NEXRAD — red/green couplets can indicate rotation; not a tornado detector.'
+            : ''}
+          {severeToggles.tracks
+            ? ' · Tracks: NEXRAD storm attributes (motion, max dBZ, TVS/MESO flags).'
             : ''}
         </p>
       </div>

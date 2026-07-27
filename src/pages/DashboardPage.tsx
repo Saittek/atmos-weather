@@ -18,10 +18,10 @@ import { SunMoon } from '../components/SunMoon'
 import { Favorites } from '../components/Favorites'
 import { SettingsBar } from '../components/SettingsBar'
 import { AllergySection } from '../components/AllergySection'
-import { InstallPrompt } from '../components/InstallPrompt'
 import { Onboarding } from '../components/Onboarding'
 import { ForecastSummary } from '../components/ForecastSummary'
 import { GlanceModules } from '../components/GlanceModules'
+import { HomeScreenWidget } from '../components/HomeScreenWidget'
 import { AlertTopBar } from '../components/AlertTopBar'
 import { AmbientOrbs } from '../components/AmbientOrbs'
 import { AdvancedSection } from '../components/AdvancedSection'
@@ -439,32 +439,43 @@ export default function DashboardPage() {
 
       <Onboarding />
 
-      <div className="app-shell">
-        <Deferred force={!isMobile} rootMargin="0px" minHeight={0}>
-          <InstallPrompt />
-        </Deferred>
-        <header className="topbar">
-          <div className="brand">
-            <img
-              className="brand-mark"
-              src="/icons/solara-logo.png"
-              alt=""
-              width={48}
-              height={48}
-              decoding="async"
-            />
-            <div>
-              <strong>Solara</strong>
-              {simpleMode && !stormMode && <span className="brand-tag simple-tag">Simple</span>}
-              {stormMode && <span className="brand-tag">Storm mode</span>}
-            </div>
-          </div>
-          <SearchBar
-            onSelect={loadForLocation}
-            onUseLocation={requestMyLocation}
-            geoLoading={geoLoading}
+      {/* Fixed topbar lives outside .app-shell so overflow-x:clip never affects pin-to-viewport */}
+      <header className="topbar">
+        <div className="brand">
+          <img
+            className="brand-mark"
+            src="/icons/solara-logo.png"
+            alt=""
+            width={48}
+            height={48}
+            decoding="async"
           />
-          <div className="topbar-right">
+          <div>
+            <strong>Solara</strong>
+            {simpleMode && !stormMode && <span className="brand-tag simple-tag">Simple</span>}
+            {stormMode && <span className="brand-tag">Storm mode</span>}
+          </div>
+        </div>
+        <SearchBar
+          onSelect={loadForLocation}
+          onUseLocation={requestMyLocation}
+          geoLoading={geoLoading}
+        />
+        <div className="topbar-right">
+          {/* Always visible — including iOS / simple mode (quick-nav is hidden on phones) */}
+            <Link
+              to={
+                location
+                  ? `/chase?lat=${location.latitude.toFixed(4)}&lon=${location.longitude.toFixed(4)}&name=${encodeURIComponent(location.name)}`
+                  : '/chase'
+              }
+              className="chip-btn nav-chip chaser-nav-btn chaser-nav-top"
+              title="Storm chasers desk"
+              aria-label="Storm chasers"
+            >
+              <span aria-hidden>🌪</span>
+              <span className="chaser-nav-label">Chasers</span>
+            </Link>
             <nav className="quick-nav" aria-label="App modes">
               <button
                 type="button"
@@ -487,20 +498,6 @@ export default function DashboardPage() {
                 >
                   🏠
                 </button>
-              )}
-              {!simpleMode && (
-                <Link
-                  to={
-                    location
-                      ? `/chase?lat=${location.latitude.toFixed(4)}&lon=${location.longitude.toFixed(4)}&name=${encodeURIComponent(location.name)}`
-                      : '/chase'
-                  }
-                  className="chip-btn nav-chip chaser-nav-btn"
-                  title="Storm chasers desk"
-                >
-                  <span aria-hidden>🌪</span>
-                  <span className="chaser-nav-label">Chasers</span>
-                </Link>
               )}
               <Link to={radarPath} className="chip-btn icon-chip nav-chip" title="Full-page radar" aria-label="Radar">
                 📡
@@ -556,13 +553,14 @@ export default function DashboardPage() {
               refreshing={refreshing}
             />
           </div>
-        </header>
+      </header>
 
+      <div className="app-shell">
         {simpleMode && !stormMode && (
           <div className="simple-mode-banner" role="status">
             <div>
               <strong>◎ Simple mode</strong>
-              <span>Basics only — current, rain, hourly &amp; 14-day</span>
+              <span>Basics only — current, rain, hourly &amp; 7-day</span>
             </div>
             <button type="button" className="chip-btn" onClick={() => setSimpleMode(false)}>
               Show full
@@ -678,6 +676,8 @@ export default function DashboardPage() {
                 {/* Directly under “Right now” */}
                 <GlanceModules weather={weather} units={units} air={air} />
 
+                <HomeScreenWidget compact />
+
                 <div id="alerts-panel">
                   {!alertsMinimized && <Alerts alerts={activeAlerts} />}
                 </div>
@@ -704,10 +704,7 @@ export default function DashboardPage() {
                 </div>
               )}
 
-              {/* Allergies — simple + full (pollen, mold-friendly air, tips) */}
-              <AllergySection air={air} weather={weather} compact={simpleMode} />
-
-              {/* Radar: always available in storm mode; collapsed CTA in simple mode */}
+              {/* Radar above allergies */}
               {!simpleMode || stormMode ? (
                 radarBlock
               ) : (
@@ -729,6 +726,9 @@ export default function DashboardPage() {
                   </div>
                 </section>
               )}
+
+              {/* Allergies — simple + full (pollen, mold-friendly air, tips) */}
+              <AllergySection air={air} weather={weather} compact={simpleMode} />
 
               {simpleMode && (
                 <div className="simple-more-cta">

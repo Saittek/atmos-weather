@@ -1,17 +1,21 @@
 /**
  * Map overlays: NWS/SPC/ECCC warning & watch polygons, SPC reports,
- * SPC Day 1 outlook, optional nearest-site velocity tiles.
+ * SPC Day 1 outlook, nearest-site velocity tiles, NEXRAD storm tracks.
  */
-import { useEffect, useMemo, useState } from 'react'
-import { CircleMarker, GeoJSON, Popup, useMap } from 'react-leaflet'
+import { Fragment, useEffect, useMemo, useState } from 'react'
+import { CircleMarker, GeoJSON, Popup, Polyline, useMap } from 'react-leaflet'
 import type { Layer, PathOptions } from 'leaflet'
 import {
   fetchAllThreatPolygons,
+  fetchNexradStormTracks,
   fetchSpcOutlooks,
   fetchSpcStormReports,
   reportColor,
+  stormCellColor,
+  stormMotionTip,
   warningStyle,
   type SpcOutlookFeature,
+  type StormCellTrack,
   type StormReport,
   type StormWarning,
 } from '../api/severeLayers'
@@ -23,12 +27,15 @@ export interface SevereLayerToggles {
   reports: boolean
   outlook: boolean
   velocity: boolean
+  /** NEXRAD storm attribute cells + motion vectors (US) */
+  tracks: boolean
 }
 
 export interface SevereLayerStats {
   warnings: number
   reports: number
   outlook: number
+  tracks: number
   velocitySite: string | null
   velocityKm: number | null
   velocityMode: 'srm' | 'base' | null
@@ -135,6 +142,7 @@ export function SevereMapLayers({
 }: Props) {
   const [warnings, setWarnings] = useState<StormWarning[]>([])
   const [reports, setReports] = useState<StormReport[]>([])
+  const [tracks, setTracks] = useState<StormCellTrack[]>([])
   const [outlookTorn, setOutlookTorn] = useState<SpcOutlookFeature[]>([])
   const [outlookCat, setOutlookCat] = useState<SpcOutlookFeature[]>([])
   const [velSite, setVelSite] = useState<string | null>(null)
@@ -182,6 +190,14 @@ export function SevereMapLayers({
         setOutlookCat([])
       }
 
+      if (toggles.tracks) {
+        tasks.push(
+          fetchNexradStormTracks().then((t) => {
+            if (!cancelled) setTracks(t)
+          }),
+        )
+      } else if (!cancelled) setTracks([])
+
       await Promise.all(tasks)
     }
     void load()
@@ -192,7 +208,15 @@ export function SevereMapLayers({
       cancelled = true
       window.clearInterval(id)
     }
-  }, [toggles.warnings, toggles.reports, toggles.outlook, lat, lon, externalWarnings?.length])
+  }, [
+    toggles.warnings,
+    toggles.reports,
+    toggles.outlook,
+    toggles.tracks,
+    lat,
+    lon,
+    externalWarnings?.length,
+  ])
 
   const visibleReports = useMemo(() => {
     if (!toggles.reports) return []
@@ -206,6 +230,33 @@ export function SevereMapLayers({
       .slice(0, 250)
   }, [reports, lat, lon, wide, toggles.reports])
 
+  const visibleTracks = useMemo(() => {
+    if (!toggles.tracks) return []
+    if (wide) {
+      // Prefer strong / rotating cells nationwide
+      return [...tracks]
+        .sort((a, b) => {
+          const sa =
+            (a.tvs && a.tvs !== 'NONE' ? 1000 : 0) +
+            (a.meso && a.meso !== 'NONE' ? 500 : 0) +
+            (a.maxDbz ?? 0)
+          const sb =
+            (b.tvs && b.tvs !== 'NONE' ? 1000 : 0) +
+            (b.meso && b.meso !== 'NONE' ? 500 : 0) +
+            (b.maxDbz ?? 0)
+          return sb - sa
+        })
+        .slice(0, 350)
+    }
+    const radius = 6
+    return tracks
+      .filter(
+        (t) =>
+          Math.abs(t.lat - lat) < radius && Math.abs(t.lon - lon) < radius * 1.4,
+      )
+      .slice(0, 180)
+  }, [tracks, lat, lon, wide, toggles.tracks])
+
   const outlookFeatures = outlookTorn.length ? outlookTorn : outlookCat
 
   useEffect(() => {
@@ -213,6 +264,7 @@ export function SevereMapLayers({
       warnings: warnings.length,
       reports: visibleReports.length,
       outlook: outlookFeatures.length,
+      tracks: visibleTracks.length,
       velocitySite: toggles.velocity ? velSite : null,
       velocityKm: toggles.velocity ? velKm : null,
       velocityMode: toggles.velocity ? velMode : null,
@@ -222,6 +274,7 @@ export function SevereMapLayers({
     warnings.length,
     visibleReports.length,
     outlookFeatures.length,
+    visibleTracks.length,
     velSite,
     velKm,
     velMode,
@@ -373,6 +426,90 @@ export function SevereMapLayers({
             </Popup>
           </CircleMarker>
         ))}
+
+      {toggles.tracks &&
+        visibleTracks.map((c) => {
+          const color = stormCellColor(c)
+          const hasMotion =
+            c.drct != null && c.sknt != null && c.sknt > 0 && Number.isFinite(c.drct)
+          const tip = hasMotion
+            ? stormMotionTip(c.lat, c.lon, c.drct!, c.sknt!, 30)
+            : null
+          return (
+            <Fragment key={c.id}>
+              {tip && (
+                <Polyline
+                  positions={[
+                    [c.lat, c.lon],
+                    tip,
+                  ]}
+                  pathOptions={{
+                    color,
+                    weight: 2,
+                    opacity: 0.85,
+                    dashArray: '4 3',
+                  }}
+                />
+              )}
+              <CircleMarker
+                center={[c.lat, c.lon]}
+                radius={
+                  c.tvs && c.tvs !== 'NONE'
+                    ? 8
+                    : c.meso && c.meso !== 'NONE'
+                      ? 7
+                      : 5
+                }
+                pathOptions={{
+                  color: '#0f172a',
+                  weight: 1.5,
+                  fillColor: color,
+                  fillOpacity: 0.95,
+                }}
+              >
+                <Popup>
+                  <strong>
+                    Storm {c.stormId || '?'} · {c.nexrad}
+                  </strong>
+                  <br />
+                  {c.maxDbz != null ? `Max ${Math.round(c.maxDbz)} dBZ` : 'Cell'}
+                  {c.vil != null ? ` · VIL ${c.vil}` : ''}
+                  {c.topKft != null ? ` · Top ${c.topKft} kft` : ''}
+                  <br />
+                  {hasMotion
+                    ? `Motion ${Math.round(c.drct!)}° at ${Math.round(c.sknt!)} kt (vector ≈ 30 min)`
+                    : 'No motion vector'}
+                  {c.tvs && c.tvs !== 'NONE' ? (
+                    <>
+                      <br />
+                      <em>TVS: {c.tvs}</em>
+                    </>
+                  ) : null}
+                  {c.meso && c.meso !== 'NONE' ? (
+                    <>
+                      <br />
+                      <em>MESO: {c.meso}</em>
+                    </>
+                  ) : null}
+                  {(c.posh ?? 0) > 0 ? (
+                    <>
+                      <br />
+                      POSH {c.posh}%{c.poh != null ? ` · POH ${c.poh}%` : ''}
+                    </>
+                  ) : null}
+                  {c.valid ? (
+                    <>
+                      <br />
+                      <small>{c.valid}</small>
+                    </>
+                  ) : null}
+                  <br />
+                  <small>NEXRAD storm attributes (IEM) — open NWS-derived data</small>
+                </Popup>
+              </CircleMarker>
+            </Fragment>
+          )
+        })}
 
     </>
   )

@@ -8,12 +8,13 @@ import { getWeatherInfo } from '../utils/weatherCodes'
 import { isDaytimeNow } from '../utils/daylight'
 import { formatTemp } from '../utils/format'
 import { locationKey } from '../api/weather'
+import { HomeScreenWidget } from '../components/HomeScreenWidget'
 import { InstallPrompt } from '../components/InstallPrompt'
 import { todayDailyIndex } from '../utils/weatherStory'
 
 /**
  * Compact installable home/rain widget — prefers exact home pin.
- * Route: /widget
+ * Route: /widget — Add to Home Screen from Safari/Chrome for a home icon.
  */
 export default function WidgetPage() {
   const {
@@ -35,6 +36,23 @@ export default function WidgetPage() {
   const rainWatch = useRainWatch(favorites, notifyAlerts, location, homeLocation)
   const [tick, setTick] = useState(0)
   const [homed, setHomed] = useState(false)
+  const [standalone, setStandalone] = useState(false)
+
+  useEffect(() => {
+    const s =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      Boolean((navigator as Navigator & { standalone?: boolean }).standalone)
+    setStandalone(s)
+    document.title = s ? 'Solara' : 'Solara · Weather widget'
+    // iOS home-screen icon label hint
+    const meta = document.querySelector('meta[name="apple-mobile-web-app-title"]')
+    if (!meta) {
+      const m = document.createElement('meta')
+      m.name = 'apple-mobile-web-app-title'
+      m.content = 'Solara'
+      document.head.appendChild(m)
+    }
+  }, [])
 
   // Always prefer exact home when widget opens
   useEffect(() => {
@@ -75,14 +93,21 @@ export default function WidgetPage() {
   const pop = weather?.daily.precipitation_probability_max[ti] ?? 0
 
   return (
-    <div className="widget-page" data-theme="dark">
-      <InstallPrompt compact />
+    <div
+      className={`widget-page ${standalone ? 'widget-standalone' : ''}`}
+      data-theme="dark"
+    >
+      {!standalone && <InstallPrompt compact />}
       <header className="widget-bar">
-        <Link to="/" className="chip-btn">
-          ← Full app
-        </Link>
+        {!standalone ? (
+          <Link to="/" className="chip-btn">
+            ← Full app
+          </Link>
+        ) : (
+          <span className="widget-bar-spacer" aria-hidden />
+        )}
         <strong className="widget-brand">
-          {homeLocation ? '🏠 Solara Home' : '☔ Solara Rain'}
+          {homeLocation ? '🏠 Solara' : '☔ Solara'}
         </strong>
         <button
           type="button"
@@ -97,6 +122,8 @@ export default function WidgetPage() {
           {homeLocation ? '🏠' : '↻'}
         </button>
       </header>
+
+      {!standalone && <HomeScreenWidget compact />}
 
       {rainWatch.banner && (
         <div className="widget-alert" role="status">

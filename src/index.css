@@ -11,6 +11,10 @@ html {
   --sab: env(safe-area-inset-bottom, 0px);
   --sal: env(safe-area-inset-left, 0px);
   --sar: env(safe-area-inset-right, 0px);
+  /* Lock page to viewport width — vertical scroll only */
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
 }
 
 html[data-theme='light'] {
@@ -19,10 +23,14 @@ html[data-theme='light'] {
 
 body {
   margin: 0;
-  min-width: 320px;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
   background: #0b1220;
   /* Prevent iOS rubber-band overscroll flash */
   overscroll-behavior-y: none;
+  overscroll-behavior-x: none;
   -webkit-tap-highlight-color: transparent;
   -webkit-text-size-adjust: 100%;
 }
@@ -34,6 +42,9 @@ html[data-theme='light'] body {
 #root {
   min-height: 100vh;
   min-height: 100dvh;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
 }
 
 /* Full-page radar needs a definite height chain for Leaflet */
@@ -43,19 +54,33 @@ html[data-theme='light'] body {
   overflow: hidden;
 }
 
-/* Capacitor / iOS shell */
+/* Capacitor / iOS shell — keep padding inside the width box */
+body.native-app,
+body.native-ios {
+  overflow-x: clip;
+  width: 100%;
+  max-width: 100%;
+}
 body.native-ios .app-shell {
-  padding-left: max(1.25rem, var(--sal));
-  padding-right: max(1.25rem, var(--sar));
-  padding-bottom: max(3rem, calc(var(--sab) + 1.5rem));
+  padding-left: max(0.85rem, var(--sal));
+  padding-right: max(0.85rem, var(--sar));
+  padding-bottom: max(2.5rem, calc(var(--sab) + 1.25rem));
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: clip;
 }
 
-body.native-ios .alert-top-bar {
+body.native-ios .alert-top-bar:not(.alert-top-bar-mini) {
   padding-top: var(--sat);
 }
-
-body.native-ios .topbar {
-  top: max(0.4rem, calc(var(--sat) * 0.15));
+body.native-ios .app {
+  --topbar-offset: max(0.35rem, calc(var(--sat) * 0.2));
+}
+body.native-ios .app.has-alerts {
+  --alert-bar-h: calc(3.35rem + var(--sat));
+}
+body.native-ios .app.has-alerts.alerts-minimized {
+  --alert-bar-h: calc(2.85rem + var(--sat));
 }
 
 body.native-ios .radar-page-bar,

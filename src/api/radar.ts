@@ -1,6 +1,8 @@
 /**
  * Solara multi-source radar
- * - US NEXRAD (Iowa Environmental Mesonet) — high-quality CONUS reflectivity
+ * - Storm chaser (region-aware): ECCC Canada · NWS NEXRAD US · RainViewer elsewhere
+ * - Official ECCC MSC GeoMet WMS (Canadian / North American composite)
+ * - US NEXRAD (Iowa Environmental Mesonet)
  * - US precipitation Q2 (IEM)
  * - GOES East/West IR & VIS (IEM)
  * - Global precip loop (RainViewer)
@@ -10,6 +12,8 @@
 
 export type RadarSourceId =
   | 'storm_chaser'
+  | 'eccc_radar'
+  | 'eccc_snow'
   | 'us_nexrad_live'
   | 'us_nexrad_loop'
   | 'us_precip'
@@ -26,6 +30,12 @@ export const RV_COLOR_NEXRAD = 6
 /** Slightly punchier “pro” palette often used in storm apps */
 export const RV_COLOR_UNIVERSAL = 2
 
+export const ECCC_GEOMET_WMS = 'https://geo.weather.gc.ca/geomet'
+export const ECCC_LAYER_RAIN = 'RADAR_1KM_RRAI'
+export const ECCC_LAYER_SNOW = 'RADAR_1KM_RSNO'
+/** Documented linear precip style for clear chaser colors */
+export const ECCC_STYLE_RAIN = 'RADARURPPRECIPR14-LINEAR'
+
 export interface RadarFrame {
   /** Unix seconds (UTC) when known */
   time: number
@@ -39,21 +49,43 @@ export interface RadarSourceMeta {
   name: string
   desc: string
   /** Rough coverage hint for the UI */
-  coverage: 'US' | 'Global' | 'GOES-E' | 'GOES-W'
+  coverage: 'US' | 'Canada' | 'NA' | 'Global' | 'GOES-E' | 'GOES-W'
   animated: boolean
   maxNativeZoom: number
   attribution: string
+  /** Render via MSC GeoMet WMS (not XYZ tiles) */
+  wms?: boolean
 }
 
 export const RADAR_SOURCES: RadarSourceMeta[] = [
   {
     id: 'storm_chaser',
     name: 'Storm chaser',
-    desc: 'WeatherWise-style: dark map + high-contrast NEXRAD colors (US NEXRAD / global composite)',
+    desc: 'Region-aware: ECCC Canada · NEXRAD US loop · global composite elsewhere — high-contrast chaser palette',
     coverage: 'Global',
     animated: true,
     maxNativeZoom: 8,
-    attribution: 'Radar © IEM NEXRAD / RainViewer · Map © Mapbox or OSM',
+    attribution: 'Radar © ECCC GeoMet / IEM NEXRAD / RainViewer · Map © Mapbox or OSM',
+  },
+  {
+    id: 'eccc_radar',
+    name: 'Canada ECCC (rain)',
+    desc: 'Official MSC GeoMet 1 km rain-rate composite — last ~3 h, 6 min steps',
+    coverage: 'NA',
+    animated: true,
+    maxNativeZoom: 9,
+    attribution: 'Radar © Environment and Climate Change Canada (MSC GeoMet)',
+    wms: true,
+  },
+  {
+    id: 'eccc_snow',
+    name: 'Canada ECCC (snow)',
+    desc: 'Official MSC GeoMet 1 km snow-rate composite',
+    coverage: 'NA',
+    animated: true,
+    maxNativeZoom: 9,
+    attribution: 'Radar © Environment and Climate Change Canada (MSC GeoMet)',
+    wms: true,
   },
   {
     id: 'us_nexrad_live',
@@ -67,7 +99,7 @@ export const RADAR_SOURCES: RadarSourceMeta[] = [
   {
     id: 'us_nexrad_loop',
     name: 'US NEXRAD (loop)',
-    desc: 'Animated national mosaic (~5 min steps)',
+    desc: 'Animated national mosaic (~5 min steps) — best for US storm chase',
     coverage: 'US',
     animated: true,
     maxNativeZoom: 8,
@@ -157,14 +189,34 @@ export function isNexradMosaicRegion(lat?: number, lon?: number): boolean {
   return lat >= 24 && lat <= 50 && lon >= -125 && lon <= -66
 }
 
-/** Default: global RainViewer loop (works worldwide); switch source for US NEXRAD */
+/**
+ * Canada where official ECCC GeoMet composite is preferred over US NEXRAD.
+ * Keeps US Midwest / Plains on NEXRAD for velocity + storm tracks.
+ */
+export function isCanadaRadarRegion(lat?: number, lon?: number): boolean {
+  if (lat == null || lon == null) return false
+  // Mainland Canada north of ~49°
+  if (lat >= 49 && lat <= 72 && lon >= -141 && lon <= -52) return true
+  // Southern Ontario / Quebec / Maritimes (south of 49°)
+  if (lat >= 41.6 && lat < 49 && lon >= -85 && lon <= -52) return true
+  // Southern BC / Prairies just below 49°
+  if (lat >= 48.2 && lat < 49 && lon >= -141 && lon < -85) return true
+  return false
+}
+
+/** Prefer storm-chaser mode everywhere — it picks the best backend per region */
 export function defaultSourceForLocation(_lat?: number, _lon?: number): RadarSourceId {
-  return 'global_loop'
+  return 'storm_chaser'
 }
 
 /** Prefer Mapbox dark basemap for chaser-style sources when token exists */
 export function prefersMapboxBasemap(sourceId: RadarSourceId): boolean {
-  return sourceId === 'storm_chaser' || sourceId === 'mapbox_radar'
+  return (
+    sourceId === 'storm_chaser' ||
+    sourceId === 'mapbox_radar' ||
+    sourceId === 'eccc_radar' ||
+    sourceId === 'eccc_snow'
+  )
 }
 
 /** High-contrast radar tile styling (NEXRAD / WeatherWise-like) */
@@ -174,8 +226,37 @@ export function usesChaserColors(sourceId: RadarSourceId): boolean {
     sourceId === 'us_nexrad_live' ||
     sourceId === 'us_nexrad_loop' ||
     sourceId === 'us_combo' ||
-    sourceId === 'mapbox_radar'
+    sourceId === 'mapbox_radar' ||
+    sourceId === 'eccc_radar' ||
+    sourceId === 'eccc_snow'
   )
+}
+
+export function isWmsSource(sourceId: RadarSourceId): boolean {
+  return Boolean(getSourceMeta(sourceId).wms)
+}
+
+/** Frame key encodes MSC layer + ISO time: eccc:RADAR_1KM_RRAI:2026-07-26T05:24:00Z */
+export function parseEcccFrame(
+  frame: RadarFrame | null | undefined,
+): { layer: string; time: string } | null {
+  if (!frame?.key.startsWith('eccc:')) return null
+  const rest = frame.key.slice(5)
+  const colon = rest.indexOf(':')
+  if (colon < 0) return null
+  const layer = rest.slice(0, colon)
+  const time = rest.slice(colon + 1)
+  if (!layer || !time) return null
+  return { layer, time }
+}
+
+export function frameUsesWms(
+  sourceId: RadarSourceId,
+  frame: RadarFrame | null | undefined,
+): boolean {
+  if (isWmsSource(sourceId)) return true
+  if (sourceId === 'storm_chaser' && frame?.key.startsWith('eccc:')) return true
+  return false
 }
 
 const IEM_TILE = 'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0'
@@ -208,6 +289,100 @@ export function buildIemNexradFrames(hoursBack = 1.5, stepMin = 5): RadarFrame[]
       label: stamp,
     })
   }
+  return frames
+}
+
+// ── ECCC MSC GeoMet (official Canadian / NA composite) ───────────────
+
+function isoUtcZ(ms: number): string {
+  return new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z')
+}
+
+/** Generate PT6M frames for last N hours (GeoMet keeps ~3 h) */
+export function buildEcccFramesSynthetic(
+  layer: string,
+  hoursBack = 2.5,
+  stepMin = 6,
+): RadarFrame[] {
+  const end = floorToStep(Date.now() - 6 * 60_000, stepMin)
+  const start = end - hoursBack * 3600_000
+  const frames: RadarFrame[] = []
+  for (let t = start; t <= end; t += stepMin * 60_000) {
+    const iso = isoUtcZ(t)
+    frames.push({
+      time: Math.floor(t / 1000),
+      key: `eccc:${layer}:${iso}`,
+      label: iso,
+    })
+  }
+  return frames
+}
+
+let ecccTimeCache: { at: number; layer: string; frames: RadarFrame[] } | null = null
+
+/**
+ * Prefer live TIME dimension from GetCapabilities; fall back to synthetic 6-min steps.
+ */
+export async function loadEcccFrames(
+  layer: string = ECCC_LAYER_RAIN,
+  opts?: { lite?: boolean },
+): Promise<RadarFrame[]> {
+  const lite = Boolean(opts?.lite)
+  if (
+    ecccTimeCache &&
+    ecccTimeCache.layer === layer &&
+    Date.now() - ecccTimeCache.at < 90_000
+  ) {
+    const all = ecccTimeCache.frames
+    return lite && all.length > 16 ? all.slice(all.length - 16) : all
+  }
+
+  try {
+    const url =
+      `${ECCC_GEOMET_WMS}?service=WMS&version=1.3.0&request=GetCapabilities` +
+      `&layer=${encodeURIComponent(layer)}`
+    const res = await fetch(url)
+    if (res.ok) {
+      const xml = await res.text()
+      // Dimension name="time" ...>start/end/PT6M</Dimension>
+      const m = xml.match(
+        /<Dimension[^>]*name="time"[^>]*>([^<]+)<\/Dimension>/i,
+      )
+      if (m?.[1]) {
+        const [range] = m[1].trim().split(/\s+/)
+        const parts = range.split('/')
+        if (parts.length >= 2) {
+          const startMs = Date.parse(parts[0])
+          const endMs = Date.parse(parts[1])
+          const stepMatch = (parts[2] ?? '').match(/PT(\d+)M/i)
+          const stepMin = stepMatch ? Number(stepMatch[1]) : 6
+          if (Number.isFinite(startMs) && Number.isFinite(endMs) && endMs > startMs) {
+            const frames: RadarFrame[] = []
+            const step = Math.max(1, stepMin) * 60_000
+            for (let t = startMs; t <= endMs; t += step) {
+              const iso = isoUtcZ(t)
+              frames.push({
+                time: Math.floor(t / 1000),
+                key: `eccc:${layer}:${iso}`,
+                label: iso,
+              })
+            }
+            if (frames.length) {
+              ecccTimeCache = { at: Date.now(), layer, frames }
+              return lite && frames.length > 16
+                ? frames.slice(frames.length - 16)
+                : frames
+            }
+          }
+        }
+      }
+    }
+  } catch {
+    /* fall through */
+  }
+
+  const frames = buildEcccFramesSynthetic(layer, lite ? 1.5 : 2.5, 6)
+  ecccTimeCache = { at: Date.now(), layer, frames }
   return frames
 }
 
@@ -250,21 +425,30 @@ export async function loadFrames(
   const lite = Boolean(opts?.lite)
   switch (sourceId) {
     case 'storm_chaser': {
-      // North America CONUS → real NEXRAD mosaic; elsewhere → global composite with NEXRAD palette
+      // Canada → official ECCC GeoMet; CONUS → longer NEXRAD loop; else global
+      if (isCanadaRadarRegion(opts?.lat, opts?.lon)) {
+        return loadEcccFrames(ECCC_LAYER_RAIN, { lite })
+      }
       if (isNexradMosaicRegion(opts?.lat, opts?.lon)) {
-        return buildIemNexradFrames(lite ? 1.25 : 2, 5).map((f) => ({
+        // Aggressive chaser lookback for storm motion
+        return buildIemNexradFrames(lite ? 1.5 : 2.5, 5).map((f) => ({
           ...f,
           key: `iem:${f.key}`,
         }))
       }
       const maps = await fetchRainViewerMaps()
-      return rainViewerFrames(maps, lite ? 10 : 16).map((f) => ({
+      return rainViewerFrames(maps, lite ? 10 : 18).map((f) => ({
         ...f,
         key: `rv:${f.key}`,
       }))
     }
+    case 'eccc_radar':
+      return loadEcccFrames(ECCC_LAYER_RAIN, { lite })
+    case 'eccc_snow':
+      return loadEcccFrames(ECCC_LAYER_SNOW, { lite })
     case 'us_nexrad_loop':
-      return buildIemNexradFrames(lite ? 1 : 1.5, 5)
+      // Longer default loop for dedicated NEXRAD product
+      return buildIemNexradFrames(lite ? 1.5 : 2.5, 5)
     case 'global_loop':
     case 'mapbox_radar': {
       const maps = await fetchRainViewerMaps()
@@ -286,7 +470,7 @@ export async function loadFrames(
 
 /**
  * Leaflet tile URL template for the primary animated/live layer.
- * Uses {z}/{x}/{y} placeholders.
+ * Uses {z}/{x}/{y} placeholders. Returns null for WMS frames (use WMS layer).
  */
 export function primaryTileUrl(
   sourceId: RadarSourceId,
@@ -294,6 +478,7 @@ export function primaryTileUrl(
   rvHost?: string,
 ): string | null {
   if (!frame) return null
+  if (frameUsesWms(sourceId, frame)) return null
   switch (sourceId) {
     case 'storm_chaser': {
       const host = (rvHost ?? 'https://tilecache.rainviewer.com').replace(/\/$/, '')
@@ -330,6 +515,25 @@ export function primaryTileUrl(
       return `${IEM_TILE}/nexrad-n0q-900913/{z}/{x}/{y}.png`
     default:
       return null
+  }
+}
+
+/** WMS options for Leaflet tileLayer.wms — ECCC GeoMet */
+export function ecccWmsOptions(frame: RadarFrame | null): {
+  layers: string
+  time: string
+  styles: string
+} | null {
+  const parsed = parseEcccFrame(frame)
+  if (!parsed) return null
+  const styles =
+    parsed.layer === ECCC_LAYER_RAIN || parsed.layer === ECCC_LAYER_SNOW
+      ? ECCC_STYLE_RAIN
+      : ''
+  return {
+    layers: parsed.layer,
+    time: parsed.time,
+    styles,
   }
 }
 
