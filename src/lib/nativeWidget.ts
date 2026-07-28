@@ -32,15 +32,19 @@ interface SolaraWidgetPlugin {
   getSnapshot(): Promise<{ json?: string | null }>
 }
 
-const SolaraWidget = registerPlugin<SolaraWidgetPlugin>('SolaraWidget')
-
-function locationKey(loc: LocationResult): string {
-  return `${loc.latitude.toFixed(4)},${loc.longitude.toFixed(4)}`
-}
-
-export function isNativeIosWidgetSupported(): boolean {
-  return isNativeApp() && isIOS()
-}
+const SolaraWidget = registerPlugin<SolaraWidgetPlugin>('SolaraWidget', {
+  web: {
+    async setSnapshot() {
+      return { ok: false }
+    },
+    async reload() {
+      return { ok: false }
+    },
+    async getSnapshot() {
+      return { json: null }
+    },
+  },
+})
 
 /** Build snapshot from forecast + place (temps stored as °C; widget converts for imperial). */
 export function buildWidgetSnapshot(
@@ -48,56 +52,70 @@ export function buildWidgetSnapshot(
   weather: WeatherData,
   units: Units,
 ): WidgetSnapshotPayload {
-  const ti = todayDailyIndex(weather)
-  const code = weather.current.weather_code
+  const ti = Math.max(0, todayDailyIndex(weather))
+  const code = weather.current?.weather_code ?? 0
   const info = getWeatherInfo(code, true)
   const pop =
-    weather.daily.precipitation_probability_max?.[ti] ??
-    weather.hourly.precipitation_probability?.[0] ??
+    weather.daily?.precipitation_probability_max?.[ti] ??
+    weather.hourly?.precipitation_probability?.[0] ??
     undefined
 
+  const high = weather.daily?.temperature_2m_max?.[ti]
+  const low = weather.daily?.temperature_2m_min?.[ti]
+
   return {
-    placeName: location.name?.replace(/\s*\(Home\)\s*$/i, '').trim() || 'Home',
-    lat: location.latitude,
-    lon: location.longitude,
-    tempC: weather.current.temperature_2m,
-    feelsLikeC: weather.current.apparent_temperature,
-    highC: weather.daily.temperature_2m_max?.[ti],
-    lowC: weather.daily.temperature_2m_min?.[ti],
-    code,
+    placeName: (location.name || 'Home').replace(/\s*\(Home\)\s*$/i, '').trim() || 'Home',
+    lat: Number(location.latitude),
+    lon: Number(location.longitude),
+    tempC: Number(weather.current?.temperature_2m ?? 0),
+    feelsLikeC:
+      weather.current?.apparent_temperature != null
+        ? Number(weather.current.apparent_temperature)
+        : undefined,
+    highC: high != null && Number.isFinite(high) ? Number(high) : undefined,
+    lowC: low != null && Number.isFinite(low) ? Number(low) : undefined,
+    code: Number(code),
     condition: info.label || info.description || 'Weather',
-    pop: pop != null ? Math.round(pop) : undefined,
+    pop: pop != null && Number.isFinite(pop) ? Math.round(Number(pop)) : undefined,
     updatedAt: Date.now() / 1000,
     units: units === 'imperial' ? 'imperial' : 'metric',
     deepLink: 'solara://home',
   }
 }
 
+export function isNativeIosWidgetSupported(): boolean {
+  return isNativeApp() && isIOS()
+}
+
 /**
- * Push snapshot to WidgetKit when running as the native iOS app.
- * Prefer home place: if a home is set, only publish when loading that place.
+ * Push snapshot to WidgetKit whenever weather loads on native iOS.
+ * Always publishes the location just loaded so the Home Screen tile updates.
  */
 export async function publishNativeWidgetSnapshot(opts: {
   location: LocationResult
   weather: WeatherData
   units: Units
+  /** kept for call-site compatibility; no longer used to skip publish */
   homeLocation?: LocationResult | null
 }): Promise<void> {
   if (!isNativeIosWidgetSupported()) return
-
-  const home = opts.homeLocation
-  if (home && locationKey(home) !== locationKey(opts.location)) {
-    return
-  }
+  if (!opts.weather?.current || !opts.location) return
 
   try {
     const snapshot = buildWidgetSnapshot(opts.location, opts.weather, opts.units)
+    // Guard against NaN coords (would break Open-Meteo refresh in the widget)
+    if (!Number.isFinite(snapshot.lat) || !Number.isFinite(snapshot.lon)) return
+
     await SolaraWidget.setSnapshot({ json: JSON.stringify(snapshot) })
-  } catch (err) {
-    // Plugin missing on older builds / simulator without extension — non-fatal
-    if (import.meta.env.DEV) {
-      console.warn('[SolaraWidget] publish failed', err)
+    // Extra reload in case the first call wrote before timelines registered
+    try {
+      await SolaraWidget.reload()
+    } catch {
+      /* ignore */
     }
+  } catch (err) {
+    // Always log on native so we can diagnose TestFlight builds in Safari Web Inspector
+    console.warn('[SolaraWidget] publish failed', err)
   }
 }
 

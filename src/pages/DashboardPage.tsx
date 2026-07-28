@@ -21,7 +21,6 @@ import { AllergySection } from '../components/AllergySection'
 import { Onboarding } from '../components/Onboarding'
 import { ForecastSummary } from '../components/ForecastSummary'
 import { GlanceModules } from '../components/GlanceModules'
-import { HomeScreenWidget } from '../components/HomeScreenWidget'
 import { AlertTopBar, AlertTopBarCircle, setAlertsMinimizedStored } from '../components/AlertTopBar'
 import { AmbientOrbs } from '../components/AmbientOrbs'
 import { AdvancedSection } from '../components/AdvancedSection'
@@ -680,8 +679,6 @@ export default function DashboardPage() {
 
                 {/* Directly under “Right now” */}
                 <GlanceModules weather={weather} units={units} air={air} />
-
-                <HomeScreenWidget compact />
 
                 <div id="alerts-panel">
                   {!alertsMinimized && <Alerts alerts={activeAlerts} />}

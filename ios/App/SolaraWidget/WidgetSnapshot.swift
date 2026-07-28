@@ -4,6 +4,7 @@ import Foundation
 enum SolaraWidgetStore {
     static let appGroupId = "group.com.solara.weather"
     static let snapshotKey = "widget.snapshot"
+    static let fileName = "widget-snapshot.json"
     static let widgetKind = "SolaraHomeWidget"
     /// Refresh if snapshot older than this (seconds)
     static let staleAfter: TimeInterval = 45 * 60
@@ -15,10 +16,31 @@ enum SolaraWidgetStore {
     static func saveSnapshotJSON(_ json: String) {
         defaults?.set(json, forKey: snapshotKey)
         defaults?.synchronize()
+        if let dir = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: appGroupId
+        ) {
+            let file = dir.appendingPathComponent(fileName)
+            try? json.write(to: file, atomically: true, encoding: .utf8)
+        }
+    }
+
+    static func loadSnapshotJSON() -> String? {
+        if let raw = defaults?.string(forKey: snapshotKey), !raw.isEmpty {
+            return raw
+        }
+        if let dir = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: appGroupId
+        ) {
+            let file = dir.appendingPathComponent(fileName)
+            if let raw = try? String(contentsOf: file, encoding: .utf8), !raw.isEmpty {
+                return raw
+            }
+        }
+        return nil
     }
 
     static func loadSnapshot() -> WidgetSnapshot? {
-        guard let raw = defaults?.string(forKey: snapshotKey),
+        guard let raw = loadSnapshotJSON(),
               let data = raw.data(using: .utf8)
         else { return nil }
         return try? JSONDecoder().decode(WidgetSnapshot.self, from: data)

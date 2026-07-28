@@ -19,8 +19,10 @@ struct SolaraProvider: TimelineProvider {
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<SolaraEntry>) -> Void) {
         let finish: (WidgetSnapshot?) -> Void = { snap in
-            let entry = SolaraEntry(date: Date(), snapshot: snap, placeholder: false)
-            let next = Date().addingTimeInterval(45 * 60)
+            // Prefer real data; never leave the tile blank if we have anything usable
+            let resolved = snap ?? SolaraWidgetStore.loadSnapshot()
+            let entry = SolaraEntry(date: Date(), snapshot: resolved, placeholder: false)
+            let next = Date().addingTimeInterval(30 * 60)
             completion(Timeline(entries: [entry], policy: .after(next)))
         }
 
@@ -30,9 +32,9 @@ struct SolaraProvider: TimelineProvider {
         }
 
         let age = Date().timeIntervalSince1970 - existing.updatedAt
-        let needsRefresh = existing.isStale || age > 20 * 60
+        let needsRefresh = existing.isStale || age > 15 * 60
 
-        if needsRefresh {
+        if needsRefresh, existing.lat != 0 || existing.lon != 0 {
             OpenMeteoWidgetFetch.refresh(
                 lat: existing.lat,
                 lon: existing.lon,

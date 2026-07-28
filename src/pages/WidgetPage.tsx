@@ -8,7 +8,7 @@ import { getWeatherInfo } from '../utils/weatherCodes'
 import { isDaytimeNow } from '../utils/daylight'
 import { formatTemp } from '../utils/format'
 import { locationKey } from '../api/weather'
-import { HomeScreenWidget } from '../components/HomeScreenWidget'
+
 import { InstallPrompt } from '../components/InstallPrompt'
 import { todayDailyIndex } from '../utils/weatherStory'
 
@@ -122,8 +122,6 @@ export default function WidgetPage() {
           {homeLocation ? '🏠' : '↻'}
         </button>
       </header>
-
-      {!standalone && <HomeScreenWidget compact />}
 
       {rainWatch.banner && (
         <div className="widget-alert" role="status">

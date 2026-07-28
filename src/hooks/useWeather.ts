@@ -762,6 +762,35 @@ export function useWeather() {
     return () => clearInterval(id)
   }, [location])
 
+  // Re-publish Home Screen widget when returning to the native app
+  useEffect(() => {
+    let remove: (() => void) | undefined
+    void (async () => {
+      try {
+        const { App } = await import('@capacitor/app')
+        const handle = await App.addListener('appStateChange', ({ isActive }) => {
+          if (!isActive) return
+          const loc = locationRef.current
+          const w = weatherRef.current
+          if (loc && w) {
+            void publishNativeWidgetSnapshot({
+              location: loc,
+              weather: w,
+              units: prefsRef.current.units,
+              homeLocation: prefsRef.current.homeLocation,
+            })
+          }
+        })
+        remove = () => {
+          void handle.remove()
+        }
+      } catch {
+        /* web / plugin missing */
+      }
+    })()
+    return () => remove?.()
+  }, [])
+
   // Drop alerts the moment they expire (without waiting for next fetch)
   useEffect(() => {
     if (!alerts.length) return
