@@ -2,11 +2,21 @@
   "name": "@solara/widget",
   "version": "1.0.0",
   "description": "Solara iOS Home Screen widget snapshot bridge",
-  "main": "dist/plugin.cjs.js",
-  "module": "dist/esm/index.js",
-  "types": "dist/esm/index.d.ts",
+  "main": "index.cjs.js",
+  "module": "index.js",
+  "types": "index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.js",
+      "require": "./index.cjs.js"
+    }
+  },
   "files": [
-    "dist/",
+    "index.js",
+    "index.cjs.js",
+    "index.d.ts",
     "ios/Sources",
     "Package.swift",
     "SolaraWidget.podspec"
