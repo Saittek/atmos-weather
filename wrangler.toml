@@ -22,7 +22,7 @@ migrations_dir = "migrations"
 
 # Public VAPID key (safe to expose). Private key is a secret: VAPID_PRIVATE_KEY
 [vars]
-VAPID_PUBLIC_KEY = "BB45eTflubxeiE2QHcq5-oP02nkxnSs82CkJVSuBQ8RWMO3piOq25R4bgqShAyWGQVuyNIKn9252uBDuD0HXpf4"
+VAPID_PUBLIC_KEY = "BL2kQvsIciHjcDJJRqnvB8u-SCwqt6eaL0IKneuvq2INHjOvjFXDFl6Kv2YW1d1uIBvsqJFiG4_Y_IhU2606qXw"
 VAPID_SUBJECT = "mailto:yellowknife1989@gmail.com"
 
 # Check saved places for severe alerts every 10 minutes

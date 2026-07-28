@@ -12,6 +12,55 @@ const CELL = 0.2
 const MAX_TEXT = 280
 const MAX_PER_ROOM = 200
 const PBKDF2_ITERS = 100_000
+const DEV_JWT_FALLBACK = 'atmos-dev-secret-change-me'
+
+// ── Auth rate limiting (per isolate + Cache API; best-effort edge protection) ──
+/** @type {Map<string, { count: number, resetAt: number }>} */
+const authHits = new Map()
+
+function clientIp(request) {
+  return (
+    request.headers.get('cf-connecting-ip') ||
+    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    request.headers.get('x-real-ip') ||
+    'unknown'
+  )
+}
+
+/**
+ * Sliding fixed window rate limit.
+ * @returns {Response|null} 429 response if limited, else null
+ */
+function rateLimitAuth(request, bucket, limit = 12, windowMs = 15 * 60 * 1000) {
+  const ip = clientIp(request)
+  const key = `${bucket}:${ip}`
+  const now = Date.now()
+  let entry = authHits.get(key)
+  if (!entry || entry.resetAt <= now) {
+    entry = { count: 0, resetAt: now + windowMs }
+    authHits.set(key, entry)
+  }
+  entry.count += 1
+  // Opportunistic cleanup
+  if (authHits.size > 5000) {
+    for (const [k, v] of authHits) {
+      if (v.resetAt <= now) authHits.delete(k)
+    }
+  }
+  if (entry.count > limit) {
+    const retry = Math.max(1, Math.ceil((entry.resetAt - now) / 1000))
+    return err('Too many attempts — try again later', 429, {
+      'Retry-After': String(retry),
+    })
+  }
+  return null
+}
+
+function getJwtSecret(env) {
+  const s = env.JWT_SECRET
+  if (typeof s === 'string' && s.length >= 16 && s !== DEV_JWT_FALLBACK) return s
+  return null
+}
 
 // ── helpers ──────────────────────────────────────────────────────────
 
@@ -19,7 +68,7 @@ const PBKDF2_ITERS = 100_000
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-cron-secret',
   'Access-Control-Max-Age': '86400',
 }
 
@@ -35,8 +84,8 @@ function json(data, status = 200, extra = {}) {
   })
 }
 
-function err(message, status = 400) {
-  return json({ error: message }, status)
+function err(message, status = 400, extraHeaders = {}) {
+  return json({ error: message }, status, extraHeaders)
 }
 
 function b64url(buf) {
@@ -65,7 +114,6 @@ function defaultUserData() {
     favorites: [],
     severeMode: true,
     stormMode: false,
-    simpleMode: true,
     notifyAlerts: false,
   }
 }
@@ -123,7 +171,6 @@ function cleanUserData(incoming) {
     favorites,
     severeMode: Boolean(src.severeMode),
     stormMode: Boolean(src.stormMode),
-    simpleMode: src.simpleMode === undefined ? true : Boolean(src.simpleMode),
     notifyAlerts: Boolean(src.notifyAlerts),
   }
 }
@@ -133,7 +180,7 @@ function validateEmail(email) {
 }
 
 function validatePassword(password) {
-  return typeof password === 'string' && password.length >= 6
+  return typeof password === 'string' && password.length >= 8
 }
 
 function roomIdFromCoords(lat, lon) {
@@ -249,8 +296,9 @@ async function requireUser(request, env) {
   const header = request.headers.get('Authorization') || ''
   const token = header.startsWith('Bearer ') ? header.slice(7) : null
   if (!token) return { error: err('Sign in required', 401) }
+  const secret = getJwtSecret(env)
+  if (!secret) return { error: err('Server misconfigured (JWT_SECRET)', 503) }
   try {
-    const secret = env.JWT_SECRET || 'atmos-dev-secret-change-me'
     const payload = await verifyToken(token, secret)
     const row = await env.DB.prepare('SELECT * FROM users WHERE id = ?')
       .bind(payload.sub)
@@ -635,14 +683,13 @@ export default {
         return json({ ok: true, id }, 201)
       }
 
-      // ── Manual cron trigger (auth optional secret) ──
+      // ── Manual cron trigger (requires CRON_SECRET header in production) ──
       if (path === '/api/push/run-check' && method === 'POST') {
-        const secret = request.headers.get('x-cron-secret') || ''
-        if (env.CRON_SECRET && secret !== env.CRON_SECRET) {
-          return err('Unauthorized', 401)
-        }
-        // Allow if CRON_SECRET unset only in non-prod? Require secret if set; if unset allow for admin debug with auth
-        if (!env.CRON_SECRET) {
+        const provided = request.headers.get('x-cron-secret') || ''
+        if (env.CRON_SECRET) {
+          if (provided !== env.CRON_SECRET) return err('Unauthorized', 401)
+        } else {
+          // No CRON_SECRET configured — require signed-in admin user only
           const auth = await requireUser(request, env)
           if (auth.error) return err('Set CRON_SECRET or sign in', 401)
         }
@@ -732,10 +779,15 @@ export default {
 
       // ── auth register ──
       if (path === '/api/auth/register' && method === 'POST') {
+        const limited = rateLimitAuth(request, 'register', 8, 60 * 60 * 1000)
+        if (limited) return limited
+        const jwtSecret = getJwtSecret(env)
+        if (!jwtSecret) return err('Server misconfigured (JWT_SECRET)', 503)
+
         const body = await request.json().catch(() => ({}))
         const { email, password, name } = body ?? {}
         if (!validateEmail(email)) return err('Enter a valid email address')
-        if (!validatePassword(password)) return err('Password must be at least 6 characters')
+        if (!validatePassword(password)) return err('Password must be at least 8 characters')
 
         const normalized = email.trim().toLowerCase()
         const existing = await env.DB.prepare('SELECT id FROM users WHERE email = ?')
@@ -758,13 +810,17 @@ export default {
           .run()
 
         const user = { id, email: normalized, name: displayName, created_at: createdAt }
-        const secret = env.JWT_SECRET || 'atmos-dev-secret-change-me'
-        const token = await signToken(user, secret)
+        const token = await signToken(user, jwtSecret)
         return json({ token, user: publicUser(user), data }, 201)
       }
 
       // ── auth login ──
       if (path === '/api/auth/login' && method === 'POST') {
+        const limited = rateLimitAuth(request, 'login', 20, 15 * 60 * 1000)
+        if (limited) return limited
+        const jwtSecret = getJwtSecret(env)
+        if (!jwtSecret) return err('Server misconfigured (JWT_SECRET)', 503)
+
         const body = await request.json().catch(() => ({}))
         const { email, password } = body ?? {}
         if (!validateEmail(email) || typeof password !== 'string') {
@@ -778,8 +834,7 @@ export default {
         const ok = await verifyPassword(password, row.password_hash)
         if (!ok) return err('Invalid email or password', 401)
 
-        const secret = env.JWT_SECRET || 'atmos-dev-secret-change-me'
-        const token = await signToken(row, secret)
+        const token = await signToken(row, jwtSecret)
         return json({
           token,
           user: publicUser(row),

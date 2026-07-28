@@ -416,6 +416,46 @@ export function rainViewerFrames(maps: RvMaps, maxPast = 16): RadarFrame[] {
   }))
 }
 
+/** XYZ tile template for a RainViewer radar path (global mosaic). */
+export function rainViewerTileUrl(
+  host: string,
+  path: string,
+  colorScheme: number = RV_COLOR_NEXRAD,
+): string {
+  const h = host.replace(/\/$/, '')
+  const p = path.startsWith('/') ? path : `/${path}`
+  return `${h}${p}/256/{z}/{x}/{y}/${colorScheme}/1_1.png`
+}
+
+/**
+ * Global loop frames + index of the latest *observed* frame (“now”),
+ * before short-term nowcast entries.
+ */
+export async function loadGlobalRadarLoop(opts?: {
+  maxPast?: number
+}): Promise<{
+  host: string
+  frames: RadarFrame[]
+  nowIndex: number
+}> {
+  const maps = await fetchRainViewerMaps()
+  const past = maps.radar?.past ?? []
+  const nowcast = maps.radar?.nowcast ?? []
+  const maxPast = opts?.maxPast ?? 16
+  const slice = past.length > maxPast ? past.slice(past.length - maxPast) : past
+  const frames = [...slice, ...nowcast].map((f) => ({
+    time: f.time,
+    key: f.path,
+    label: String(f.time),
+  }))
+  const nowIndex = Math.max(0, slice.length - 1)
+  return {
+    host: maps.host || 'https://tilecache.rainviewer.com',
+    frames,
+    nowIndex,
+  }
+}
+
 // ── Frame loaders ────────────────────────────────────────────────────
 
 export async function loadFrames(

@@ -28,15 +28,13 @@ It is **not** the web `/widget` page or “Add to Home Screen” PWA icon.
 
 ## Apple Developer setup (one-time)
 
+**Required before Codemagic TestFlight includes the widget.** Full checklist: `docs/SPRINT1.md`.
+
 1. [developer.apple.com](https://developer.apple.com) → **Identifiers**
-2. Create App ID **`com.solara.weather.widget`** (App Extension)
-3. On **both** `com.solara.weather` and `com.solara.weather.widget`:
-   - Enable **App Groups**
-   - Add / create **`group.com.solara.weather`**
-4. Create App Store provisioning profiles for:
-   - Main app (`com.solara.weather`)
-   - Widget extension (`com.solara.weather.widget`)  
-   Codemagic’s `app-store-connect fetch-signing-files` should create them when both bundle IDs are registered.
+2. Create **App Group** `group.com.solara.weather`
+3. Create App ID **`com.solara.weather.widget`** (App Extension) with App Groups enabled
+4. On main App ID **`com.solara.weather`**: enable App Groups → same group
+5. Codemagic `ios-testflight` fetches signing for both `BUNDLE_ID` and `BUNDLE_ID_WIDGET`
 
 ## Xcode (Mac) checklist
 

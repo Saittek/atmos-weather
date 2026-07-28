@@ -11,6 +11,12 @@ interface Props {
   onJumpDetails?: () => void
   /** Fired when minimize state changes (so parent can hide the big panel) */
   onMinimizedChange?: (minimized: boolean) => void
+  /**
+   * When true, the full strip is hidden — parent shows a circle in the top bar.
+   * If omitted, component manages its own minimized state (uncontrolled).
+   */
+  minimized?: boolean
+  onRequestExpand?: () => void
 }
 
 function severityColor(sev: string): string {
@@ -45,19 +51,65 @@ function saveMinimized(v: boolean) {
   }
 }
 
+export function isAlertsMinimizedStored(): boolean {
+  return loadMinimized()
+}
+
+export function setAlertsMinimizedStored(v: boolean) {
+  saveMinimized(v)
+}
+
+/** Circular control for the main top bar when alerts are hidden */
+export function AlertTopBarCircle({
+  count,
+  severity,
+  onClick,
+}: {
+  count: number
+  severity?: string
+  onClick: () => void
+}) {
+  const color = severity ? severityColor(severity) : '#b91c1c'
+  return (
+    <button
+      type="button"
+      className="alert-topbar-circle"
+      onClick={onClick}
+      title={count > 1 ? `Show ${count} weather alerts` : 'Show weather alert'}
+      aria-label={count > 1 ? `Show ${count} weather alerts` : 'Show weather alert'}
+      aria-expanded={false}
+      style={{ ['--alert-circle-bg' as string]: color }}
+    >
+      <span className="alert-topbar-circle-icon" aria-hidden>
+        ⚠️
+      </span>
+      {count > 1 && <span className="alert-topbar-circle-badge">{count > 9 ? '9+' : count}</span>}
+    </button>
+  )
+}
+
 /**
- * Sticky alerts: compact strip, or a red pill when hidden so you can reopen anytime.
+ * Sticky alerts strip. When minimized, renders nothing — parent shows AlertTopBarCircle in the top bar.
  */
 export function AlertTopBar({
   alerts,
   placeName,
   onJumpDetails,
   onMinimizedChange,
+  minimized: minimizedProp,
 }: Props) {
-  const [minimized, setMinimized] = useState(loadMinimized)
+  const [internalMini, setInternalMini] = useState(loadMinimized)
+  const controlled = typeof minimizedProp === 'boolean'
+  const minimized = controlled ? minimizedProp : internalMini
   const [expanded, setExpanded] = useState(false)
   const [openId, setOpenId] = useState<string | null>(null)
   const active = useMemo(() => filterActiveAlerts(alerts), [alerts])
+
+  const setMinimized = (v: boolean) => {
+    if (!controlled) setInternalMini(v)
+    saveMinimized(v)
+    onMinimizedChange?.(v)
+  }
 
   useEffect(() => {
     onMinimizedChange?.(minimized)
@@ -66,12 +118,16 @@ export function AlertTopBar({
   // If all alerts clear, reset minimize so a new alert shows open
   useEffect(() => {
     if (!active.length && minimized) {
-      setMinimized(false)
+      if (!controlled) setInternalMini(false)
       saveMinimized(false)
+      onMinimizedChange?.(false)
     }
-  }, [active.length, minimized])
+  }, [active.length, minimized, controlled, onMinimizedChange])
 
   if (!active.length) return null
+
+  // Minimized: full strip off — circle lives in the main top bar
+  if (minimized) return null
 
   const sorted = [...active].sort((a, b) => {
     const rank = (s: string) =>
@@ -86,45 +142,8 @@ export function AlertTopBar({
     setMinimized(true)
     setExpanded(false)
     setOpenId(null)
-    saveMinimized(true)
   }
 
-  const openFromPill = () => {
-    setMinimized(false)
-    setExpanded(true)
-    saveMinimized(false)
-  }
-
-  // —— Minimized: red button only ——
-  if (minimized) {
-    return (
-      <div className="alert-top-bar alert-top-bar-mini" role="region" aria-label="Hidden weather alerts">
-        <div className="alert-top-inner alert-top-inner-mini">
-          <button
-            type="button"
-            className="alert-mini-btn"
-            onClick={openFromPill}
-            title="Show weather alerts"
-            aria-expanded={false}
-          >
-            <span className="alert-mini-icon" aria-hidden>
-              ⚠️
-            </span>
-            <span className="alert-mini-count">{active.length}</span>
-            <span className="alert-mini-label">
-              alert{active.length > 1 ? 's' : ''}
-            </span>
-            <span className="alert-mini-peek">{top.event}</span>
-            <span className="alert-mini-open" aria-hidden>
-              Open
-            </span>
-          </button>
-        </div>
-      </div>
-    )
-  }
-
-  // —— Full compact strip ——
   return (
     <div className="alert-top-bar" role="region" aria-label="Weather alerts for this location">
       <div className="alert-top-inner">
@@ -174,7 +193,7 @@ export function AlertTopBar({
                 e.preventDefault()
                 minimize()
               }}
-              title="Collapse alerts to a red button"
+              title="Hide alerts — keep a circle in the top bar"
             >
               Hide
             </button>

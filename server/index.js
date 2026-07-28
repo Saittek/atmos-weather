@@ -56,7 +56,7 @@ function validateEmail(email) {
 }
 
 function validatePassword(password) {
-  return typeof password === 'string' && password.length >= 6
+  return typeof password === 'string' && password.length >= 8
 }
 
 app.get('/api/health', (_req, res) => {
@@ -164,7 +164,7 @@ app.post('/api/auth/register', async (req, res) => {
       return res.status(400).json({ error: 'Enter a valid email address' })
     }
     if (!validatePassword(password)) {
-      return res.status(400).json({ error: 'Password must be at least 6 characters' })
+      return res.status(400).json({ error: 'Password must be at least 8 characters' })
     }
 
     const passwordHash = await bcrypt.hash(password, 10)

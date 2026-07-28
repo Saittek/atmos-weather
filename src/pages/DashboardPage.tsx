@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { SearchBar } from '../components/SearchBar'
 import { CurrentWeather } from '../components/CurrentWeather'
 import { HourlyForecast } from '../components/HourlyForecast'
@@ -22,7 +22,7 @@ import { Onboarding } from '../components/Onboarding'
 import { ForecastSummary } from '../components/ForecastSummary'
 import { GlanceModules } from '../components/GlanceModules'
 import { HomeScreenWidget } from '../components/HomeScreenWidget'
-import { AlertTopBar } from '../components/AlertTopBar'
+import { AlertTopBar, AlertTopBarCircle, setAlertsMinimizedStored } from '../components/AlertTopBar'
 import { AmbientOrbs } from '../components/AmbientOrbs'
 import { AdvancedSection } from '../components/AdvancedSection'
 import { isMobileViewport } from '../utils/device'
@@ -144,6 +144,7 @@ function MapChunkFallback({ label }: { label: string }) {
 }
 
 export default function DashboardPage() {
+  const navigate = useNavigate()
   const [isMobile] = useState(() => isMobileViewport())
   /** Mobile: radar is opt-in — Leaflet + tile loops are the #1 resource hog */
   const [radarOpen, setRadarOpen] = useState(false)
@@ -170,7 +171,6 @@ export default function DashboardPage() {
     homeLocation,
     severeMode,
     stormMode,
-    simpleMode,
     notifyAlerts,
     severeActive,
     setUnits,
@@ -178,7 +178,6 @@ export default function DashboardPage() {
     setDensity,
     setSevereMode,
     setStormMode,
-    setSimpleMode,
     setNotifyAlerts,
     toggleFavorite,
     isFavorite,
@@ -221,7 +220,7 @@ export default function DashboardPage() {
   const pull = usePullToRefresh(doRefresh, isMobile)
 
   const [shareMsg, setShareMsg] = useState<string | null>(null)
-  /** When true, alert strip is the red pill; panel list stays hidden until opened */
+  /** When true, full alert strip is hidden — circle shows in the top bar */
   const [alertsMinimized, setAlertsMinimized] = useState(() => {
     try {
       return localStorage.getItem('atmos-alerts-minimized') === '1'
@@ -231,6 +230,17 @@ export default function DashboardPage() {
   })
 
   const activeAlerts = useMemo(() => filterActiveAlerts(alerts), [alerts])
+  const topAlertSeverity = useMemo(() => {
+    if (!activeAlerts.length) return undefined
+    const rank = (s: string) =>
+      s === 'Extreme' ? 0 : s === 'Severe' ? 1 : s === 'Moderate' ? 2 : 3
+    return [...activeAlerts].sort((a, b) => rank(a.severity) - rank(b.severity))[0]?.severity
+  }, [activeAlerts])
+
+  const expandAlerts = useCallback(() => {
+    setAlertsMinimized(false)
+    setAlertsMinimizedStored(false)
+  }, [])
 
   const bg =
     weather != null && resolvedTheme === 'dark'
@@ -416,6 +426,7 @@ export default function DashboardPage() {
         alerts={activeAlerts}
         placeName={location?.name}
         onJumpDetails={jumpAlerts}
+        minimized={alertsMinimized}
         onMinimizedChange={setAlertsMinimized}
       />
 
@@ -428,7 +439,7 @@ export default function DashboardPage() {
             onMute={threat.setMuted}
             onJump={() => {
               const p = location
-              window.location.assign(
+              navigate(
                 `/chase?lat=${p.latitude.toFixed(4)}&lon=${p.longitude.toFixed(4)}&name=${encodeURIComponent(p.name)}`,
               )
             }}
@@ -453,10 +464,21 @@ export default function DashboardPage() {
             />
             <div>
               <strong>Solara</strong>
-              {simpleMode && !stormMode && <span className="brand-tag simple-tag">Simple</span>}
               {stormMode && <span className="brand-tag">Storm mode</span>}
             </div>
           </div>
+          {/* 3D Earth + global radar */}
+          <Link
+            to="/globe"
+            className="chip-btn nav-chip earth-nav-btn"
+            title="3D Earth · global radar"
+            aria-label="3D Earth with global radar"
+          >
+            <span className="earth-nav-orb" aria-hidden>
+              <span className="earth-nav-glow" />
+            </span>
+            <span className="earth-nav-label hide-sm">Earth</span>
+          </Link>
           {/* Storm chasers — sits with brand so it never stacks under account/settings */}
           <Link
             to={
@@ -471,6 +493,14 @@ export default function DashboardPage() {
             <span aria-hidden>🌪</span>
             <span className="chaser-nav-label">Chasers</span>
           </Link>
+          {/* Hidden alerts → circle in top bar */}
+          {alertsMinimized && activeAlerts.length > 0 && (
+            <AlertTopBarCircle
+              count={activeAlerts.length}
+              severity={topAlertSeverity}
+              onClick={expandAlerts}
+            />
+          )}
         </div>
         <SearchBar
           onSelect={loadForLocation}
@@ -479,17 +509,6 @@ export default function DashboardPage() {
         />
         <div className="topbar-right">
             <nav className="quick-nav" aria-label="App modes">
-              <button
-                type="button"
-                className={`chip-btn nav-chip simple-nav-btn ${simpleMode ? 'active' : ''}`}
-                title={simpleMode ? 'Simple mode on — tap for full forecast' : 'Simple mode — basics only'}
-                aria-label={simpleMode ? 'Turn off simple mode' : 'Turn on simple mode'}
-                aria-pressed={simpleMode}
-                onClick={() => setSimpleMode(!simpleMode)}
-              >
-                <span aria-hidden>{simpleMode ? '◎' : '○'}</span>
-                <span className="simple-nav-label">{simpleMode ? 'Simple' : 'Full'}</span>
-              </button>
               {homeLocation && (
                 <button
                   type="button"
@@ -504,16 +523,14 @@ export default function DashboardPage() {
               <Link to={radarPath} className="chip-btn icon-chip nav-chip" title="Full-page radar" aria-label="Radar">
                 📡
               </Link>
-              {!simpleMode && (
-                <Link
-                  to="/widget"
-                  className="chip-btn icon-chip nav-chip hide-sm"
-                  title="Home rain widget"
-                  aria-label="Rain widget"
-                >
-                  ☔
-                </Link>
-              )}
+              <Link
+                to="/widget"
+                className="chip-btn icon-chip nav-chip hide-sm"
+                title="Home rain widget"
+                aria-label="Rain widget"
+              >
+                ☔
+              </Link>
             </nav>
             <SettingsBar
               units={units}
@@ -521,7 +538,6 @@ export default function DashboardPage() {
               density={density}
               severeMode={severeMode}
               stormMode={stormMode}
-              simpleMode={simpleMode}
               notifyAlerts={notifyAlerts}
               isFavorite={isFavorite(location)}
               cloudSynced={cloudSynced}
@@ -532,7 +548,6 @@ export default function DashboardPage() {
               onDensity={setDensity}
               onSevereMode={setSevereMode}
               onStormMode={setStormMode}
-              onSimpleMode={setSimpleMode}
               onNotify={(v) => void setNotifyAlerts(v)}
               onToggleFavorite={() => location && toggleFavorite(location)}
               onGoHome={() => goHome()}
@@ -558,18 +573,6 @@ export default function DashboardPage() {
       </header>
 
       <div className="app-shell">
-        {simpleMode && !stormMode && (
-          <div className="simple-mode-banner" role="status">
-            <div>
-              <strong>◎ Simple mode</strong>
-              <span>Basics only — current, rain, hourly &amp; 7-day</span>
-            </div>
-            <button type="button" className="chip-btn" onClick={() => setSimpleMode(false)}>
-              Show full
-            </button>
-          </div>
-        )}
-
         {stormMode && (
           <div className="storm-mode-banner" role="status">
             <div>
@@ -645,7 +648,7 @@ export default function DashboardPage() {
 
         {weather && location && (
           <main
-            className={`dashboard ${stormMode ? 'dashboard-storm' : ''} ${simpleMode ? 'dashboard-simple' : ''}`}
+            className={`dashboard ${stormMode ? 'dashboard-storm' : ''}`}
           >
             <div className="col main-col">
               <div className="priority-stack">
@@ -684,71 +687,28 @@ export default function DashboardPage() {
                   {!alertsMinimized && <Alerts alerts={activeAlerts} />}
                 </div>
 
-                {!simpleMode && (
-                  <ForecastSummary
-                    weather={weather}
-                    units={units}
-                    placeName={location.name}
-                    air={air}
-                  />
-                )}
+                <ForecastSummary
+                  weather={weather}
+                  units={units}
+                  placeName={location.name}
+                  air={air}
+                />
               </div>
 
               <HourlyForecast weather={weather} units={units} />
               <WeekStrip weather={weather} units={units} />
 
-              {/* 14-day list: always in simple mode; mobile slot in full mode */}
-              {simpleMode ? (
+              <div className="daily-mobile-slot">
                 <DailyForecast weather={weather} units={units} />
-              ) : (
-                <div className="daily-mobile-slot">
-                  <DailyForecast weather={weather} units={units} />
-                </div>
-              )}
+              </div>
 
               {/* Radar above allergies */}
-              {!simpleMode || stormMode ? (
-                radarBlock
-              ) : (
-                <section className="panel radar-cta-panel simple-radar-cta" aria-label="Radar">
-                  <div className="panel-header">
-                    <h2>📡 Radar</h2>
-                  </div>
-                  <div className="radar-cta-actions">
-                    <Link to={radarPath} className="primary-btn radar-view-btn">
-                      Open radar
-                    </Link>
-                    <button
-                      type="button"
-                      className="chip-btn"
-                      onClick={() => setSimpleMode(false)}
-                    >
-                      Full forecast
-                    </button>
-                  </div>
-                </section>
-              )}
+              {radarBlock}
 
-              {/* Allergies — simple + full (pollen, mold-friendly air, tips) */}
-              <AllergySection air={air} weather={weather} compact={simpleMode} />
+              {/* Allergies — pollen, mold-friendly air, tips */}
+              <AllergySection air={air} weather={weather} />
 
-              {simpleMode && (
-                <div className="simple-more-cta">
-                  <button
-                    type="button"
-                    className="primary-btn"
-                    onClick={() => setSimpleMode(false)}
-                  >
-                    Show full forecast
-                  </button>
-                  <p className="muted-center">
-                    UV, air quality, radar map, videos, and planning tools
-                  </p>
-                </div>
-              )}
-
-              {!simpleMode && (
-                <>
+              <>
                   <div className="outdoor-mobile-slot">
                     <SunMoon weather={weather} />
                     <AirQuality air={air} />
@@ -850,11 +810,10 @@ export default function DashboardPage() {
                       </LazyPanel>
                     </div>
                   </AdvancedSection>
-                </>
-              )}
+              </>
             </div>
 
-            <aside className={`col side-col ${simpleMode ? 'side-col-simple' : ''}`}>
+            <aside className="col side-col">
               <div className="favorites-desktop-slot">
                 <Favorites
                   favorites={favorites}
@@ -870,8 +829,7 @@ export default function DashboardPage() {
                 />
               </div>
 
-              {!simpleMode && (
-                <>
+              <>
                   <div className="daily-desktop-slot">
                     <DailyForecast weather={weather} units={units} />
                   </div>
@@ -899,8 +857,7 @@ export default function DashboardPage() {
                       </LazyPanel>
                     </div>
                   </AdvancedSection>
-                </>
-              )}
+              </>
 
               <footer className="credits">
                 <p>

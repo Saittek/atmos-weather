@@ -54,6 +54,13 @@ html[data-theme='light'] body {
   overflow: hidden;
 }
 
+/* Full-page 3D Earth radar */
+#root:has(.globe-page) {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
 /* Capacitor / iOS shell — keep padding inside the width box */
 body.native-app,
 body.native-ios {
@@ -80,7 +87,8 @@ body.native-ios .app.has-alerts {
   --alert-bar-h: calc(3.35rem + var(--sat));
 }
 body.native-ios .app.has-alerts.alerts-minimized {
-  --alert-bar-h: calc(2.85rem + var(--sat));
+  /* Circle lives in the top bar — no extra strip under the notch */
+  --alert-bar-h: 0px;
 }
 
 body.native-ios .radar-page-bar,

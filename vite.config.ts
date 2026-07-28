@@ -25,12 +25,13 @@ export default defineConfig({
       polyfill: false,
       // Don't force-load Leaflet on first paint (mobile bandwidth / parse cost)
       resolveDependencies: (_filename, deps) =>
-        deps.filter((d) => !d.includes('map-vendor')),
+        deps.filter((d) => !d.includes('map-vendor') && !d.includes('globe-vendor')),
     },
     rollupOptions: {
       output: {
         manualChunks(id) {
           if (!id.includes('node_modules')) return
+          if (id.includes('maplibre-gl')) return 'globe-vendor'
           if (id.includes('leaflet') || id.includes('react-leaflet')) return 'map-vendor'
           if (id.includes('@capacitor')) return 'cap-vendor'
           if (

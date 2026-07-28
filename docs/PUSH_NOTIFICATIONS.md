@@ -30,15 +30,21 @@
 ## Server secrets
 
 ```bash
-# Already generated once — set private key as a secret (do not commit):
+# Generate a VAPID key pair offline, then store ONLY the private key as a Worker secret.
+# NEVER commit the private key to git or paste it into docs.
 npx wrangler secret put VAPID_PRIVATE_KEY
-# paste: Ld3IIJ3U3g4wvNkds7bszzP6GYY6kiEnxRM6qc3SHpI
+# (paste private key at the prompt — value stays only in Cloudflare)
 
-# Optional: protect manual cron HTTP trigger
+# Strongly recommended: protect manual cron HTTP trigger
 npx wrangler secret put CRON_SECRET
+
+# Ensure JWT is not the default dev secret in production
+npx wrangler secret put JWT_SECRET
 ```
 
-Public key is in `wrangler.toml` `[vars]` and `.env.production` as `VITE_VAPID_PUBLIC_KEY`.
+Public VAPID key is safe to expose (`wrangler.toml` `[vars]` and/or `VITE_VAPID_PUBLIC_KEY`).
+
+If a private VAPID key was ever committed or shared, **rotate it**: generate a new pair, update `VAPID_PUBLIC_KEY` + secret, redeploy, and have users re-enable Notify.
 
 ## Migrations
 

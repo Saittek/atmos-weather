@@ -11,7 +11,6 @@ interface Props {
   density: DensityMode
   severeMode: boolean
   stormMode: boolean
-  simpleMode?: boolean
   notifyAlerts: boolean
   isFavorite: boolean
   cloudSynced: boolean
@@ -22,7 +21,6 @@ interface Props {
   onDensity: (d: DensityMode) => void
   onSevereMode: (v: boolean) => void
   onStormMode: (v: boolean) => void
-  onSimpleMode?: (v: boolean) => void
   onNotify: (v: boolean) => void
   onToggleFavorite: () => void
   onGoHome?: () => void
@@ -40,7 +38,6 @@ export function SettingsBar({
   density,
   severeMode,
   stormMode,
-  simpleMode,
   notifyAlerts,
   isFavorite,
   cloudSynced,
@@ -51,7 +48,6 @@ export function SettingsBar({
   onDensity,
   onSevereMode,
   onStormMode,
-  onSimpleMode,
   onNotify,
   onToggleFavorite,
   onGoHome,
@@ -135,19 +131,6 @@ export function SettingsBar({
       </div>
 
       <div className="settings-more-toggles">
-        {onSimpleMode && (
-          <label className="settings-more-row">
-            <input
-              type="checkbox"
-              checked={Boolean(simpleMode)}
-              onChange={(e) => onSimpleMode(e.target.checked)}
-            />
-            <span>
-              <strong>Simple mode</strong>
-              <em>Basics only — less scroll</em>
-            </span>
-          </label>
-        )}
         <label className="settings-more-row">
           <input
             type="checkbox"

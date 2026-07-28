@@ -49,6 +49,9 @@ export function AuthModal({ open, onClose, onSuccess }: Props) {
     setBusy(true)
     setError(null)
     try {
+      if (mode === 'register' && password.length < 8) {
+        throw new Error('Password must be at least 8 characters')
+      }
       if (mode === 'login') {
         await login(email.trim(), password)
       } else {
@@ -131,10 +134,10 @@ export function AuthModal({ open, onClose, onSuccess }: Props) {
               type="password"
               autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
               required
-              minLength={6}
+              minLength={8}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="At least 6 characters"
+              placeholder="At least 8 characters"
             />
           </label>
 

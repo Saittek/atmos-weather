@@ -25,8 +25,6 @@ export interface CloudPrefs {
   favorites: LocationResult[]
   severeMode: boolean
   stormMode?: boolean
-  /** Compact dashboard — basics only */
-  simpleMode?: boolean
   notifyAlerts: boolean
 }
 

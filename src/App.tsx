@@ -4,6 +4,7 @@ import './App.css'
 
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const RadarPage = lazy(() => import('./pages/RadarPage'))
+const GlobePage = lazy(() => import('./pages/GlobePage'))
 const WidgetPage = lazy(() => import('./pages/WidgetPage'))
 const StormChaserPage = lazy(() => import('./pages/StormChaserPage'))
 
@@ -22,6 +23,8 @@ export default function App() {
       <Routes>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/radar" element={<RadarPage />} />
+        <Route path="/globe" element={<GlobePage />} />
+        <Route path="/earth" element={<GlobePage />} />
         <Route path="/chase" element={<StormChaserPage />} />
         <Route path="/storm" element={<StormChaserPage />} />
         <Route path="/widget" element={<WidgetPage />} />

@@ -44,8 +44,6 @@ export interface Prefs {
   severeMode: boolean
   /** Radar-first, intense UI — the signature “stand out” mode */
   stormMode: boolean
-  /** Basics only — hide advanced panels */
-  simpleMode: boolean
   notifyAlerts: boolean
 }
 
@@ -63,8 +61,6 @@ function loadPrefs(): Prefs {
         favorites: Array.isArray(p.favorites) ? p.favorites : [],
         severeMode: p.severeMode ?? true,
         stormMode: p.stormMode ?? false,
-        // Default on when field missing — cleaner first experience
-        simpleMode: p.simpleMode ?? true,
         notifyAlerts: p.notifyAlerts ?? false,
       }
     }
@@ -80,7 +76,6 @@ function loadPrefs(): Prefs {
         favorites: [],
         severeMode: true,
         stormMode: false,
-        simpleMode: true,
         notifyAlerts: false,
       }
     }
@@ -95,7 +90,6 @@ function loadPrefs(): Prefs {
     favorites: [],
     severeMode: true,
     stormMode: false,
-    simpleMode: true,
     notifyAlerts: false,
   }
 }
@@ -130,7 +124,6 @@ function prefsToCloud(p: Prefs): CloudPrefs {
     favorites: p.favorites,
     severeMode: p.severeMode,
     stormMode: p.stormMode,
-    simpleMode: p.simpleMode,
     notifyAlerts: p.notifyAlerts,
   }
 }
@@ -160,7 +153,6 @@ function cloudToPrefs(c: CloudPrefs, local: Prefs): Prefs {
     favorites: [...map.values()].slice(0, 12),
     severeMode: c.severeMode ?? local.severeMode,
     stormMode: c.stormMode ?? local.stormMode,
-    simpleMode: c.simpleMode ?? local.simpleMode,
     notifyAlerts: c.notifyAlerts ?? local.notifyAlerts,
   }
 }
@@ -560,22 +552,10 @@ export function useWeather() {
 
   const setStormMode = useCallback(
     (stormMode: boolean) => {
-      // Storm mode: radar-first + keep severe highlighting on; leave simple mode
+      // Storm mode: radar-first + keep severe highlighting on
       patchPrefs({
         stormMode,
         severeMode: stormMode ? true : prefsRef.current.severeMode,
-        simpleMode: stormMode ? false : prefsRef.current.simpleMode,
-      })
-    },
-    [patchPrefs],
-  )
-
-  const setSimpleMode = useCallback(
-    (simpleMode: boolean) => {
-      // Simple and storm are opposites for layout density
-      patchPrefs({
-        simpleMode,
-        stormMode: simpleMode ? false : prefsRef.current.stormMode,
       })
     },
     [patchPrefs],
@@ -821,7 +801,6 @@ export function useWeather() {
     homeLocation: prefs.homeLocation ?? null,
     severeMode: prefs.severeMode,
     stormMode: prefs.stormMode,
-    simpleMode: prefs.simpleMode,
     notifyAlerts: prefs.notifyAlerts,
     severeActive,
     cloudSynced,
@@ -833,7 +812,6 @@ export function useWeather() {
     setDensity,
     setSevereMode,
     setStormMode,
-    setSimpleMode,
     setNotifyAlerts,
     toggleFavorite,
     isFavorite,
