@@ -207,10 +207,14 @@ workflows:
 
       - name: Build signed IPA
         script: |
+          set -euo pipefail
           cd "$XCODE_WORKSPACE_DIR"
+          # Shared scheme App.xcscheme archives main app + embedded SolaraWidgetExtension
+          # destination flag avoids some Xcode archive host-architecture issues
           xcode-project build-ipa \
             --project "$XCODE_PROJECT" \
-            --scheme "$XCODE_SCHEME"
+            --scheme "$XCODE_SCHEME" \
+            --archive-flags="-destination 'generic/platform=iOS'"
 
       - name: Ensure App Store Connect app exists
         script: |
@@ -319,8 +323,12 @@ workflows:
           agvtool new-version -all ${PROJECT_BUILD_NUMBER:-$BUILD_NUMBER}
       - name: Build signed IPA
         script: |
+          set -euo pipefail
           cd "$XCODE_WORKSPACE_DIR"
-          xcode-project build-ipa --project "$XCODE_PROJECT" --scheme "$XCODE_SCHEME"
+          xcode-project build-ipa \
+            --project "$XCODE_PROJECT" \
+            --scheme "$XCODE_SCHEME" \
+            --archive-flags="-destination 'generic/platform=iOS'"
     artifacts:
       - ios/App/build/ios/ipa/*.ipa
     publishing:
