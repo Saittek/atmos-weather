@@ -57,12 +57,12 @@ struct WidgetSnapshot: Codable, Equatable {
     var lowLabel: String? { lowC.map { displayTemp($0) } }
     var feelsLabel: String? { feelsLikeC.map { displayTemp($0) } }
 
-    var iconEmoji: String {
+    var iconDisplay: String {
         switch code {
         case 0: return "☀️"
         case 1, 2: return "🌤"
         case 3: return "☁️"
-        case 45, 48: return "fog"
+        case 45, 48: return "🌫️"
         case 51, 53, 55, 56, 57: return "🌦"
         case 61, 63, 65, 66, 67, 80, 81, 82: return "🌧"
         case 71, 73, 75, 77, 85, 86: return "❄️"
@@ -71,16 +71,33 @@ struct WidgetSnapshot: Codable, Equatable {
         }
     }
 
-    /// Fog uses text fallback (emoji inconsistent across platforms)
-    var iconDisplay: String {
-        code == 45 || code == 48 ? "🌫️" : iconEmoji
-    }
+    static let preview = WidgetSnapshot(
+        placeName: "Yellowknife",
+        lat: 62.45,
+        lon: -114.38,
+        tempC: -12,
+        feelsLikeC: -18,
+        highC: -8,
+        lowC: -19,
+        code: 71,
+        condition: "Snow",
+        pop: 40,
+        updatedAt: Date().timeIntervalSince1970,
+        units: "metric",
+        deepLink: "solara://home"
+    )
 }
 
 enum OpenMeteoWidgetFetch {
-    static func refresh(lat: Double, lon: Double, units: String) async -> WidgetSnapshot? {
-        var components = URLComponents(string: "https://api.open-meteo.com/v1/forecast")!
-        components.queryItems = [
+    /// Completion-based fetch — avoids Swift concurrency issues in app extensions.
+    static func refresh(
+        lat: Double,
+        lon: Double,
+        units: String,
+        completion: @escaping (WidgetSnapshot?) -> Void
+    ) {
+        var components = URLComponents(string: "https://api.open-meteo.com/v1/forecast")
+        components?.queryItems = [
             URLQueryItem(name: "latitude", value: String(lat)),
             URLQueryItem(name: "longitude", value: String(lon)),
             URLQueryItem(
@@ -94,16 +111,30 @@ enum OpenMeteoWidgetFetch {
             URLQueryItem(name: "timezone", value: "auto"),
             URLQueryItem(name: "forecast_days", value: "1"),
         ]
-        guard let url = components.url else { return nil }
+        guard let url = components?.url else {
+            completion(nil)
+            return
+        }
 
-        do {
-            let (data, response) = try await URLSession.shared.data(from: url)
-            guard let http = response as? HTTPURLResponse, (200 ... 299).contains(http.statusCode)
-            else { return nil }
+        let task = URLSession.shared.dataTask(with: url) { data, response, error in
+            if error != nil || data == nil {
+                completion(nil)
+                return
+            }
+            guard let http = response as? HTTPURLResponse,
+                  (200 ... 299).contains(http.statusCode),
+                  let data = data
+            else {
+                completion(nil)
+                return
+            }
 
-            guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let current = json["current"] as? [String: Any]
-            else { return nil }
+            guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let current = root["current"] as? [String: Any]
+            else {
+                completion(nil)
+                return
+            }
 
             let temp = (current["temperature_2m"] as? NSNumber)?.doubleValue ?? 0
             let feels = (current["apparent_temperature"] as? NSNumber)?.doubleValue
@@ -112,7 +143,7 @@ enum OpenMeteoWidgetFetch {
             var high: Double?
             var low: Double?
             var pop: Int?
-            if let daily = json["daily"] as? [String: Any] {
+            if let daily = root["daily"] as? [String: Any] {
                 if let arr = daily["temperature_2m_max"] as? [NSNumber], let v = arr.first {
                     high = v.doubleValue
                 }
@@ -148,10 +179,9 @@ enum OpenMeteoWidgetFetch {
             {
                 SolaraWidgetStore.saveSnapshotJSON(str)
             }
-            return snap
-        } catch {
-            return nil
+            completion(snap)
         }
+        task.resume()
     }
 
     static func conditionLabel(code: Int) -> String {
