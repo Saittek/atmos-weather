@@ -6,6 +6,7 @@ import type {
   ModelId,
   ModelSeries,
   PressureLevelProfile,
+  TropicalGlobeData,
   TropicalStorm,
   WeatherAlert,
   WeatherData,
@@ -14,6 +15,7 @@ import { filterActiveAlerts } from '../utils/activeAlerts'
 import { isDaytimeNow } from '../utils/daylight'
 import { blendWeatherData, pickModels, detectForecastRegion } from './forecastModels'
 import { fetchNearestEcccCityPage, mergeEcccIntoWeather } from './ecccCityPage'
+import { getApiBase } from '../lib/native'
 
 const GEOCODE = 'https://geocoding-api.open-meteo.com/v1/search'
 const FORECAST = 'https://api.open-meteo.com/v1/forecast'
@@ -922,8 +924,28 @@ export async function fetchWeatherGrid(
   }))
 }
 
+/** Active tropical cyclones + forecast tracks (Worker proxies NHC to avoid CORS). */
+export async function fetchTropicalGlobeData(): Promise<TropicalGlobeData | null> {
+  try {
+    const base = getApiBase()
+    const res = await fetch(`${base}/api/tropical`, { headers: { Accept: 'application/json' } })
+    if (!res.ok) return null
+    return (await res.json()) as TropicalGlobeData
+  } catch {
+    return null
+  }
+}
+
 export async function fetchTropicalStorms(): Promise<TropicalStorm[]> {
-  // Try NHC CurrentStorms.json (may fail CORS in some browsers)
+  // Prefer Worker proxy (positions + forecast track geometry)
+  try {
+    const globe = await fetchTropicalGlobeData()
+    if (globe?.storms?.length) return globe.storms
+  } catch {
+    /* fall through */
+  }
+
+  // Direct NHC CurrentStorms.json (may fail CORS in some browsers)
   try {
     const res = await fetch('https://www.nhc.noaa.gov/CurrentStorms.json', {
       headers: { Accept: 'application/json' },
@@ -932,15 +954,26 @@ export async function fetchTropicalStorms(): Promise<TropicalStorm[]> {
       const data = await res.json()
       const active = data.activeStorms ?? data.storms ?? []
       return (active as Record<string, unknown>[]).map((s) => {
-        const latNum = parseFloat(String(s.latitudeDecimal ?? s.lat ?? 0))
-        const lonNum = parseFloat(String(s.longitudeDecimal ?? s.lon ?? 0))
+        const latNum = parseFloat(
+          String(s.latitudeNumeric ?? s.latitudeDecimal ?? s.lat ?? 0),
+        )
+        const lonNum = parseFloat(
+          String(s.longitudeNumeric ?? s.longitudeDecimal ?? s.lon ?? 0),
+        )
+        const wind = s.intensity != null ? String(s.intensity) : String(s.wind ?? '')
+        const windKt = Number(wind)
         return {
           id: String(s.id ?? s.binNumber ?? s.name),
           name: String(s.name ?? 'Unknown'),
-          classification: String(s.classification ?? s.sampleClass ?? s.intensity ?? 'Tropical'),
-          intensity: String(s.intensity ?? s.wind ?? ''),
+          classification: String(s.classification ?? s.sampleClass ?? 'Tropical'),
+          intensity: Number.isFinite(windKt) ? `${windKt} kt` : wind,
           pressure: s.pressure != null ? String(s.pressure) : undefined,
-          movement: s.movement != null ? String(s.movement) : undefined,
+          movement:
+            s.movement != null
+              ? String(s.movement)
+              : s.movementDir != null
+                ? `${s.movementDir}° ${s.movementSpeed ?? ''} kt`.trim()
+                : undefined,
           lat: latNum,
           lon: lonNum,
           binNumber: s.binNumber != null ? String(s.binNumber) : undefined,

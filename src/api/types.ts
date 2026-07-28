@@ -224,6 +224,13 @@ export interface GridPoint {
   precipitation: number
 }
 
+export interface TropicalForecastPoint {
+  lon: number
+  lat: number
+  label?: string
+  windKt?: number
+}
+
 export interface TropicalStorm {
   id: string
   name: string
@@ -235,6 +242,32 @@ export interface TropicalStorm {
   lon: number
   binNumber?: string
   headline?: string
+  lastUpdate?: string
+  advisoryUrl?: string
+  /** Forecast track as [lon, lat] pairs */
+  track?: [number, number][]
+  forecastPoints?: TropicalForecastPoint[]
+}
+
+export type GeoJsonFeatureCollection = {
+  type: 'FeatureCollection'
+  features: Array<{
+    type: 'Feature'
+    properties?: Record<string, unknown> | null
+    geometry: {
+      type: string
+      coordinates: unknown
+    }
+  }>
+}
+
+export interface TropicalGlobeData {
+  storms: TropicalStorm[]
+  tracks: GeoJsonFeatureCollection
+  cones: GeoJsonFeatureCollection
+  points: GeoJsonFeatureCollection
+  updatedAt: string
+  source: string
 }
 
 export type ThemeMode = 'dark' | 'light' | 'auto'

@@ -6,6 +6,7 @@
 import { runAlertPushCron } from './push-cron.js'
 import { getVapidConfig } from './push-send.js'
 import { getWeatherVideos } from './weather-videos.js'
+import { getTropicalGlobeData } from './tropical.js'
 
 const TOKEN_DAYS = 30
 const CELL = 0.2
@@ -576,10 +577,24 @@ export default {
         return json({
           ok: true,
           service: 'solara-api',
-          features: ['auth', 'chat', 'fires', 'push', 'weather-videos'],
+          features: ['auth', 'chat', 'fires', 'push', 'weather-videos', 'tropical'],
           runtime: 'cloudflare-worker',
           pushConfigured: Boolean(getVapidConfig(env)),
         })
+      }
+
+      // ── Active hurricanes / tropical cyclones + forecast tracks (NHC) ──
+      if (path === '/api/tropical' && method === 'GET') {
+        try {
+          const data = await getTropicalGlobeData()
+          return json(data, 200, {
+            'Cache-Control': 'public, max-age=300',
+            'Access-Control-Allow-Origin': '*',
+          })
+        } catch (e) {
+          console.error('tropical', e)
+          return err('Could not load tropical cyclone data', 502)
+        }
       }
 
       // ── Free official weather videos (NWS / NOAA YouTube RSS) ──

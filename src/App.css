@@ -8639,3 +8639,112 @@ html.mobile-perf .earth-nav-glow {
     padding: 0.55rem 0.6rem;
   }
 }
+
+/* Tropical cyclones on globe */
+.globe-storm-panel {
+  position: absolute;
+  top: max(0.65rem, env(safe-area-inset-top, 0px));
+  left: 0.65rem;
+  z-index: 6;
+  width: min(17rem, calc(100% - 5rem));
+  max-height: min(42vh, 320px);
+  overflow: auto;
+  padding: 0.55rem 0.6rem;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(12px);
+}
+.globe-storm-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  margin-bottom: 0.4rem;
+}
+.globe-storm-panel-head strong {
+  font-size: 0.85rem;
+}
+.globe-storm-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.globe-storm-card {
+  width: 100%;
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 10px;
+  padding: 0.45rem 0.5rem;
+  color: #f8fafc;
+  cursor: pointer;
+}
+.globe-storm-card:hover {
+  border-color: rgba(251, 191, 36, 0.55);
+  background: rgba(251, 191, 36, 0.1);
+}
+.globe-storm-card-name {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.35rem;
+  font-weight: 700;
+  font-size: 0.88rem;
+}
+.globe-storm-card-name em {
+  font-style: normal;
+  font-weight: 650;
+  font-size: 0.7rem;
+  color: #fbbf24;
+}
+.globe-storm-card-meta {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.72rem;
+  color: rgba(226, 232, 240, 0.75);
+}
+.globe-storm-card-track {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.68rem;
+  color: #fda4af;
+  font-weight: 600;
+}
+.globe-storm-marker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  max-width: 11rem;
+}
+.globe-storm-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fda4af, #e11d48 70%);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85), 0 0 12px rgba(225, 29, 72, 0.7);
+  flex-shrink: 0;
+}
+.globe-storm-dot.is-hu {
+  width: 16px;
+  height: 16px;
+  background: radial-gradient(circle at 35% 30%, #fde68a, #f59e0b 45%, #b91c1c 80%);
+  box-shadow: 0 0 0 2px #fff, 0 0 16px rgba(245, 158, 11, 0.85);
+}
+.globe-storm-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
