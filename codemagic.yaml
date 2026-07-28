@@ -26,6 +26,8 @@ workflows:
         XCODE_PROJECT: App.xcodeproj
         XCODE_SCHEME: App
         BUNDLE_ID: com.solara.weather
+        # WidgetKit extension (Home Screen → Add Widget)
+        BUNDLE_ID_WIDGET: com.solara.weather.widget
         VITE_API_BASE: https://solaraweather.com
       node: v22.14.0
       xcode: latest
@@ -152,28 +154,42 @@ workflows:
           }
 
           fetch_files() {
-            app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            local BID="$1"
+            echo "Fetching/creating signing files for $BID ..."
+            app-store-connect fetch-signing-files "$BID" \
               --type IOS_APP_STORE \
               --create \
               --certificate-key="@file:$KEY_FILE"
           }
 
-          echo "Fetching/creating signing files for $BUNDLE_ID ..."
-          set +e
-          OUT=$(fetch_files 2>&1)
-          STATUS=$?
-          set -e
-          echo "$OUT"
-
-          if [ $STATUS -ne 0 ]; then
-            if echo "$OUT" | grep -qiE 'already have|maximum|limit|409|private key|Distribution certificate'; then
-              echo "Certificate slot full or unusable — deleting existing Distribution certs..."
-              delete_distribution_certs || true
-              echo "Retrying fetch-signing-files..."
-              fetch_files
-            else
-              exit $STATUS
+          fetch_with_retry() {
+            local BID="$1"
+            set +e
+            OUT=$(fetch_files "$BID" 2>&1)
+            STATUS=$?
+            set -e
+            echo "$OUT"
+            if [ $STATUS -ne 0 ]; then
+              if echo "$OUT" | grep -qiE 'already have|maximum|limit|409|private key|Distribution certificate'; then
+                echo "Certificate slot full or unusable — deleting existing Distribution certs..."
+                delete_distribution_certs || true
+                echo "Retrying fetch-signing-files for $BID ..."
+                fetch_files "$BID"
+              else
+                exit $STATUS
+              fi
             fi
+          }
+
+          fetch_with_retry "$BUNDLE_ID"
+          # Home Screen WidgetKit extension (must exist in Apple Developer portal)
+          if [ -n "${BUNDLE_ID_WIDGET:-}" ]; then
+            fetch_with_retry "$BUNDLE_ID_WIDGET" || {
+              echo "WARNING: Could not fetch signing for widget $BUNDLE_ID_WIDGET"
+              echo "Create App ID com.solara.weather.widget + App Group group.com.solara.weather"
+              echo "See docs/IOS_WIDGET.md"
+              exit 1
+            }
           fi
 
           echo "Signing files ready"
@@ -242,6 +258,7 @@ workflows:
         XCODE_PROJECT: App.xcodeproj
         XCODE_SCHEME: App
         BUNDLE_ID: com.solara.weather
+        BUNDLE_ID_WIDGET: com.solara.weather.widget
         VITE_API_BASE: https://solaraweather.com
       node: v22.14.0
       xcode: latest
@@ -262,8 +279,11 @@ workflows:
           set -euo pipefail
           KEY_FILE="$CM_BUILD_DIR/ios_distribution.key.pem"
           openssl genrsa -out "$KEY_FILE" 2048
+          fetch_bid() {
+            app-store-connect fetch-signing-files "$1" --type IOS_APP_STORE --create --certificate-key="@file:$KEY_FILE"
+          }
           set +e
-          OUT=$(app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_STORE --create --certificate-key="@file:$KEY_FILE" 2>&1)
+          OUT=$(fetch_bid "$BUNDLE_ID" 2>&1)
           STATUS=$?
           set -e
           echo "$OUT"
@@ -286,8 +306,9 @@ workflows:
             print("delete", i)
             subprocess.call(["app-store-connect", "certificates", "delete", i])
           PY
-            app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_STORE --create --certificate-key="@file:$KEY_FILE"
+            fetch_bid "$BUNDLE_ID"
           fi
+          fetch_bid "$BUNDLE_ID_WIDGET"
       - name: Add certificates to keychain
         script: keychain add-certificates
       - name: Apply signing to Xcode project

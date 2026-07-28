@@ -53,5 +53,16 @@
 	<string>Solara uses your location to show local weather, radar, and severe weather alerts for your area.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.solara.weather</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>solara</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

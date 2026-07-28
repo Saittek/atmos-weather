@@ -25,6 +25,7 @@ import type {
 import type { Units } from '../utils/format'
 import { useAuth } from './useAuth'
 import { getCurrentPosition } from '../lib/native'
+import { publishNativeWidgetSnapshot } from '../lib/nativeWidget'
 import { loadOfflineBundle, saveOfflineBundle } from '../utils/offlineCache'
 import { filterActiveAlerts } from '../utils/activeAlerts'
 
@@ -380,6 +381,14 @@ export function useWeather() {
         setLoading(false)
         setRefreshing(false)
 
+        // Home Screen WidgetKit tile (iOS native app only)
+        void publishNativeWidgetSnapshot({
+          location: loc,
+          weather: w,
+          units: prefsRef.current.units,
+          homeLocation: prefsRef.current.homeLocation,
+        })
+
         // Phase 1b — air + alerts (don't block the first paint)
         const loadAirAlerts = async () => {
           if (gen !== fetchGen.current) return
@@ -526,7 +535,22 @@ export function useWeather() {
 
   loadForLocationRef.current = loadForLocation
 
-  const setUnits = useCallback((units: Units) => patchPrefs({ units }), [patchPrefs])
+  const setUnits = useCallback(
+    (units: Units) => {
+      patchPrefs({ units })
+      const loc = locationRef.current
+      const w = weatherRef.current
+      if (loc && w) {
+        void publishNativeWidgetSnapshot({
+          location: loc,
+          weather: w,
+          units,
+          homeLocation: prefsRef.current.homeLocation,
+        })
+      }
+    },
+    [patchPrefs],
+  )
   const setTheme = useCallback((theme: ThemeMode) => patchPrefs({ theme }), [patchPrefs])
   const setDensity = useCallback((density: DensityMode) => patchPrefs({ density }), [patchPrefs])
   const setSevereMode = useCallback(
@@ -662,6 +686,20 @@ export function useWeather() {
           ? `Home set · ${coords} · syncing to phone when signed in`
           : `Home set · ${coords} · Sign in to use this home on your phone`,
       )
+      // Refresh native widget for the new home (uses current weather if same place)
+      const w = weatherRef.current
+      if (w && locationRef.current && locationKey(locationRef.current) === locationKey(home)) {
+        void publishNativeWidgetSnapshot({
+          location: home,
+          weather: w,
+          units: prefsRef.current.units,
+          homeLocation: home,
+        })
+      } else {
+        window.setTimeout(() => {
+          void loadForLocationRef.current?.(home)
+        }, 80)
+      }
     },
     [commitPrefs, showStatus, user],
   )

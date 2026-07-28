@@ -1,6 +1,7 @@
 /**
- * Guide: add Solara weather to the phone home screen (PWA shortcut / “widget” icon).
- * True iOS WidgetKit tiles need a native extension; this is the cross-platform path that works today.
+ * Guide: add Solara to the home screen.
+ * - Native iOS app: real WidgetKit (Edit → Add Widget → Solara Weather)
+ * - Safari/Chrome: PWA “Add to Home Screen” shortcut to /widget
  */
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -53,19 +54,6 @@ export function HomeScreenWidget({ compact = false }: Props) {
     } catch {
       /* ignore */
     }
-  }
-
-  const openInSafari = async () => {
-    try {
-      if (isNativeApp()) {
-        const { Browser } = await import('@capacitor/browser')
-        await Browser.open({ url: 'https://solaraweather.com/widget' })
-        return
-      }
-    } catch {
-      /* fall through */
-    }
-    window.open(widgetUrl, '_blank', 'noopener,noreferrer')
   }
 
   if (standalone) {
@@ -121,19 +109,17 @@ export function HomeScreenWidget({ compact = false }: Props) {
       {platform === 'ios-native' && (
         <ol className="homescreen-steps">
           <li>
-            Home screen <strong>widgets</strong> for the App Store app need a future WidgetKit update.
+            Open Solara once and set your <strong>Home</strong> place (or load your city) so weather is
+            saved for the widget.
           </li>
           <li>
-            For a home screen icon <strong>today</strong>, open the widget page in Safari:
+            On the Home Screen: long-press → <strong>Edit</strong> → <strong>Add Widget</strong>.
           </li>
           <li>
-            <button type="button" className="primary-btn" onClick={() => void openInSafari()}>
-              Open widget in Safari
-            </button>
+            Search <strong>Solara</strong> → pick <strong>Small</strong> or <strong>Medium</strong> →
+            Add.
           </li>
-          <li>
-            In Safari: <strong>Share → Add to Home Screen</strong>.
-          </li>
+          <li>Tap the tile anytime to open the app. It refreshes when you open Solara or about every 45 minutes.</li>
         </ol>
       )}
 

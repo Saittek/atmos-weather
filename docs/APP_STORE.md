@@ -138,6 +138,7 @@ Xcode → Info (or `ios/App/App/Info.plist`):
 2. Radar with **🏠 home pin** + severe warning polygons  
 3. Storm Chasers desk (CAPE / threat bar)  
 4. Rain widget (`/widget`) locked to home  
+5. Native Home Screen widget (WidgetKit) — see **docs/IOS_WIDGET.md**  
 5. Morning / severe notification mock (or in-app banner)
 
 ### Review tips (avoid rejection)
