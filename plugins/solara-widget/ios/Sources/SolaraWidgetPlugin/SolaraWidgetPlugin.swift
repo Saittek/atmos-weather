@@ -3,13 +3,9 @@ import Capacitor
 import WidgetKit
 
 /**
- * Bridge: React writes a weather JSON snapshot into the App Group;
- * WidgetKit extension reads it for the Home Screen tile.
- *
- * Writes BOTH:
- *  - UserDefaults(suiteName: group)
- *  - App Group container file widget-snapshot.json
- * so the extension can still load if one path fails.
+ * Writes weather JSON into the App Group for SolaraWidgetExtension.
+ * Primary store: App Group container file (shared reliably).
+ * Secondary: UserDefaults suite.
  */
 @objc(SolaraWidgetPlugin)
 public class SolaraWidgetPlugin: CAPPlugin, CAPBridgedPlugin {
@@ -26,21 +22,15 @@ public class SolaraWidgetPlugin: CAPPlugin, CAPBridgedPlugin {
     private static let fileName = "widget-snapshot.json"
     private static let widgetKind = "SolaraHomeWidget"
 
-    @objc func setSnapshot(_ call: CAPPluginCall) {
+    @objc public func setSnapshot(_ call: CAPPluginCall) {
         guard let json = call.getString("json"), !json.isEmpty else {
             call.reject("json required")
             return
         }
 
-        var wroteDefaults = false
         var wroteFile = false
-
-        if let defaults = UserDefaults(suiteName: Self.appGroupId) {
-            defaults.set(json, forKey: Self.snapshotKey)
-            // Force flush for extension process
-            defaults.synchronize()
-            wroteDefaults = true
-        }
+        var wroteDefaults = false
+        var groupError: String?
 
         if let dir = FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: Self.appGroupId
@@ -50,41 +40,42 @@ public class SolaraWidgetPlugin: CAPPlugin, CAPBridgedPlugin {
                 try json.write(to: file, atomically: true, encoding: .utf8)
                 wroteFile = true
             } catch {
-                // continue — defaults may still work
+                groupError = "file write failed: \(error.localizedDescription)"
             }
+        } else {
+            groupError = "App Group container nil — enable group.com.solara.weather on both App IDs and re-sign"
         }
 
-        if !wroteDefaults && !wroteFile {
-            call.reject(
-                "App Group unavailable — enable group.com.solara.weather on App + Widget in Apple Developer + Xcode signing"
-            )
+        if let defaults = UserDefaults(suiteName: Self.appGroupId) {
+            defaults.set(json, forKey: Self.snapshotKey)
+            defaults.synchronize()
+            wroteDefaults = true
+        }
+
+        // File is the reliable cross-process store; require it
+        if !wroteFile {
+            call.reject(groupError ?? "App Group unavailable")
             return
         }
 
         Self.reloadTimelines()
         call.resolve([
             "ok": true,
-            "defaults": wroteDefaults,
             "file": wroteFile,
+            "defaults": wroteDefaults,
         ])
     }
 
-    @objc func reload(_ call: CAPPluginCall) {
+    @objc public func reload(_ call: CAPPluginCall) {
         Self.reloadTimelines()
         call.resolve(["ok": true])
     }
 
-    @objc func getSnapshot(_ call: CAPPluginCall) {
+    @objc public func getSnapshot(_ call: CAPPluginCall) {
         call.resolve(["json": Self.loadSnapshotJSON() as Any])
     }
 
-    static func loadSnapshotJSON() -> String? {
-        if let defaults = UserDefaults(suiteName: appGroupId),
-           let raw = defaults.string(forKey: snapshotKey),
-           !raw.isEmpty
-        {
-            return raw
-        }
+    public static func loadSnapshotJSON() -> String? {
         if let dir = FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: appGroupId
         ) {
@@ -93,13 +84,21 @@ public class SolaraWidgetPlugin: CAPPlugin, CAPBridgedPlugin {
                 return raw
             }
         }
+        if let defaults = UserDefaults(suiteName: appGroupId),
+           let raw = defaults.string(forKey: snapshotKey),
+           !raw.isEmpty
+        {
+            return raw
+        }
         return nil
     }
 
-    static func reloadTimelines() {
+    public static func reloadTimelines() {
         if #available(iOS 14.0, *) {
-            WidgetCenter.shared.reloadTimelines(ofKind: widgetKind)
-            WidgetCenter.shared.reloadAllTimelines()
+            DispatchQueue.main.async {
+                WidgetCenter.shared.reloadTimelines(ofKind: widgetKind)
+                WidgetCenter.shared.reloadAllTimelines()
+            }
         }
     }
 }

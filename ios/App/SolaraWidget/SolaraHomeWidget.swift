@@ -1,5 +1,6 @@
 import SwiftUI
 import WidgetKit
+import CoreLocation
 
 struct SolaraEntry: TimelineEntry {
     let date: Date
@@ -13,37 +14,122 @@ struct SolaraProvider: TimelineProvider {
     }
 
     func getSnapshot(in context: Context, completion: @escaping (SolaraEntry) -> Void) {
-        let snap = SolaraWidgetStore.loadSnapshot() ?? .preview
-        completion(SolaraEntry(date: Date(), snapshot: snap, placeholder: false))
+        if let snap = SolaraWidgetStore.loadSnapshot() {
+            completion(SolaraEntry(date: Date(), snapshot: snap, placeholder: false))
+            return
+        }
+        // Gallery / first paint: show preview sample rather than empty
+        completion(SolaraEntry(date: Date(), snapshot: .preview, placeholder: true))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<SolaraEntry>) -> Void) {
         let finish: (WidgetSnapshot?) -> Void = { snap in
-            // Prefer real data; never leave the tile blank if we have anything usable
-            let resolved = snap ?? SolaraWidgetStore.loadSnapshot()
-            let entry = SolaraEntry(date: Date(), snapshot: resolved, placeholder: false)
+            let entry = SolaraEntry(date: Date(), snapshot: snap, placeholder: false)
             let next = Date().addingTimeInterval(30 * 60)
             completion(Timeline(entries: [entry], policy: .after(next)))
         }
 
-        guard let existing = SolaraWidgetStore.loadSnapshot() else {
-            finish(nil)
-            return
-        }
-
-        let age = Date().timeIntervalSince1970 - existing.updatedAt
-        let needsRefresh = existing.isStale || age > 15 * 60
-
-        if needsRefresh, existing.lat != 0 || existing.lon != 0 {
+        // 1) Prefer snapshot written by the main app (App Group file / suite)
+        if let existing = SolaraWidgetStore.loadSnapshot() {
+            let age = Date().timeIntervalSince1970 - existing.updatedAt
+            if age <= 15 * 60 {
+                finish(existing)
+                return
+            }
+            // Stale — refresh via Open-Meteo using stored coords
             OpenMeteoWidgetFetch.refresh(
                 lat: existing.lat,
                 lon: existing.lon,
-                units: existing.units
+                units: existing.units,
+                placeName: existing.placeName
             ) { fresh in
                 finish(fresh ?? existing)
             }
+            return
+        }
+
+        // 2) No app snapshot yet — fetch with device location (widget can still show weather)
+        WidgetLocation.once { coord in
+            guard let coord = coord else {
+                finish(nil)
+                return
+            }
+            OpenMeteoWidgetFetch.refresh(
+                lat: coord.latitude,
+                lon: coord.longitude,
+                units: "metric",
+                placeName: "My location"
+            ) { fresh in
+                finish(fresh)
+            }
+        }
+    }
+}
+
+/// One-shot location for widget when the app has not written a snapshot yet.
+private enum WidgetLocation {
+    private static let manager = CLLocationManager()
+    private static var delegateBox: LocDelegate?
+
+    static func once(completion: @escaping (CLLocationCoordinate2D?) -> Void) {
+        let status: CLAuthorizationStatus
+        if #available(iOS 14.0, *) {
+            status = manager.authorizationStatus
         } else {
-            finish(existing)
+            status = CLLocationManager.authorizationStatus()
+        }
+
+        // Widget cannot prompt for permission; only use if already authorized by main app
+        let ok: Bool
+        switch status {
+        case .authorizedAlways, .authorizedWhenInUse:
+            ok = true
+        default:
+            ok = false
+        }
+        guard ok else {
+            completion(nil)
+            return
+        }
+
+        let box = LocDelegate { coord in
+            delegateBox = nil
+            completion(coord)
+        }
+        delegateBox = box
+        manager.delegate = box
+        manager.desiredAccuracy = kCLLocationAccuracyKilometer
+        manager.requestLocation()
+
+        // Timeout so WidgetKit is never left hanging
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
+            if delegateBox != nil {
+                delegateBox = nil
+                completion(manager.location?.coordinate)
+            }
+        }
+    }
+
+    private final class LocDelegate: NSObject, CLLocationManagerDelegate {
+        let handler: (CLLocationCoordinate2D?) -> Void
+        private var done = false
+
+        init(handler: @escaping (CLLocationCoordinate2D?) -> Void) {
+            self.handler = handler
+        }
+
+        private func finish(_ c: CLLocationCoordinate2D?) {
+            guard !done else { return }
+            done = true
+            handler(c)
+        }
+
+        func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+            finish(locations.last?.coordinate)
+        }
+
+        func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+            finish(nil)
         }
     }
 }
@@ -57,7 +143,7 @@ struct SolaraHomeWidget: Widget {
                 .modifier(SolaraWidgetBackground())
         }
         .configurationDisplayName("Solara Weather")
-        .description("Current conditions for your home place — temp, high/low, and rain chance.")
+        .description("Current conditions — temp, high/low, and rain chance.")
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }
@@ -190,7 +276,7 @@ struct SolaraWidgetView: View {
             Text("Solara")
                 .font(.headline)
                 .foregroundColor(.white)
-            Text("Open the app to load weather for your home place.")
+            Text("Open Solara once so weather can load on this widget.")
                 .font(.caption)
                 .foregroundColor(Color.white.opacity(0.75))
             Spacer(minLength: 0)

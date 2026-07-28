@@ -116,6 +116,7 @@ enum OpenMeteoWidgetFetch {
         lat: Double,
         lon: Double,
         units: String,
+        placeName: String? = nil,
         completion: @escaping (WidgetSnapshot?) -> Void
     ) {
         var components = URLComponents(string: "https://api.open-meteo.com/v1/forecast")
@@ -178,7 +179,10 @@ enum OpenMeteoWidgetFetch {
             }
 
             let existing = SolaraWidgetStore.loadSnapshot()
-            let place = existing?.placeName ?? String(format: "%.2f, %.2f", lat, lon)
+            let place =
+                placeName
+                ?? existing?.placeName
+                ?? String(format: "%.2f, %.2f", lat, lon)
 
             let snap = WidgetSnapshot(
                 placeName: place,

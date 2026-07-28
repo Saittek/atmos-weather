@@ -1,9 +1,8 @@
 /**
  * Native iOS Home Screen widget (WidgetKit) bridge.
- * Writes a JSON snapshot into the App Group; the SolaraWidget extension renders it.
- * No-op on web / Android.
+ * Uses @solara/widget Capacitor plugin → App Group shared store.
  */
-import { registerPlugin } from '@capacitor/core'
+import { SolaraWidget } from '@solara/widget'
 import type { LocationResult, WeatherData } from '../api/types'
 import type { Units } from '../utils/format'
 import { getWeatherInfo } from '../utils/weatherCodes'
@@ -25,26 +24,6 @@ export interface WidgetSnapshotPayload {
   units: 'metric' | 'imperial'
   deepLink?: string
 }
-
-interface SolaraWidgetPlugin {
-  setSnapshot(options: { json: string }): Promise<{ ok?: boolean }>
-  reload(): Promise<{ ok?: boolean }>
-  getSnapshot(): Promise<{ json?: string | null }>
-}
-
-const SolaraWidget = registerPlugin<SolaraWidgetPlugin>('SolaraWidget', {
-  web: {
-    async setSnapshot() {
-      return { ok: false }
-    },
-    async reload() {
-      return { ok: false }
-    },
-    async getSnapshot() {
-      return { json: null }
-    },
-  },
-})
 
 /** Build snapshot from forecast + place (temps stored as °C; widget converts for imperial). */
 export function buildWidgetSnapshot(
@@ -88,14 +67,12 @@ export function isNativeIosWidgetSupported(): boolean {
 }
 
 /**
- * Push snapshot to WidgetKit whenever weather loads on native iOS.
- * Always publishes the location just loaded so the Home Screen tile updates.
+ * Always publish the location just loaded so the Home Screen tile updates.
  */
 export async function publishNativeWidgetSnapshot(opts: {
   location: LocationResult
   weather: WeatherData
   units: Units
-  /** kept for call-site compatibility; no longer used to skip publish */
   homeLocation?: LocationResult | null
 }): Promise<void> {
   if (!isNativeIosWidgetSupported()) return
@@ -103,18 +80,16 @@ export async function publishNativeWidgetSnapshot(opts: {
 
   try {
     const snapshot = buildWidgetSnapshot(opts.location, opts.weather, opts.units)
-    // Guard against NaN coords (would break Open-Meteo refresh in the widget)
     if (!Number.isFinite(snapshot.lat) || !Number.isFinite(snapshot.lon)) return
 
-    await SolaraWidget.setSnapshot({ json: JSON.stringify(snapshot) })
-    // Extra reload in case the first call wrote before timelines registered
+    const result = await SolaraWidget.setSnapshot({ json: JSON.stringify(snapshot) })
+    console.info('[SolaraWidget] snapshot written', result)
     try {
       await SolaraWidget.reload()
     } catch {
       /* ignore */
     }
   } catch (err) {
-    // Always log on native so we can diagnose TestFlight builds in Safari Web Inspector
     console.warn('[SolaraWidget] publish failed', err)
   }
 }
