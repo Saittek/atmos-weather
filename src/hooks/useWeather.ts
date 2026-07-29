@@ -28,6 +28,7 @@ import { getCurrentPosition } from '../lib/native'
 import { publishNativeWidgetSnapshot } from '../lib/nativeWidget'
 import { loadOfflineBundle, saveOfflineBundle } from '../utils/offlineCache'
 import { filterActiveAlerts } from '../utils/activeAlerts'
+import { applyTheme } from '../lib/theme'
 
 const STORAGE_KEY = 'atmos-weather-prefs-v2'
 const NOTIFIED_KEY = 'atmos-notified-alerts'
@@ -100,18 +101,6 @@ function saveLocal(prefs: Prefs) {
   } catch {
     /* ignore */
   }
-}
-
-function applyTheme(theme: ThemeMode) {
-  const root = document.documentElement
-  let mode: 'dark' | 'light' = 'dark'
-  if (theme === 'light') mode = 'light'
-  else if (theme === 'auto') {
-    mode = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
-  }
-  root.dataset.theme = mode
-  root.style.colorScheme = mode
-  return mode
 }
 
 function prefsToCloud(p: Prefs): CloudPrefs {

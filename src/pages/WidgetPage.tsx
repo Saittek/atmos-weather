@@ -93,10 +93,7 @@ export default function WidgetPage() {
   const pop = weather?.daily.precipitation_probability_max[ti] ?? 0
 
   return (
-    <div
-      className={`widget-page ${standalone ? 'widget-standalone' : ''}`}
-      data-theme="dark"
-    >
+    <div className={`widget-page ${standalone ? 'widget-standalone' : ''}`}>
       {!standalone && <InstallPrompt compact />}
       <header className="widget-bar">
         {!standalone ? (

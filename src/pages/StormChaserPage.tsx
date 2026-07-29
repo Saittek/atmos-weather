@@ -287,7 +287,7 @@ export default function StormChaserPage() {
   }
 
   return (
-    <div className="chaser-page app" data-theme-active="dark" data-storm-mode="true">
+    <div className="chaser-page app" data-storm-mode="true">
       <header className="chaser-topbar">
         <Link to={homeLink} className="chip-btn">
           ← Solara
