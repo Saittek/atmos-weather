@@ -10,7 +10,7 @@ import {
 import { fetchTropicalGlobeData } from '../api/weather'
 import type { TropicalGlobeData, TropicalStorm } from '../api/types'
 import { formatRadarTime } from '../utils/format'
-import { nightPolygonRing, terminatorLine } from '../utils/sunTerminator'
+import { dayNightGeoJSON } from '../utils/sunTerminator'
 
 const SPEED_MS = { slow: 900, normal: 520, fast: 300 } as const
 type SpeedKey = keyof typeof SPEED_MS
@@ -123,6 +123,12 @@ const GIBS_IR_TILES =
   'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-East_ABI_Band13_Clean_Infrared/default/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png'
 const IR_SOURCE = 'globe-ir'
 const IR_LAYER = 'globe-ir-layer'
+
+/** Day/night shade + terminator (MapLibre, works with globe projection). */
+const NIGHT_SOURCE = 'globe-night'
+const NIGHT_LAYER = 'globe-night-fill'
+const TERM_SOURCE = 'globe-terminator'
+const TERM_LAYER = 'globe-terminator-line'
 
 function prefersReducedMotion(): boolean {
   try {
@@ -332,6 +338,7 @@ export function GlobalRadarGlobe() {
    * - Culls points on the back of the globe (stops path “teleport” glitches)
    * - Breaks polylines at limb / back-side gaps instead of drawing chords
    * - Hides HTML markers when their storm center is behind the planet
+   * Day/night is a MapLibre layer (not SVG) so it works with or without storms.
    */
   const scheduleOverlay = useCallback(() => {
     if (overlayRafRef.current != null) return
@@ -341,9 +348,8 @@ export function GlobalRadarGlobe() {
       const svg = trackSvgRef.current
       const data = tropicalDataRef.current
       if (!svg) return
-      if (!map || !data || !showTropicalRef.current || !data.storms.length) {
-        svg.innerHTML = ''
-        svg.style.display = 'none'
+
+      const hideMarkers = () => {
         for (const m of markersRef.current) {
           const el = m.getElement()
           if (el) {
@@ -351,6 +357,12 @@ export function GlobalRadarGlobe() {
             el.style.pointerEvents = 'none'
           }
         }
+      }
+
+      if (!map || !data || !showTropicalRef.current || !data.storms.length) {
+        svg.innerHTML = ''
+        svg.style.display = 'none'
+        hideMarkers()
         return
       }
 
@@ -494,25 +506,7 @@ export function GlobalRadarGlobe() {
         }
       }
 
-      // Day / night terminator + soft night fill (SVG, same project as tracks)
-      if (showDayNightRef.current) {
-        const now = new Date()
-        const term = terminatorLine(now, 80)
-        const dTerm = pathFromCoords(term)
-        if (dTerm.includes('L')) {
-          nodes.push(`<path class="globe-svg-terminator" d="${dTerm}" fill="none" />`)
-        }
-        // Night polygon — only front-side segments to avoid chords
-        const night = nightPolygonRing(now, 64)
-        const nightSegs = visibleSegments(night)
-        for (const seg of nightSegs) {
-          if (seg.length < 3) continue
-          const d = seg
-            .map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`)
-            .join(' ')
-          nodes.push(`<path class="globe-svg-night" d="${d} Z" />`)
-        }
-      }
+      // Day/night is drawn as MapLibre layers (updateDayNightLayers) — not SVG.
 
       svg.innerHTML = nodes.join('')
 
@@ -845,6 +839,7 @@ export function GlobalRadarGlobe() {
         setNowIndex(ni)
         setFrameIdx(ni)
         readyRef.current = true
+        updateDayNightLayers(true)
 
         // Paint radar at world view, then briefly re-warm radar tiles at high zoom
         applyFrame(ni, true)
@@ -1035,10 +1030,101 @@ export function GlobalRadarGlobe() {
     }
   }, [showIR])
 
+  /**
+   * Day/night: fill night hemisphere + terminator line as MapLibre layers.
+   * (SVG shade was wrong on the globe and only ran when storms were visible.)
+   */
+  const updateDayNightLayers = useCallback((forceVisible?: boolean) => {
+    const map = mapRef.current
+    if (!map || !readyRef.current || swappingBasemapRef.current) return
+    if (!map.isStyleLoaded()) return
+
+    const visible = forceVisible ?? showDayNightRef.current
+    try {
+      const geo = dayNightGeoJSON(new Date())
+      const nightFc = {
+        type: 'FeatureCollection' as const,
+        features: [geo.night],
+      }
+      const termFc = {
+        type: 'FeatureCollection' as const,
+        features: [geo.terminator],
+      }
+
+      if (!map.getSource(NIGHT_SOURCE)) {
+        map.addSource(NIGHT_SOURCE, { type: 'geojson', data: nightFc })
+      } else {
+        ;(map.getSource(NIGHT_SOURCE) as maplibregl.GeoJSONSource).setData(nightFc)
+      }
+
+      if (!map.getSource(TERM_SOURCE)) {
+        map.addSource(TERM_SOURCE, { type: 'geojson', data: termFc })
+      } else {
+        ;(map.getSource(TERM_SOURCE) as maplibregl.GeoJSONSource).setData(termFc)
+      }
+
+      // Night fill above basemap, below radar / IR / labels
+      if (!map.getLayer(NIGHT_LAYER)) {
+        const before =
+          (map.getLayer(IR_LAYER) && IR_LAYER) ||
+          (map.getLayer(RADAR_ID) && RADAR_ID) ||
+          (map.getLayer('labels') && 'labels') ||
+          undefined
+        map.addLayer(
+          {
+            id: NIGHT_LAYER,
+            type: 'fill',
+            source: NIGHT_SOURCE,
+            paint: {
+              'fill-color': '#020617',
+              'fill-opacity': 0.42,
+              'fill-antialias': true,
+            },
+            layout: { visibility: visible ? 'visible' : 'none' },
+          },
+          before || undefined,
+        )
+      } else {
+        map.setLayoutProperty(NIGHT_LAYER, 'visibility', visible ? 'visible' : 'none')
+      }
+
+      // Terminator line on top so it stays readable over radar
+      if (!map.getLayer(TERM_LAYER)) {
+        map.addLayer({
+          id: TERM_LAYER,
+          type: 'line',
+          source: TERM_SOURCE,
+          paint: {
+            'line-color': '#fde68a',
+            'line-width': 1.75,
+            'line-opacity': 0.9,
+            'line-blur': 0.25,
+          },
+          layout: {
+            visibility: visible ? 'visible' : 'none',
+            'line-cap': 'round',
+            'line-join': 'round',
+          },
+        })
+      } else {
+        map.setLayoutProperty(TERM_LAYER, 'visibility', visible ? 'visible' : 'none')
+      }
+    } catch (e) {
+      console.warn('[globe] day/night layer', e)
+    }
+  }, [])
+
   useEffect(() => {
     showDayNightRef.current = showDayNight
-    scheduleOverlay()
-  }, [showDayNight, scheduleOverlay])
+    updateDayNightLayers(showDayNight)
+  }, [showDayNight, updateDayNightLayers])
+
+  // Refresh terminator as Earth rotates under the sun (~every 2 minutes)
+  useEffect(() => {
+    if (!showDayNight) return
+    const id = window.setInterval(() => updateDayNightLayers(true), 120_000)
+    return () => window.clearInterval(id)
+  }, [showDayNight, updateDayNightLayers])
 
   // Play / pause — single timer, no double-start
   useEffect(() => {
@@ -1074,6 +1160,12 @@ export function GlobalRadarGlobe() {
     radarKeyRef.current = null
 
     try {
+      if (map.getLayer(TERM_LAYER)) map.removeLayer(TERM_LAYER)
+      if (map.getSource(TERM_SOURCE)) map.removeSource(TERM_SOURCE)
+      if (map.getLayer(NIGHT_LAYER)) map.removeLayer(NIGHT_LAYER)
+      if (map.getSource(NIGHT_SOURCE)) map.removeSource(NIGHT_SOURCE)
+      if (map.getLayer(IR_LAYER)) map.removeLayer(IR_LAYER)
+      if (map.getSource(IR_SOURCE)) map.removeSource(IR_SOURCE)
       if (map.getLayer(RADAR_ID)) map.removeLayer(RADAR_ID)
       if (map.getSource(RADAR_ID)) map.removeSource(RADAR_ID)
       if (map.getLayer('labels')) map.removeLayer('labels')
@@ -1120,10 +1212,40 @@ export function GlobalRadarGlobe() {
 
     swappingBasemapRef.current = false
     applyFrame(frameIdxRef.current, true)
+    // Re-add day/night + IR after basemap stack rebuild
+    updateDayNightLayers()
+    if (showIR) {
+      // trigger IR effect by toggling layout after sources exist
+      try {
+        if (!map.getSource(IR_SOURCE)) {
+          map.addSource(IR_SOURCE, {
+            type: 'raster',
+            tiles: [GIBS_IR_TILES],
+            tileSize: 256,
+            maxzoom: 7,
+            attribution: 'IR © NASA GIBS / NOAA GOES',
+          })
+        }
+        if (!map.getLayer(IR_LAYER)) {
+          const before = map.getLayer(RADAR_ID) ? RADAR_ID : map.getLayer('labels') ? 'labels' : undefined
+          map.addLayer(
+            {
+              id: IR_LAYER,
+              type: 'raster',
+              source: IR_SOURCE,
+              paint: { 'raster-opacity': 0.55, 'raster-fade-duration': 0 },
+            },
+            before,
+          )
+        }
+      } catch {
+        /* ignore */
+      }
+    }
     scheduleOverlay()
     if (wasSpinning) setSpinning(true)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- showLabels at swap time
-  }, [basemapId, applyFrame, scheduleOverlay, showLabels])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- showLabels/showIR at swap time
+  }, [basemapId, applyFrame, scheduleOverlay, showLabels, showIR, updateDayNightLayers])
 
   const goNow = () => {
     setPlaying(false)
