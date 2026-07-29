@@ -156,6 +156,30 @@ function normalizeLon(lon: number): number {
   return x
 }
 
+/**
+ * True when (lon,lat) is on the front hemisphere of the globe for the current
+ * camera center. map.project() still returns coords for the back side — those
+ * make hurricane paths jump across the disk while rotating.
+ */
+function isFrontOfGlobe(
+  lon: number,
+  lat: number,
+  centerLng: number,
+  centerLat: number,
+  /** 0 = horizon; higher hides near-limb points that jitter */
+  margin = 0.12,
+): boolean {
+  const toRad = Math.PI / 180
+  const φ1 = centerLat * toRad
+  const λ1 = centerLng * toRad
+  const φ2 = lat * toRad
+  const λ2 = lon * toRad
+  // Great-circle cos(c) between camera target and point on unit sphere
+  const cosC =
+    Math.sin(φ1) * Math.sin(φ2) + Math.cos(φ1) * Math.cos(φ2) * Math.cos(λ2 - λ1)
+  return cosC > margin
+}
+
 function applySky(map: MapLibreMap, basemap: BasemapDef) {
   try {
     map.setSky({
@@ -227,7 +251,13 @@ export function GlobalRadarGlobe() {
     markersRef.current = []
   }, [])
 
-  /** Schedule at most one SVG redraw per animation frame. */
+  /**
+   * Project storm geometry onto the SVG layer.
+   * - Coalesced to one paint per animation frame (keeps spin/drag smooth)
+   * - Culls points on the back of the globe (stops path “teleport” glitches)
+   * - Breaks polylines at limb / back-side gaps instead of drawing chords
+   * - Hides HTML markers when their storm center is behind the planet
+   */
   const scheduleOverlay = useCallback(() => {
     if (overlayRafRef.current != null) return
     overlayRafRef.current = window.requestAnimationFrame(() => {
@@ -239,6 +269,13 @@ export function GlobalRadarGlobe() {
       if (!map || !data || !showTropicalRef.current || !data.storms.length) {
         svg.innerHTML = ''
         svg.style.display = 'none'
+        for (const m of markersRef.current) {
+          const el = m.getElement()
+          if (el) {
+            el.style.opacity = '0'
+            el.style.pointerEvents = 'none'
+          }
+        }
         return
       }
 
@@ -247,33 +284,80 @@ export function GlobalRadarGlobe() {
       const h = canvas.clientHeight || canvas.height
       if (w < 2 || h < 2) return
 
+      const center = map.getCenter()
+      const cLng = center.lng
+      const cLat = center.lat
+
       svg.style.display = ''
       svg.setAttribute('width', String(w))
       svg.setAttribute('height', String(h))
       svg.setAttribute('viewBox', `0 0 ${w} ${h}`)
 
-      const projectLine = (coords: [number, number][]): string => {
+      type Pt = { x: number; y: number; lon: number; lat: number }
+
+      const projectVisible = (lon: number, lat: number): Pt | null => {
+        if (!Number.isFinite(lon) || !Number.isFinite(lat)) return null
+        if (!isFrontOfGlobe(lon, lat, cLng, cLat)) return null
+        const p = map.project([lon, lat])
+        if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) return null
+        // Far off-canvas after project (rare near limb)
+        if (p.x < -120 || p.x > w + 120 || p.y < -120 || p.y > h + 120) return null
+        return { x: p.x, y: p.y, lon, lat }
+      }
+
+      /** Build SVG path data; lift pen when a point goes behind the globe. */
+      const pathFromCoords = (coords: [number, number][]): string => {
         const parts: string[] = []
         let penDown = false
+        let prev: Pt | null = null
         for (const [lon, lat] of coords) {
-          if (!Number.isFinite(lon) || !Number.isFinite(lat)) {
+          const pt = projectVisible(lon, lat)
+          if (!pt) {
             penDown = false
+            prev = null
             continue
           }
-          const p = map.project([lon, lat])
-          if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) {
-            penDown = false
-            continue
+          // Also break on huge screen jumps (antimeridian / projection seams)
+          if (prev && penDown) {
+            const dx = pt.x - prev.x
+            const dy = pt.y - prev.y
+            if (dx * dx + dy * dy > (w * 0.45) * (w * 0.45)) {
+              penDown = false
+            }
           }
-          // Drop points clearly off-screen / back of globe
-          if (p.x < -80 || p.x > w + 80 || p.y < -80 || p.y > h + 80) {
-            penDown = false
-            continue
-          }
-          parts.push(`${penDown ? 'L' : 'M'}${p.x.toFixed(1)},${p.y.toFixed(1)}`)
+          parts.push(`${penDown ? 'L' : 'M'}${pt.x.toFixed(1)},${pt.y.toFixed(1)}`)
           penDown = true
+          prev = pt
         }
         return parts.join(' ')
+      }
+
+      /** Continuous front-side segments only (for cone fill — never chord the back). */
+      const visibleSegments = (coords: [number, number][]): Pt[][] => {
+        const segs: Pt[][] = []
+        let cur: Pt[] = []
+        let prev: Pt | null = null
+        for (const [lon, lat] of coords) {
+          const pt = projectVisible(lon, lat)
+          if (!pt) {
+            if (cur.length >= 2) segs.push(cur)
+            cur = []
+            prev = null
+            continue
+          }
+          if (prev) {
+            const dx = pt.x - prev.x
+            const dy = pt.y - prev.y
+            if (dx * dx + dy * dy > (w * 0.45) * (w * 0.45)) {
+              if (cur.length >= 2) segs.push(cur)
+              cur = []
+            }
+          }
+          cur.push(pt)
+          prev = pt
+        }
+        if (cur.length >= 2) segs.push(cur)
+        return segs
       }
 
       const nodes: string[] = []
@@ -283,13 +367,23 @@ export function GlobalRadarGlobe() {
           (data.cones?.features
             ?.find((f) => f.properties?.id === s.id || f.properties?.name === s.name)
             ?.geometry?.coordinates as [number, number][][] | undefined)?.[0]
+
         if (ring && ring.length >= 3) {
-          const d = projectLine(ring as [number, number][])
-          if (d.includes('L')) {
-            nodes.push(
-              `<path class="globe-svg-cone" d="${d} Z" />`,
-              `<path class="globe-svg-cone-stroke" d="${d} Z" fill="none" />`,
-            )
+          const segs = visibleSegments(ring as [number, number][])
+          // Only fill when most of the ring is on the front (avoids wild filled triangles)
+          const frontCount = (ring as [number, number][]).filter(([lon, lat]) =>
+            isFrontOfGlobe(lon, lat, cLng, cLat),
+          ).length
+          const mostlyFront = frontCount >= ring.length * 0.55
+          for (const seg of segs) {
+            if (seg.length < 2) continue
+            const d = seg
+              .map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`)
+              .join(' ')
+            if (mostlyFront && segs.length === 1 && seg.length >= 4) {
+              nodes.push(`<path class="globe-svg-cone" d="${d} Z" />`)
+            }
+            nodes.push(`<path class="globe-svg-cone-stroke" d="${d}" fill="none" />`)
           }
         }
 
@@ -300,7 +394,7 @@ export function GlobalRadarGlobe() {
               ? [s.pastTrack]
               : []
         for (const seg of pastSegs) {
-          const d = projectLine(seg)
+          const d = pathFromCoords(seg)
           if (d.includes('L')) {
             nodes.push(`<path class="globe-svg-past-glow" d="${d}" fill="none" />`)
             nodes.push(`<path class="globe-svg-past" d="${d}" fill="none" />`)
@@ -308,7 +402,7 @@ export function GlobalRadarGlobe() {
         }
 
         if (s.track && s.track.length >= 2) {
-          const d = projectLine(s.track)
+          const d = pathFromCoords(s.track)
           if (d.includes('L')) {
             nodes.push(`<path class="globe-svg-fcst-glow" d="${d}" fill="none" />`)
             nodes.push(`<path class="globe-svg-fcst" d="${d}" fill="none" />`)
@@ -316,15 +410,32 @@ export function GlobalRadarGlobe() {
         }
 
         for (const pt of s.forecastPoints ?? []) {
-          const p = map.project([pt.lon, pt.lat])
-          if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) continue
+          const p = projectVisible(pt.lon, pt.lat)
+          if (!p) continue
           if (p.x < 0 || p.x > w || p.y < 0 || p.y > h) continue
           nodes.push(
             `<circle class="globe-svg-fcst-pt" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4.5" />`,
           )
         }
       }
+
       svg.innerHTML = nodes.join('')
+
+      // Storm name markers: fade when center is on the far side
+      for (const m of markersRef.current) {
+        const el = m.getElement()
+        if (!el) continue
+        if (!showTropicalRef.current) {
+          el.style.opacity = '0'
+          el.style.pointerEvents = 'none'
+          continue
+        }
+        const ll = m.getLngLat()
+        const front = isFrontOfGlobe(ll.lng, ll.lat, cLng, cLat, 0.08)
+        el.style.opacity = front ? '1' : '0'
+        el.style.pointerEvents = front ? 'auto' : 'none'
+        el.style.transition = 'opacity 0.12s linear'
+      }
     })
   }, [])
 
@@ -471,10 +582,10 @@ export function GlobalRadarGlobe() {
   /**
    * Equatorial spin: advance center longitude, keep latitude, bearing 0 (north-up).
    * This is Earth rotating about its polar axis — not a camera roll via setBearing.
+   * Overlay follows via map `move` → scheduleOverlay (rAF-coalesced).
    */
   const startSpin = useCallback(() => {
     stopSpin()
-    let lastOverlay = 0
     const tick = () => {
       if (!spinningRef.current) {
         spinRafRef.current = null
@@ -493,12 +604,7 @@ export function GlobalRadarGlobe() {
             bearing: 0,
             pitch: 0,
           })
-          const now = performance.now()
-          // Overlay ~8fps while spinning (full rate fights the GPU)
-          if (now - lastOverlay > 120) {
-            lastOverlay = now
-            scheduleOverlay()
-          }
+          // jumpTo fires `move` → scheduleOverlay keeps tracks glued to the surface
         } catch {
           /* ignore */
         }
@@ -506,7 +612,7 @@ export function GlobalRadarGlobe() {
       spinRafRef.current = window.requestAnimationFrame(tick)
     }
     spinRafRef.current = window.requestAnimationFrame(tick)
-  }, [scheduleOverlay, stopSpin])
+  }, [stopSpin])
 
   const flyRegion = useCallback((regionId: string) => {
     const map = mapRef.current
@@ -588,10 +694,13 @@ export function GlobalRadarGlobe() {
       'top-right',
     )
 
-    const onMoveEnd = () => scheduleOverlay()
-    // Only redraw tracks when motion settles — not on every pixel of drag/spin
-    map.on('moveend', onMoveEnd)
-    map.on('zoomend', onMoveEnd)
+    // Keep hurricane SVG + markers locked to the globe while dragging / spinning.
+    // scheduleOverlay is rAF-coalesced so this stays cheap.
+    const onMove = () => scheduleOverlay()
+    map.on('move', onMove)
+    map.on('zoom', onMove)
+    map.on('pitch', onMove)
+    map.on('rotate', onMove)
 
     const ro = new ResizeObserver(() => {
       try {
@@ -682,8 +791,10 @@ export function GlobalRadarGlobe() {
       }
       ro.disconnect()
       try {
-        map.off('moveend', onMoveEnd)
-        map.off('zoomend', onMoveEnd)
+        map.off('move', onMove)
+        map.off('zoom', onMove)
+        map.off('pitch', onMove)
+        map.off('rotate', onMove)
       } catch {
         /* ignore */
       }
