@@ -981,7 +981,7 @@ export function GlobalRadarGlobe() {
           type: 'raster',
           tiles: def.labels,
           tileSize: 256,
-          maxzoom: Math.min(def.maxzoom, 10),
+          maxzoom: Math.min(def.maxzoom, 12),
           attribution: '© CARTO',
         })
         map.addLayer({
