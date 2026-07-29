@@ -4,6 +4,7 @@ import { useWeather } from '../hooks/useWeather'
 import { sameExactPlace } from '../hooks/useWeather'
 import { useRainWatch } from '../hooks/useRainWatch'
 import { RainNextHour } from '../components/RainNextHour'
+import { NextHourHero } from '../components/NextHourHero'
 import { getWeatherInfo } from '../utils/weatherCodes'
 import { isDaytimeNow } from '../utils/daylight'
 import { formatTemp } from '../utils/format'
@@ -169,6 +170,12 @@ export default function WidgetPage() {
             </Link>
           </section>
 
+          <NextHourHero
+            weather={weather}
+            units={units}
+            placeName={atHome ? 'Home' : location.name}
+            compact
+          />
           <RainNextHour weather={weather} units={units} />
 
           {rainyPins.length > 0 && (

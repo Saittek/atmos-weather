@@ -478,6 +478,28 @@ async function listMessages(db, roomId, { after, limit = 80 } = {}) {
   }
 }
 
+/** Lightweight content filter — blocks spam/scam patterns only. */
+function moderateChatText(text) {
+  const t = text.toLowerCase()
+  // Excessive URLs / invite spam
+  const urlHits = (text.match(/https?:\/\//gi) || []).length
+  if (urlHits >= 2) {
+    return 'Please don’t post multiple links in one message'
+  }
+  if (
+    /(free\s*crypto|double\s*your\s*money|telegram\.me\/join|bit\.ly\/|onlyfans\.com\/|viagra|casino\s*bonus)/i.test(
+      t,
+    )
+  ) {
+    return 'Message blocked by spam filter'
+  }
+  // Same character spam
+  if (/(.)\1{12,}/.test(text)) {
+    return 'Message looks like spam'
+  }
+  return null
+}
+
 async function postMessage(db, { roomId, userId, userName, text, placeLabel, lat, lon }) {
   const cleaned = String(text || '')
     .replace(/\s+/g, ' ')
@@ -488,10 +510,30 @@ async function postMessage(db, { roomId, userId, userName, text, placeLabel, lat
     e.code = 'EMPTY'
     throw e
   }
+  const mod = moderateChatText(cleaned)
+  if (mod) {
+    const e = new Error(mod)
+    e.code = 'MOD'
+    throw e
+  }
 
   let room = await db.prepare('SELECT * FROM chat_rooms WHERE id = ?').bind(roomId).first()
   const now = Date.now()
   const createdAt = new Date(now).toISOString()
+
+  // Per-user hourly cap across rooms (abuse brake)
+  const hourAgo = new Date(now - 60 * 60 * 1000).toISOString()
+  const hourly = await db
+    .prepare(
+      `SELECT COUNT(*) as c FROM chat_messages WHERE user_id = ? AND created_at > ?`,
+    )
+    .bind(userId, hourAgo)
+    .first()
+  if ((hourly?.c ?? 0) >= 40) {
+    const e = new Error('Hourly message limit reached — try again later')
+    e.code = 'RATE'
+    throw e
+  }
 
   if (!room) {
     await db
@@ -515,8 +557,9 @@ async function postMessage(db, { roomId, userId, userName, text, placeLabel, lat
     } catch {
       lastBy = {}
     }
-    if (lastBy[userId] && now - lastBy[userId] < 2000) {
-      const e = new Error('Slow down — wait a moment between messages')
+    // 4s between messages (was 2s)
+    if (lastBy[userId] && now - lastBy[userId] < 4000) {
+      const e = new Error('Slow down — wait a few seconds between messages')
       e.code = 'RATE'
       throw e
     }

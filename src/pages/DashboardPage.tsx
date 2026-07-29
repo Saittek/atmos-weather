@@ -34,6 +34,8 @@ import { useHomeAlerts } from '../hooks/useHomeAlerts'
 import { sameExactPlace } from '../hooks/useWeather'
 import { ThreatBanner } from '../components/ThreatBanner'
 import { WhatMattersNow } from '../components/WhatMattersNow'
+import { NextHourHero } from '../components/NextHourHero'
+import { ModelConfidence } from '../components/ModelConfidence'
 import { useAuth } from '../hooks/useAuth'
 import { useRainWatch } from '../hooks/useRainWatch'
 import { isDaytimeNow } from '../utils/daylight'
@@ -411,6 +413,9 @@ export default function DashboardPage() {
       data-theme-active={theme}
       data-density={density}
     >
+      <a className="skip-link" href="#main-content">
+        Skip to forecast
+      </a>
       {!isMobile && <div className="bg-noise" aria-hidden />}
       <div className="bg-scrim" aria-hidden />
       {!isMobile && <AmbientOrbs />}
@@ -659,7 +664,9 @@ export default function DashboardPage() {
 
         {weather && location && (
           <main
+            id="main-content"
             className={`dashboard ${stormMode ? 'dashboard-storm' : ''}`}
+            tabIndex={-1}
           >
             <div className="col main-col">
               <div className="priority-stack">
@@ -690,6 +697,17 @@ export default function DashboardPage() {
                 />
 
                 {/* Directly under “Right now” */}
+                {/* Hyperlocal next-hour precip (lock-screen style) */}
+                <NextHourHero
+                  weather={weather}
+                  units={units}
+                  placeName={
+                    homeLocation && sameExactPlace(location, homeLocation)
+                      ? 'Home'
+                      : location.name
+                  }
+                />
+
                 <GlanceModules weather={weather} units={units} air={air} />
 
                 {/* One clear action strip — full NWS text stays in Alerts */}
@@ -823,7 +841,16 @@ export default function DashboardPage() {
                           />
                         )}
                         {!isMobile && (
-                          <ModelCompare models={models} units={units} timezone={weather.timezone} />
+                          <>
+                            {models.length >= 2 && (
+                              <ModelConfidence
+                                models={models}
+                                weather={weather}
+                                units={units}
+                              />
+                            )}
+                            <ModelCompare models={models} units={units} timezone={weather.timezone} />
+                          </>
                         )}
                         {!isMobile && (
                           <CityCompare units={units} home={location} homeWeather={weather} />
@@ -870,7 +897,12 @@ export default function DashboardPage() {
                           lon={location.longitude}
                         />
                         <SnowOutlook weather={weather} units={units} />
-                        <TripPlanner weather={weather} units={units} placeName={location.name} />
+                        <TripPlanner
+                          weather={weather}
+                          units={units}
+                          placeName={location.name}
+                          origin={location}
+                        />
                         <OutlookTips weather={weather} units={units} />
                         <FireSmoke weather={weather} air={air} />
                         <Sounding profile={profile} units={units} timezone={weather.timezone} />

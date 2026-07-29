@@ -238,24 +238,31 @@ export default function StormChaserPage() {
   const onShare = async () => {
     if (!place || !brief) return
     const url = shareChaseUrl(place)
-    const text = `${brief.shareText}\n${url}`
+    const alertLines = (alerts ?? [])
+      .filter((a) => ['Extreme', 'Severe', 'Moderate'].includes(a.severity))
+      .slice(0, 4)
+      .map((a) => a.event)
+    const text = [
+      `Solara Chase Pack — ${place.name}`,
+      brief.shareText,
+      alertLines.length ? `Alerts: ${alertLines.join(' · ')}` : null,
+      stormEnv?.now?.cape != null ? `CAPE ${Math.round(stormEnv.now.cape)} J/kg` : null,
+      url,
+    ]
+      .filter(Boolean)
+      .join('\n')
     const result = await shareBriefingCard({
       placeName: place.name,
       brief,
       tempLabel: weather ? formatTemp(weather.current.temperature_2m, units) : '',
       url,
       text,
+      alertLines,
     })
-    if (result === 'shared') setShareMsg('Shared card')
-    else if (result === 'downloaded') setShareMsg('Card saved')
-    else {
-      try {
-        await navigator.clipboard.writeText(text)
-        setShareMsg('Briefing copied')
-      } catch {
-        setShareMsg('Could not share')
-      }
-    }
+    if (result === 'shared') setShareMsg('Pack shared')
+    else if (result === 'downloaded') setShareMsg('Pack saved')
+    else if (result === 'copied') setShareMsg('Pack copied')
+    else setShareMsg('Could not share')
     window.setTimeout(() => setShareMsg(null), 2200)
   }
 
@@ -317,8 +324,14 @@ export default function StormChaserPage() {
           >
             {refreshing || envLoading ? '…' : '↻'}
           </button>
-          <button type="button" className="chip-btn" onClick={() => void onShare()} disabled={!brief}>
-            {shareMsg ?? 'Share'}
+          <button
+            type="button"
+            className="chip-btn chaser-pack-btn"
+            onClick={() => void onShare()}
+            disabled={!brief}
+            title="Share chase pack image + text"
+          >
+            {shareMsg ?? '📦 Chase pack'}
           </button>
           <Link to={radarLink} className="chip-btn">
             📡 Full
@@ -416,6 +429,16 @@ export default function StormChaserPage() {
                   ? ` · CAPE peak ${Math.round(brief.atmosphere.capePeak)} J/kg`
                   : ''}
               </p>
+              <button
+                type="button"
+                className="primary-btn chaser-pack-cta"
+                onClick={() => void onShare()}
+              >
+                📦 Share chase pack
+                <span className="chaser-pack-cta-sub">
+                  Radar desk + CAPE + hazards + alerts
+                </span>
+              </button>
             </div>
             <div className="chaser-now-temp">
               <span className="chaser-now-big">

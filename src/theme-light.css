@@ -808,6 +808,55 @@ html.mobile-perf[data-theme='light'] .topbar {
 [data-theme='light'] .wmn-action strong {
   color: #0369a1;
 }
+
+[data-theme='light'] .next-hour-hero {
+  background: linear-gradient(145deg, rgba(224, 242, 254, 0.95), #ffffff);
+  border-color: rgba(3, 105, 161, 0.2);
+  color: #0f172a;
+}
+[data-theme='light'] .next-hour-hero.is-dry {
+  background: linear-gradient(145deg, rgba(220, 252, 231, 0.9), #fff);
+  border-color: rgba(22, 163, 74, 0.25);
+}
+[data-theme='light'] .nh-bar-track {
+  background: rgba(15, 23, 42, 0.08);
+}
+[data-theme='light'] .nh-kicker,
+[data-theme='light'] .nh-label,
+[data-theme='light'] .nh-meta {
+  color: rgba(15, 23, 42, 0.6);
+}
+[data-theme='light'] .model-confidence {
+  background: #fff;
+  border-color: rgba(15, 23, 42, 0.12);
+  color: #0f172a;
+}
+[data-theme='light'] .mc-item {
+  background: rgba(15, 23, 42, 0.04);
+}
+[data-theme='light'] .trip-city-card,
+[data-theme='light'] .trip-day-strip li {
+  background: #fff;
+  border-color: rgba(15, 23, 42, 0.1);
+  color: #0f172a;
+}
+[data-theme='light'] .trip-add-city input {
+  background: #fff;
+  color: #0f172a;
+}
+[data-theme='light'] .trip-city-hits {
+  background: #fff;
+  border-color: rgba(15, 23, 42, 0.12);
+}
+[data-theme='light'] .conf-high .mc-badge {
+  color: #15803d;
+}
+[data-theme='light'] .conf-moderate .mc-badge {
+  color: #a16207;
+}
+[data-theme='light'] .conf-low .mc-badge {
+  color: #b91c1c;
+}
 [data-theme='light'] .search-section-label {
   color: rgba(15, 23, 42, 0.55);
 }

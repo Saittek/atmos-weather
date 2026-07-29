@@ -26,6 +26,7 @@ export function AreaChat({ location }: Props) {
   const listRef = useRef<HTMLDivElement>(null)
   const stickBottom = useRef(true)
   const lastTsRef = useRef<string | undefined>(undefined)
+  const lastSendAt = useRef(0)
 
   const scrollToBottom = useCallback(() => {
     const el = listRef.current
@@ -134,15 +135,26 @@ export function AreaChat({ location }: Props) {
       setError('Sign in to chat with people nearby')
       return
     }
+    const now = Date.now()
+    if (now - lastSendAt.current < 4000) {
+      setError('Slow down — wait a few seconds between messages')
+      return
+    }
+    const body = text.trim()
+    if ((body.match(/https?:\/\//gi) || []).length >= 2) {
+      setError('Please don’t post multiple links')
+      return
+    }
     setSending(true)
     setError(null)
     try {
       const msg = await sendChatMessage(room.id, {
-        text: text.trim(),
+        text: body,
         lat: location.latitude,
         lon: location.longitude,
         placeLabel: location.name,
       })
+      lastSendAt.current = Date.now()
       setMessages((prev) => {
         if (prev.some((m) => m.id === msg.id)) return prev
         return [...prev, msg]
@@ -184,7 +196,7 @@ export function AreaChat({ location }: Props) {
             <div>
               <strong>{room?.label || `Near ${location.name}`}</strong>
               <span>
-                People viewing weather here can chat
+                Local weather chat · be kind · no spam
                 {activeNearby > 0 ? ` · ${activeNearby} active recently` : ''}
               </span>
             </div>
