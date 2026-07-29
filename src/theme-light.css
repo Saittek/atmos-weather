@@ -1,0 +1,420 @@
+/**
+ * Solara light theme — surfaces, chips, text contrast.
+ * Loaded after App.css so hard-coded dark leftovers get corrected.
+ */
+
+[data-theme='light'] {
+  color-scheme: light;
+}
+
+[data-theme='light'] body,
+[data-theme='light'] .app {
+  color: var(--text);
+  background: var(--app-fallback-bg);
+}
+
+[data-theme='light'] body {
+  background: var(--bg-body, #e8eef7);
+}
+
+[data-theme='light'] .bg-noise {
+  opacity: 0.025;
+}
+
+[data-theme='light'] .orb-mesh {
+  opacity: 0.07;
+  background-image:
+    linear-gradient(rgba(15, 23, 42, 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.12) 1px, transparent 1px);
+}
+
+/* Shell chrome */
+[data-theme='light'] .topbar,
+[data-theme='light'] .settings-more-menu,
+[data-theme='light'] .settings-sheet,
+[data-theme='light'] .search-results,
+[data-theme='light'] .auth-modal {
+  background: var(--glass-strong);
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+[data-theme='light'] .settings-sheet-backdrop,
+[data-theme='light'] .auth-backdrop {
+  background: rgba(15, 23, 42, 0.4);
+}
+
+[data-theme='light'] .settings-sheet {
+  background: var(--bg-elevated, #fff);
+  color: var(--text);
+  box-shadow: 0 -12px 40px rgba(15, 23, 42, 0.14);
+}
+
+[data-theme='light'] .panel,
+[data-theme='light'] .advanced-section {
+  color: var(--text);
+  border-color: var(--border);
+}
+
+[data-theme='light'] .panel {
+  background: linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.95) 0%,
+      rgba(255, 255, 255, 0.82) 55%,
+      rgba(248, 250, 252, 0.9) 100%
+    ),
+    var(--glass);
+  box-shadow:
+    0 4px 16px rgba(15, 23, 42, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 1);
+}
+
+[data-theme='light'] .panel-header h2,
+[data-theme='light'] .panel strong,
+[data-theme='light'] .condition,
+[data-theme='light'] .temp-big,
+[data-theme='light'] .h-temp,
+[data-theme='light'] .brand strong,
+[data-theme='light'] .result-name,
+[data-theme='light'] .settings-sheet-head strong,
+[data-theme='light'] .settings-more-row strong {
+  color: var(--text);
+}
+
+[data-theme='light'] .temp-big {
+  text-shadow: 0 2px 12px rgba(15, 23, 42, 0.08);
+}
+
+[data-theme='light'] .place-name {
+  background: none;
+  color: var(--text);
+  -webkit-background-clip: unset;
+  background-clip: unset;
+}
+
+[data-theme='light'] .hero-grid {
+  opacity: 0.08;
+  background-image:
+    linear-gradient(rgba(15, 23, 42, 0.18) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.18) 1px, transparent 1px);
+}
+
+[data-theme='light'] .current-3d-wrap {
+  filter: drop-shadow(0 10px 18px rgba(15, 23, 42, 0.12));
+}
+
+/* Chips / buttons / inputs */
+[data-theme='light'] .chip-btn,
+[data-theme='light'] .chip-toggle,
+[data-theme='light'] .unit-toggle,
+[data-theme='light'] .unit-toggle button,
+[data-theme='light'] .icon-chip,
+[data-theme='light'] .search-input-wrap,
+[data-theme='light'] .theme-toggle button,
+[data-theme='light'] .density-toggle button {
+  background: var(--chip-bg) !important;
+  color: var(--text) !important;
+  border-color: var(--border) !important;
+}
+
+[data-theme='light'] .chip-btn:hover,
+[data-theme='light'] .icon-chip:hover,
+[data-theme='light'] .unit-toggle button:hover,
+[data-theme='light'] .theme-toggle button:hover {
+  background: var(--chip-bg-hover) !important;
+}
+
+[data-theme='light'] .chip-btn.active,
+[data-theme='light'] .unit-toggle button.active,
+[data-theme='light'] .theme-toggle button.active,
+[data-theme='light'] .density-toggle button.active {
+  background: var(--chip-active-bg) !important;
+  border-color: rgba(3, 105, 161, 0.45) !important;
+  color: #0c4a6e !important;
+  font-weight: 700;
+}
+
+[data-theme='light'] .geo-btn {
+  background: rgba(3, 105, 161, 0.12);
+  color: var(--accent);
+}
+
+[data-theme='light'] .search-input,
+[data-theme='light'] .auth-form input,
+[data-theme='light'] select,
+[data-theme='light'] textarea {
+  color: var(--text);
+}
+
+[data-theme='light'] .auth-form input {
+  background: var(--input-bg);
+  color: var(--text);
+}
+
+[data-theme='light'] .search-input::placeholder,
+[data-theme='light'] .auth-form input::placeholder {
+  color: var(--text-mute);
+}
+
+[data-theme='light'] .search-spinner {
+  border-color: rgba(15, 23, 42, 0.15);
+  border-top-color: var(--accent);
+}
+
+[data-theme='light'] .settings-more-row {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+[data-theme='light'] .settings-more-row:hover {
+  background: var(--surface-2);
+}
+
+/* Cards / lists */
+[data-theme='light'] .hourly-card,
+[data-theme='light'] .pin-card,
+[data-theme='light'] .wxwise-site-chip,
+[data-theme='light'] .allergy-risk-pill {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+[data-theme='light'] .hourly-card:first-child {
+  background: linear-gradient(180deg, rgba(3, 105, 161, 0.12), rgba(3, 105, 161, 0.04));
+  border-color: rgba(3, 105, 161, 0.35);
+}
+
+[data-theme='light'] .daily-row:hover,
+[data-theme='light'] .daily-list li.open .daily-row,
+[data-theme='light'] .search-results button:hover,
+[data-theme='light'] .search-results button.active {
+  background: var(--row-hover);
+}
+
+[data-theme='light'] .advanced-section {
+  background: var(--surface);
+}
+
+[data-theme='light'] .advanced-toggle:hover {
+  background: rgba(3, 105, 161, 0.06);
+}
+
+[data-theme='light'] .skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(15, 23, 42, 0.05) 0%,
+    rgba(15, 23, 42, 0.1) 50%,
+    rgba(15, 23, 42, 0.05) 100%
+  );
+  background-size: 200% 100%;
+}
+
+/* Secondary text */
+[data-theme='light'] .muted,
+[data-theme='light'] .muted-center,
+[data-theme='light'] .panel-hint,
+[data-theme='light'] .place-meta,
+[data-theme='light'] .local-time,
+[data-theme='light'] .feels,
+[data-theme='light'] .hi-lo,
+[data-theme='light'] .h-time,
+[data-theme='light'] .h-label,
+[data-theme='light'] .h-pop,
+[data-theme='light'] .feed-label,
+[data-theme='light'] .brand-tag,
+[data-theme='light'] .result-meta,
+[data-theme='light'] .radar-sub,
+[data-theme='light'] .auth-foot,
+[data-theme='light'] .detail-grid .label,
+[data-theme='light'] .detail-grid.mini .label,
+[data-theme='light'] .settings-more-label,
+[data-theme='light'] .settings-more-row em,
+[data-theme='light'] .empty-lead,
+[data-theme='light'] .empty-state-rich {
+  color: var(--text-mute);
+}
+
+[data-theme='light'] .detail-grid .value,
+[data-theme='light'] .h-temp {
+  color: var(--text);
+}
+
+[data-theme='light'] .h-pop.wet {
+  color: #0284c7;
+}
+
+[data-theme='light'] .rain-hour-amt.snow {
+  color: #0369a1 !important;
+}
+
+[data-theme='light'] a {
+  color: var(--accent);
+}
+
+[data-theme='light'] .install-widget-link,
+[data-theme='light'] .onboard-ios-hint a {
+  color: #0369a1;
+}
+
+[data-theme='light'] .auth-error {
+  background: rgba(254, 226, 226, 0.95);
+  border-color: rgba(185, 28, 28, 0.35);
+  color: #991b1b;
+}
+
+/* Map embeds on dashboard keep readable toolbar chips */
+[data-theme='light'] .radar-panel:not(.is-fullscreen):not(.radar-page-mode) {
+  color: var(--text);
+}
+
+[data-theme='light'] .radar-panel:not(.is-fullscreen):not(.radar-page-mode) .chip-btn {
+  background: var(--chip-bg) !important;
+  color: var(--text) !important;
+}
+
+/* Full-page radar stays dark map chrome; force light chips on dark bars */
+[data-theme='light'] .radar-page {
+  background: #0f172a;
+  color: #f1f5f9;
+}
+
+[data-theme='light'] .radar-page .chip-btn,
+[data-theme='light'] .radar-page-bar .chip-btn {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #f8fafc !important;
+  border-color: rgba(255, 255, 255, 0.22) !important;
+}
+
+[data-theme='light'] .radar-page .chip-btn.active {
+  background: rgba(56, 189, 248, 0.3) !important;
+  color: #f0f9ff !important;
+}
+
+[data-theme='light'] .radar-map .leaflet-control-zoom a {
+  background: rgba(255, 255, 255, 0.95) !important;
+  color: #0f172a !important;
+  border-color: rgba(15, 23, 42, 0.15) !important;
+}
+
+/* Storm mode */
+[data-theme='light'] .storm-chip.storm-on {
+  color: #991b1b !important;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.16), rgba(168, 85, 247, 0.12)) !important;
+  border-color: rgba(185, 28, 28, 0.45) !important;
+}
+
+/* Rain strip */
+[data-theme='light'] .rain-hour-track {
+  background: rgba(15, 23, 42, 0.08);
+}
+
+[data-theme='light'] .rain-hour-fill.dry {
+  background: rgba(15, 23, 42, 0.06);
+}
+
+/* Chat FAB when open */
+[data-theme='light'] .area-chat-fab.is-open {
+  background: #ffffff;
+  color: #0f172a;
+  border-color: rgba(15, 23, 42, 0.15);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+}
+
+[data-theme='light'] .area-chat-fab-dot {
+  border-color: #ffffff;
+}
+
+/* Onboarding */
+[data-theme='light'] .onboard-backdrop {
+  background: rgba(15, 23, 42, 0.45);
+}
+
+[data-theme='light'] .onboard-card {
+  background:
+    linear-gradient(160deg, rgba(3, 105, 161, 0.08), transparent 45%),
+    #ffffff;
+  border-color: var(--border-strong);
+  color: var(--text);
+  box-shadow: 0 20px 48px rgba(15, 23, 42, 0.15);
+}
+
+[data-theme='light'] .onboard-card p {
+  color: var(--text-dim);
+}
+
+[data-theme='light'] .onboard-progress span {
+  background: rgba(15, 23, 42, 0.12);
+}
+
+/* Scrollbars */
+[data-theme='light'] ::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 42, 0.22);
+}
+
+[data-theme='light'] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(15, 23, 42, 0.35);
+}
+
+[data-theme='light'] .hourly-scroll {
+  scrollbar-color: rgba(15, 23, 42, 0.28) transparent;
+}
+
+/* Mobile perf solids */
+html.mobile-perf[data-theme='light'] .panel {
+  background: #ffffff !important;
+  color: #0f172a;
+}
+
+html.mobile-perf[data-theme='light'] .topbar {
+  background: #ffffff !important;
+  color: #0f172a;
+}
+
+/* Brand mark */
+[data-theme='light'] .brand-mark {
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.1), 0 2px 10px rgba(15, 23, 42, 0.12);
+}
+
+/* Select controls */
+[data-theme='light'] select {
+  background-color: var(--surface-solid);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+/* Map chunk fallback */
+[data-theme='light'] .map-chunk-fallback {
+  background: var(--surface);
+  color: var(--text-dim);
+  border-color: var(--border);
+}
+
+/* Wxwise chips */
+[data-theme='light'] .wxwise-site-chip.active {
+  color: #0e7490;
+  background: rgba(8, 145, 178, 0.12);
+  border-color: rgba(8, 145, 178, 0.4);
+}
+
+/* Globe page keeps its own dark chrome */
+[data-theme='light'] .globe-page {
+  color: #f1f5f9;
+}
+
+/* Soften wet-decision icons if any forced dark filters */
+[data-theme='light'] .wet-decision-icon {
+  color: var(--text);
+}
+
+/* Ensure primary interactive chips stay dark-on-light */
+[data-theme='light'] button.chip-btn,
+[data-theme='light'] button.icon-chip {
+  color: var(--text) !important;
+}
+
+/* Avoid pure white text on light panels from leftover rules */
+[data-theme='light'] .panel .chip-btn.active {
+  color: #0c4a6e !important;
+}

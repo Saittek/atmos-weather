@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import './App.css'
+import './theme-light.css'
 
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const RadarPage = lazy(() => import('./pages/RadarPage'))

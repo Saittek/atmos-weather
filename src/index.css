@@ -37,6 +37,14 @@ body {
 
 html[data-theme='light'] body {
   background: #e8eef7;
+  color: #0f172a;
+}
+
+html[data-theme='light'] ::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 42, 0.22);
+}
+html[data-theme='light'] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(15, 23, 42, 0.35);
 }
 
 #root {
