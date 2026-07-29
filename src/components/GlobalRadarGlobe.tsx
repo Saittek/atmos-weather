@@ -11,6 +11,8 @@ import { fetchTropicalGlobeData } from '../api/weather'
 import type { TropicalGlobeData, TropicalStorm } from '../api/types'
 import { formatRadarTime } from '../utils/format'
 import {
+  destinationPoint,
+  screenToLatLonOrtho,
   solarElevationSin,
   subsolarPoint,
   terminatorLine,
@@ -29,11 +31,20 @@ const GLOBE_MAX_ZOOM = 6.5
 /** Comfortable full-earth view after tile warm-up. */
 const GLOBE_WORLD_ZOOM = 1.35
 const GLOBE_WORLD_CENTER: [number, number] = [0, 8]
-/** Large cache so high-zoom basemap/radar tiles stay loaded while spinning. */
-const GLOBE_TILE_CACHE = 2200
+/** Tile cache — high enough for spin, not so large it thrashs memory/GPU. */
+const GLOBE_TILE_CACHE = 900
 
-/** Degrees of longitude advanced per animation frame while spinning (~full turn ~90s at 60fps). */
-const SPIN_DEG_PER_FRAME = 0.12
+/**
+ * Spin: advance every N frames to cut map+overlay work (~half the main-thread cost).
+ * Degrees per advance chosen so full rotation stays ~90s at 60fps.
+ */
+const SPIN_EVERY_N_FRAMES = 2
+const SPIN_DEG_PER_TICK = 0.24
+
+/** Day/night paint budget (internal buffer long edge). */
+const DN_MAX_EDGE_IDLE = 320
+const DN_MAX_EDGE_SPIN = 200
+const DN_MAX_EDGE_DRAG = 240
 
 type BasemapId = 'satellite' | 'voyager' | 'light' | 'dark'
 
@@ -317,6 +328,10 @@ export function GlobalRadarGlobe() {
   const userInteractingRef = useRef(false)
   const interactEndTimerRef = useRef<number | null>(null)
   const overlayRafRef = useRef<number | null>(null)
+  /** Separate throttle for expensive day/night (storms SVG stays more responsive). */
+  const dayNightRafRef = useRef<number | null>(null)
+  const dayNightLastPaintRef = useRef(0)
+  const spinFrameRef = useRef(0)
   const basemapIdRef = useRef<BasemapId>('satellite')
   const swappingBasemapRef = useRef(false)
   const mountedRef = useRef(true)
@@ -353,11 +368,9 @@ export function GlobalRadarGlobe() {
   }, [])
 
   /**
-   * Day/night canvas — locked to the Earth surface at every zoom.
-   *
-   * No “guess the globe radius” circle (that shrank when zoomed). Instead each
-   * pixel is: unproject → re-project (must land back on itself = on globe) →
-   * front-hemisphere soft limb → soft solar terminator.
+   * Fast day/night:
+   * - World view: orthographic sphere math (no map.unproject — huge win while spinning)
+   * - Zoomed in: sparse unproject only (low buffer, no re-project test)
    */
   const paintDayNight = useCallback((map: MapLibreMap, date = new Date()) => {
     const canvas = dayNightCanvasRef.current
@@ -373,13 +386,18 @@ export function GlobalRadarGlobe() {
     }
     canvas.style.display = ''
 
-    // Internal buffer (upscaled with smoothing for soft edges)
-    const maxEdge = 960
+    const spinning = spinningRef.current && !userInteractingRef.current
+    const dragging = userInteractingRef.current
+    const maxEdge = spinning
+      ? DN_MAX_EDGE_SPIN
+      : dragging
+        ? DN_MAX_EDGE_DRAG
+        : DN_MAX_EDGE_IDLE
     const scale = Math.min(1, maxEdge / Math.max(cssW, cssH))
     const sw = Math.max(2, Math.round(cssW * scale))
     const sh = Math.max(2, Math.round(cssH * scale))
 
-    const dpr = Math.min(typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1, 2)
+    const dpr = Math.min(typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1, 1.5)
     const outW = Math.round(cssW * dpr)
     const outH = Math.round(cssH * dpr)
     if (canvas.width !== outW || canvas.height !== outH) {
@@ -389,7 +407,7 @@ export function GlobalRadarGlobe() {
     canvas.style.width = `${cssW}px`
     canvas.style.height = `${cssH}px`
 
-    const ctx = canvas.getContext('2d')
+    const ctx = canvas.getContext('2d', { alpha: true })
     if (!ctx) return
     ctx.setTransform(1, 0, 0, 1, 0, 0)
     ctx.clearRect(0, 0, outW, outH)
@@ -397,6 +415,25 @@ export function GlobalRadarGlobe() {
     const center = map.getCenter()
     const cLng = center.lng
     const cLat = center.lat
+    const zoom = map.getZoom()
+    const centerPt = map.project([cLng, cLat])
+    const sun = subsolarPoint(date)
+
+    // Estimate disk radius (max of sparse limb samples)
+    let Rcss = 0
+    for (let b = 0; b < 360; b += 30) {
+      const [lon, lat] = destinationPoint(cLng, cLat, 89.2, b)
+      if (frontCosC(lon, lat, cLng, cLat) <= -0.05) continue
+      const p = map.project([lon, lat])
+      if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) continue
+      const d = Math.hypot(p.x - centerPt.x, p.y - centerPt.y)
+      if (d > Rcss && d < Math.hypot(cssW, cssH) * 1.15) Rcss = d
+    }
+    if (Rcss < 12) Rcss = Math.min(cssW, cssH) * 0.42
+    Rcss *= 1.015
+
+    // Full-disk on screen → pure math orthographic (fast). Zoomed → unproject path.
+    const useOrtho = zoom <= 2.55 && Rcss < Math.max(cssW, cssH) * 0.7
 
     let buf = dayNightBufRef.current
     if (!buf) {
@@ -407,51 +444,55 @@ export function GlobalRadarGlobe() {
       buf.width = sw
       buf.height = sh
     }
-    const bctx = buf.getContext('2d')
+    const bctx = buf.getContext('2d', { alpha: true })
     if (!bctx) return
     const img = bctx.createImageData(sw, sh)
     const data = img.data
 
     const sx = sw / cssW
     const sy = sh / cssH
-    // Re-project error threshold (css px): sky samples fail this; surface passes
-    const maxReprojErr = Math.max(2.25, 3.25 / scale)
-    // Soft limb: fade as cosC → 0 (horizon of the planet)
-    const limbSoft = 0.055
-    // Soft terminator in sin(solar elevation)
-    const termSoft = 0.065
-    const maxA = 178
+    const termSoft = 0.07
+    const maxA = 175
+    const limbSoft = 0.05
 
     for (let y = 0; y < sh; y++) {
       for (let x = 0; x < sw; x++) {
         const cssX = (x + 0.5) / sx
         const cssY = (y + 0.5) / sy
+        let lon: number
+        let lat: number
+        let limbA = 1
 
-        let ll: { lng: number; lat: number }
-        try {
-          ll = map.unproject([cssX, cssY])
-        } catch {
-          continue
+        if (useOrtho) {
+          const hit = screenToLatLonOrtho(
+            cssX,
+            cssY,
+            centerPt.x,
+            centerPt.y,
+            Rcss,
+            cLng,
+            cLat,
+          )
+          if (!hit) continue
+          lon = hit.lon
+          lat = hit.lat
+          limbA = hit.limb
+        } else {
+          let ll: { lng: number; lat: number }
+          try {
+            ll = map.unproject([cssX, cssY])
+          } catch {
+            continue
+          }
+          if (!Number.isFinite(ll.lng) || !Number.isFinite(ll.lat)) continue
+          const cosC = frontCosC(ll.lng, ll.lat, cLng, cLat)
+          if (cosC <= 0) continue
+          limbA = cosC >= limbSoft ? 1 : smoothstep01(cosC / limbSoft)
+          lon = ll.lng
+          lat = ll.lat
         }
-        if (!Number.isFinite(ll.lng) || !Number.isFinite(ll.lat)) continue
 
-        // Must land back on the same screen pixel → on the rendered globe surface
-        let p2: { x: number; y: number }
-        try {
-          p2 = map.project([ll.lng, ll.lat])
-        } catch {
-          continue
-        }
-        if (!Number.isFinite(p2.x) || !Number.isFinite(p2.y)) continue
-        if (Math.hypot(p2.x - cssX, p2.y - cssY) > maxReprojErr) continue
-
-        // Front of globe only; soft fade at the limb so edges match Earth, not a smaller disk
-        const cosC = frontCosC(ll.lng, ll.lat, cLng, cLat)
-        if (cosC <= 0) continue
-        const limbA =
-          cosC >= limbSoft ? 1 : smoothstep01(cosC / limbSoft)
-
-        const sinEl = solarElevationSin(ll.lng, ll.lat, date)
+        const sinEl = solarElevationSin(lon, lat, sun)
         let nightA = 0
         if (sinEl <= -termSoft) nightA = 1
         else if (sinEl < termSoft) {
@@ -470,26 +511,28 @@ export function GlobalRadarGlobe() {
     bctx.putImageData(img, 0, 0)
 
     ctx.imageSmoothingEnabled = true
-    ctx.imageSmoothingQuality = 'high'
+    ctx.imageSmoothingQuality = spinning ? 'low' : 'high'
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     ctx.drawImage(buf, 0, 0, sw, sh, 0, 0, cssW, cssH)
 
-    // Gold terminator — only where re-project stays on the globe
-    const term = terminatorLine(date, 288)
-    ctx.strokeStyle = 'rgba(253, 230, 138, 0.92)'
-    ctx.lineWidth = 2
+    // Terminator stroke (lighter while spinning — no shadow blur)
+    const termSamples = spinning ? 96 : 160
+    const term = terminatorLine(date, termSamples)
+    ctx.strokeStyle = 'rgba(253, 230, 138, 0.9)'
+    ctx.lineWidth = 1.75
     ctx.lineJoin = 'round'
     ctx.lineCap = 'round'
-    ctx.shadowColor = 'rgba(251, 191, 36, 0.4)'
-    ctx.shadowBlur = 4
+    if (!spinning) {
+      ctx.shadowColor = 'rgba(251, 191, 36, 0.35)'
+      ctx.shadowBlur = 3
+    }
     ctx.beginPath()
     let pen = false
     let prevX = 0
     let prevY = 0
-    const jumpLim = Math.max(48, Math.min(cssW, cssH) * 0.2)
+    const jumpLim = Math.max(40, Rcss * 0.4)
     for (const [lon, lat] of term) {
-      const cosC = frontCosC(lon, lat, cLng, cLat)
-      if (cosC <= 0.02) {
+      if (frontCosC(lon, lat, cLng, cLat) <= 0.03) {
         pen = false
         continue
       }
@@ -498,17 +541,12 @@ export function GlobalRadarGlobe() {
         pen = false
         continue
       }
-      // Stay on surface (reject sky projections of terminator samples)
-      try {
-        const back = map.unproject([p.x, p.y])
-        const p3 = map.project([back.lng, back.lat])
-        if (Math.hypot(p3.x - p.x, p3.y - p.y) > maxReprojErr * 1.5) {
+      if (useOrtho) {
+        const d = Math.hypot(p.x - centerPt.x, p.y - centerPt.y)
+        if (d > Rcss + 4) {
           pen = false
           continue
         }
-      } catch {
-        pen = false
-        continue
       }
       if (pen && Math.hypot(p.x - prevX, p.y - prevY) > jumpLim) pen = false
       if (!pen) ctx.moveTo(p.x, p.y)
@@ -520,38 +558,65 @@ export function GlobalRadarGlobe() {
     ctx.stroke()
     ctx.shadowBlur = 0
 
-    // Sun marker when on the front surface
-    const sun = subsolarPoint(date)
-    if (frontCosC(sun.lon, sun.lat, cLng, cLat) > 0.12) {
+    if (!spinning && frontCosC(sun.lon, sun.lat, cLng, cLat) > 0.15) {
       const sp = map.project([sun.lon, sun.lat])
       if (Number.isFinite(sp.x) && Number.isFinite(sp.y)) {
+        if (!useOrtho || Math.hypot(sp.x - centerPt.x, sp.y - centerPt.y) <= Rcss) {
+          const g = ctx.createRadialGradient(sp.x, sp.y, 0, sp.x, sp.y, 14)
+          g.addColorStop(0, 'rgba(254, 243, 199, 0.9)')
+          g.addColorStop(0.45, 'rgba(251, 191, 36, 0.45)')
+          g.addColorStop(1, 'rgba(251, 191, 36, 0)')
+          ctx.fillStyle = g
+          ctx.beginPath()
+          ctx.arc(sp.x, sp.y, 14, 0, Math.PI * 2)
+          ctx.fill()
+        }
+      }
+    }
+
+    dayNightLastPaintRef.current = performance.now()
+  }, [])
+
+  /** Throttled day/night — spin ~10–12 fps shade; idle ~full rate on settle. */
+  const scheduleDayNight = useCallback(
+    (force = false) => {
+      if (!showDayNightRef.current) {
+        const c = dayNightCanvasRef.current
+        if (c) c.style.display = 'none'
+        return
+      }
+      if (dayNightRafRef.current != null && !force) return
+      const minGap =
+        spinningRef.current && !userInteractingRef.current
+          ? 90
+          : userInteractingRef.current
+            ? 55
+            : 28
+      const run = () => {
+        dayNightRafRef.current = null
+        const map = mapRef.current
+        if (!map) return
+        const now = performance.now()
+        if (!force && now - dayNightLastPaintRef.current < minGap) {
+          dayNightRafRef.current = window.requestAnimationFrame(run)
+          return
+        }
         try {
-          const back = map.unproject([sp.x, sp.y])
-          const p3 = map.project([back.lng, back.lat])
-          if (Math.hypot(p3.x - sp.x, p3.y - sp.y) <= maxReprojErr * 2) {
-            const g = ctx.createRadialGradient(sp.x, sp.y, 0, sp.x, sp.y, 16)
-            g.addColorStop(0, 'rgba(254, 243, 199, 0.95)')
-            g.addColorStop(0.4, 'rgba(251, 191, 36, 0.5)')
-            g.addColorStop(1, 'rgba(251, 191, 36, 0)')
-            ctx.fillStyle = g
-            ctx.beginPath()
-            ctx.arc(sp.x, sp.y, 16, 0, Math.PI * 2)
-            ctx.fill()
-          }
+          paintDayNight(map)
         } catch {
           /* ignore */
         }
       }
-    }
-  }, [])
+      dayNightRafRef.current = window.requestAnimationFrame(run)
+    },
+    [paintDayNight],
+  )
 
   /**
-   * Project storm geometry onto the SVG layer + repaint day/night canvas.
-   * - Coalesced to one paint per animation frame (keeps spin/drag smooth)
-   * - Culls points on the back of the globe (stops path “teleport” glitches)
-   * - Day/night always paints (independent of storms)
+   * Storm SVG overlay (cheap). Day/night is scheduled separately + throttled.
    */
   const scheduleOverlay = useCallback(() => {
+    scheduleDayNight(false)
     if (overlayRafRef.current != null) return
     overlayRafRef.current = window.requestAnimationFrame(() => {
       overlayRafRef.current = null
@@ -559,13 +624,6 @@ export function GlobalRadarGlobe() {
       const svg = trackSvgRef.current
       const data = tropicalDataRef.current
       if (!map) return
-
-      // Day/night every frame (works without storms)
-      try {
-        paintDayNight(map)
-      } catch {
-        /* ignore */
-      }
 
       const hideMarkers = () => {
         for (const m of markersRef.current) {
@@ -744,7 +802,7 @@ export function GlobalRadarGlobe() {
         el.style.transition = 'opacity 0.12s linear'
       }
     })
-  }, [paintDayNight])
+  }, [scheduleDayNight])
 
   const placeMarkers = useCallback(
     (map: MapLibreMap, data: TropicalGlobeData, visible: boolean) => {
@@ -889,21 +947,28 @@ export function GlobalRadarGlobe() {
   /**
    * Equatorial spin: advance longitude while keeping the user's latitude.
    * Pauses while the user is dragging / zooming so you can still move around.
+   * Advances every N frames to cut map re-renders + overlay work roughly in half.
    */
   const startSpin = useCallback(() => {
     stopSpin()
+    spinFrameRef.current = 0
     const tick = () => {
       if (!spinningRef.current) {
         spinRafRef.current = null
         return
       }
       const map = mapRef.current
+      spinFrameRef.current += 1
       // Skip frames while the user is dragging/zooming so spin doesn't fight the camera
-      if (map && !swappingBasemapRef.current && !userInteractingRef.current) {
+      if (
+        map &&
+        !swappingBasemapRef.current &&
+        !userInteractingRef.current &&
+        spinFrameRef.current % SPIN_EVERY_N_FRAMES === 0
+      ) {
         try {
           const c = map.getCenter()
-          // Keep the user's latitude — only rotate under them
-          const lon = normalizeLon(c.lng - SPIN_DEG_PER_FRAME)
+          const lon = normalizeLon(c.lng - SPIN_DEG_PER_TICK)
           map.jumpTo({
             center: [lon, c.lat],
             bearing: 0,
@@ -1017,10 +1082,11 @@ export function GlobalRadarGlobe() {
     }
     const markInteractEnd = () => {
       if (interactEndTimerRef.current != null) window.clearTimeout(interactEndTimerRef.current)
-      // Brief delay so inertia / wheel settle before spin resumes
+      // Brief delay so inertia / wheel settle before spin resumes; then HQ day/night
       interactEndTimerRef.current = window.setTimeout(() => {
         userInteractingRef.current = false
         interactEndTimerRef.current = null
+        scheduleDayNight(true)
       }, 180)
     }
     map.on('dragstart', markInteractStart)
@@ -1183,6 +1249,10 @@ export function GlobalRadarGlobe() {
         window.clearTimeout(interactEndTimerRef.current)
         interactEndTimerRef.current = null
       }
+      if (dayNightRafRef.current != null) {
+        window.cancelAnimationFrame(dayNightRafRef.current)
+        dayNightRafRef.current = null
+      }
       try {
         map.off('move', onMove)
         map.off('zoom', onMove)
@@ -1298,8 +1368,8 @@ export function GlobalRadarGlobe() {
 
   useEffect(() => {
     showDayNightRef.current = showDayNight
-    scheduleOverlay()
-  }, [showDayNight, scheduleOverlay])
+    scheduleDayNight(true)
+  }, [showDayNight, scheduleDayNight])
 
   // Play / pause — single timer, no double-start
   useEffect(() => {

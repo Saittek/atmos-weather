@@ -49,23 +49,82 @@ export function subsolarPoint(date: Date = new Date()): { lon: number; lat: numb
 
 /**
  * sin(solar elevation). Positive = day, negative = night, ~0 at the terminator.
- * Used for soft day/night blending (not a hard cut).
+ * Hot path: pass sunLon/sunLat when looping many pixels (avoids recompute).
  */
 export function solarElevationSin(
   lon: number,
   lat: number,
-  date: Date = new Date(),
+  dateOrSun: Date | { lon: number; lat: number } = new Date(),
 ): number {
-  const { lon: sunLon, lat: sunLat } = subsolarPoint(date)
+  const sun =
+    dateOrSun instanceof Date ? subsolarPoint(dateOrSun) : dateOrSun
   const φ = toRad(lat)
-  const δ = toRad(sunLat)
-  const Δλ = toRad(lon - sunLon)
+  const δ = toRad(sun.lat)
+  const Δλ = toRad(lon - sun.lon)
   return Math.sin(φ) * Math.sin(δ) + Math.cos(φ) * Math.cos(δ) * Math.cos(Δλ)
 }
 
 /** True when the sun is below the geometric horizon (civil-ish limb, no refraction). */
 export function isNight(lon: number, lat: number, date: Date = new Date()): boolean {
   return solarElevationSin(lon, lat, date) < 0
+}
+
+/**
+ * Fast orthographic globe day/night: screen disk → lat/lon without map.unproject.
+ * Accurate when the whole Earth disk is on screen (world zoom).
+ */
+export function screenToLatLonOrtho(
+  cssX: number,
+  cssY: number,
+  centerX: number,
+  centerY: number,
+  radiusPx: number,
+  lookLng: number,
+  lookLat: number,
+): { lon: number; lat: number; limb: number } | null {
+  if (radiusPx < 1) return null
+  const nx = (cssX - centerX) / radiusPx
+  // Screen Y down → geographic north is up
+  const ny = (centerY - cssY) / radiusPx
+  const r2 = nx * nx + ny * ny
+  if (r2 > 1.0005) return null
+  const nz = Math.sqrt(Math.max(0, 1 - Math.min(1, r2)))
+  // Soft limb factor from radial distance
+  const limb = r2 > 0.92 ? smoothstepOut(Math.sqrt(r2), 0.92, 1) : 1
+
+  const lat0 = toRad(lookLat)
+  const lon0 = toRad(lookLng)
+  const cosLat0 = Math.cos(lat0)
+  const sinLat0 = Math.sin(lat0)
+  const cosLon0 = Math.cos(lon0)
+  const sinLon0 = Math.sin(lon0)
+  // Camera basis: east, north, up (radial at look-at)
+  // p = nx*east + ny*north + nz*up
+  const ex = -sinLon0
+  const ey = cosLon0
+  const ez = 0
+  const nx_ = -sinLat0 * cosLon0
+  const ny_ = -sinLat0 * sinLon0
+  const nz_ = cosLat0
+  const ux = cosLat0 * cosLon0
+  const uy = cosLat0 * sinLon0
+  const uz = sinLat0
+
+  const x = nx * ex + ny * nx_ + nz * ux
+  const y = nx * ey + ny * ny_ + nz * uy
+  const z = nx * ez + ny * nz_ + nz * uz
+
+  const lat = toDeg(Math.asin(Math.max(-1, Math.min(1, z))))
+  const lon = toDeg(Math.atan2(y, x))
+  return { lon, lat, limb }
+}
+
+function smoothstepOut(r: number, a: number, b: number): number {
+  if (r <= a) return 1
+  if (r >= b) return 0
+  const t = (r - a) / (b - a)
+  const s = t * t * (3 - 2 * t)
+  return 1 - s
 }
 
 /**
