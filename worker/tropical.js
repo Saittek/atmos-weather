@@ -80,6 +80,7 @@ export async function getTropicalGlobeData() {
 
   const storms = []
   const trackFeatures = []
+  const pastTrackFeatures = []
   const coneFeatures = []
   const pointFeatures = []
 
@@ -112,32 +113,59 @@ export async function getTropicalGlobeData() {
       lastUpdate: s.lastUpdate != null ? String(s.lastUpdate) : undefined,
       advisoryUrl: s.publicAdvisory?.url != null ? String(s.publicAdvisory.url) : undefined,
       track: /** @type {[number, number][]} */ ([]),
+      pastTrack: /** @type {[number, number][]} */ ([]),
       forecastPoints: /** @type {{ lon: number, lat: number, label?: string, windKt?: number }[]} */ ([]),
     }
 
     const base = layerBase(bin)
     if (base != null) {
-      const [pts, track, cone] = await Promise.all([
+      const [pts, track, cone, pastTrack] = await Promise.all([
         fetchGeoJson(base + 2), // Forecast Points
         fetchGeoJson(base + 3), // Forecast Track
         fetchGeoJson(base + 4), // Forecast Cone
+        fetchGeoJson(base + 8), // Past Track (observed path)
       ])
 
       if (track?.features?.[0]) {
         const line = coordsFromLine(track.features[0])
-        storm.track = line
-        trackFeatures.push({
-          type: 'Feature',
-          properties: {
-            id,
-            name,
-            classification,
-          },
-          geometry: {
-            type: 'LineString',
-            coordinates: line,
-          },
-        })
+        if (line.length >= 2) {
+          storm.track = line
+          trackFeatures.push({
+            type: 'Feature',
+            properties: {
+              id,
+              name,
+              classification,
+              kind: 'forecast',
+            },
+            geometry: {
+              type: 'LineString',
+              coordinates: line,
+            },
+          })
+        }
+      }
+
+      // Observed path already taken (best/past track)
+      if (pastTrack?.features?.length) {
+        for (const f of pastTrack.features) {
+          const line = coordsFromLine(f)
+          if (line.length < 2) continue
+          storm.pastTrack = line
+          pastTrackFeatures.push({
+            type: 'Feature',
+            properties: {
+              id,
+              name,
+              classification,
+              kind: 'past',
+            },
+            geometry: {
+              type: 'LineString',
+              coordinates: line,
+            },
+          })
+        }
       }
 
       if (cone?.features?.[0]) {
@@ -168,7 +196,7 @@ export async function getTropicalGlobeData() {
             properties: {
               id,
               name,
-              label: p.datelbl || p.tau != null ? `+${p.tau}h` : '',
+              label: p.datelbl || (p.tau != null ? `+${p.tau}h` : ''),
               windKt: p.maxwind,
               tau: p.tau,
             },
@@ -198,6 +226,7 @@ export async function getTropicalGlobeData() {
   return {
     storms,
     tracks: { type: 'FeatureCollection', features: trackFeatures },
+    pastTracks: { type: 'FeatureCollection', features: pastTrackFeatures },
     cones: { type: 'FeatureCollection', features: coneFeatures },
     points: { type: 'FeatureCollection', features: pointFeatures },
     updatedAt: new Date().toISOString(),

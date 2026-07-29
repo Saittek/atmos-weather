@@ -246,6 +246,8 @@ export interface TropicalStorm {
   advisoryUrl?: string
   /** Forecast track as [lon, lat] pairs */
   track?: [number, number][]
+  /** Observed path already taken */
+  pastTrack?: [number, number][]
   forecastPoints?: TropicalForecastPoint[]
 }
 
@@ -264,6 +266,7 @@ export type GeoJsonFeatureCollection = {
 export interface TropicalGlobeData {
   storms: TropicalStorm[]
   tracks: GeoJsonFeatureCollection
+  pastTracks?: GeoJsonFeatureCollection
   cones: GeoJsonFeatureCollection
   points: GeoJsonFeatureCollection
   updatedAt: string

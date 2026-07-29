@@ -133,30 +133,84 @@ export function GlobalRadarGlobe() {
     markersRef.current = []
   }, [])
 
+  const TROPICAL_LAYER_IDS = [
+    'tropical-cone-fill',
+    'tropical-cone-outline',
+    'tropical-past-track',
+    'tropical-track-line',
+    'tropical-track-glow',
+    'tropical-fcst-points',
+    'tropical-center-glow',
+  ] as const
+
+  /** Keep storm paths above radar (radar frames re-add layers under labels). */
+  const raiseTropicalLayers = useCallback((map: MapLibreMap) => {
+    for (const id of TROPICAL_LAYER_IDS) {
+      if (map.getLayer(id)) {
+        try {
+          map.moveLayer(id)
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+  }, [])
+
   const applyTropicalLayers = useCallback(
     (map: MapLibreMap, data: TropicalGlobeData, visible: boolean) => {
       const vis = visible ? 'visible' : 'none'
 
+      // Rebuild track FeatureCollections from storm arrays if server FC empty
+      let tracks = data.tracks
+      let pastTracks = data.pastTracks ?? { type: 'FeatureCollection' as const, features: [] }
+      if (!tracks.features?.length && data.storms.some((s) => (s.track?.length ?? 0) >= 2)) {
+        tracks = {
+          type: 'FeatureCollection',
+          features: data.storms
+            .filter((s) => (s.track?.length ?? 0) >= 2)
+            .map((s) => ({
+              type: 'Feature' as const,
+              properties: { id: s.id, name: s.name, kind: 'forecast' },
+              geometry: { type: 'LineString', coordinates: s.track! },
+            })),
+        }
+      }
+      if (!pastTracks.features?.length && data.storms.some((s) => (s.pastTrack?.length ?? 0) >= 2)) {
+        pastTracks = {
+          type: 'FeatureCollection',
+          features: data.storms
+            .filter((s) => (s.pastTrack?.length ?? 0) >= 2)
+            .map((s) => ({
+              type: 'Feature' as const,
+              properties: { id: s.id, name: s.name, kind: 'past' },
+              geometry: { type: 'LineString', coordinates: s.pastTrack! },
+            })),
+        }
+      }
+
       const ensureSource = (id: string, fc: TropicalGlobeData['tracks']) => {
+        const geo = fc as unknown as GeoJSON.GeoJSON
         if (map.getSource(id)) {
-          ;(map.getSource(id) as maplibregl.GeoJSONSource).setData(fc as GeoJSON.GeoJSON)
+          ;(map.getSource(id) as maplibregl.GeoJSONSource).setData(geo)
         } else {
-          map.addSource(id, { type: 'geojson', data: fc as GeoJSON.GeoJSON })
+          map.addSource(id, { type: 'geojson', data: geo })
         }
       }
 
       ensureSource('tropical-cones', data.cones)
-      ensureSource('tropical-tracks', data.tracks)
+      ensureSource('tropical-past-tracks', pastTracks)
+      ensureSource('tropical-tracks', tracks)
       ensureSource('tropical-points', data.points)
 
       if (!map.getLayer('tropical-cone-fill')) {
+        // Cone under tracks
         map.addLayer({
           id: 'tropical-cone-fill',
           type: 'fill',
           source: 'tropical-cones',
           paint: {
             'fill-color': '#fbbf24',
-            'fill-opacity': 0.18,
+            'fill-opacity': 0.22,
           },
         })
         map.addLayer({
@@ -165,8 +219,31 @@ export function GlobalRadarGlobe() {
           source: 'tropical-cones',
           paint: {
             'line-color': '#f59e0b',
-            'line-width': 1.5,
-            'line-opacity': 0.85,
+            'line-width': 2,
+            'line-opacity': 0.9,
+          },
+        })
+        // Observed path (where the storm has been)
+        map.addLayer({
+          id: 'tropical-past-track',
+          type: 'line',
+          source: 'tropical-past-tracks',
+          paint: {
+            'line-color': '#e2e8f0',
+            'line-width': 3,
+            'line-opacity': 0.95,
+          },
+        })
+        // Forecast path glow + main line
+        map.addLayer({
+          id: 'tropical-track-glow',
+          type: 'line',
+          source: 'tropical-tracks',
+          paint: {
+            'line-color': '#fb7185',
+            'line-width': 7,
+            'line-opacity': 0.35,
+            'line-blur': 2,
           },
         })
         map.addLayer({
@@ -175,8 +252,9 @@ export function GlobalRadarGlobe() {
           source: 'tropical-tracks',
           paint: {
             'line-color': '#fb7185',
-            'line-width': 2.5,
-            'line-opacity': 0.95,
+            'line-width': 3,
+            'line-opacity': 1,
+            'line-dasharray': [1.2, 1.2],
           },
         })
         map.addLayer({
@@ -185,22 +263,33 @@ export function GlobalRadarGlobe() {
           source: 'tropical-points',
           filter: ['!=', ['get', 'isCenter'], true],
           paint: {
-            'circle-radius': 4,
+            'circle-radius': 5,
             'circle-color': '#fda4af',
-            'circle-stroke-width': 1,
+            'circle-stroke-width': 1.5,
+            'circle-stroke-color': '#fff',
+          },
+        })
+        map.addLayer({
+          id: 'tropical-center-glow',
+          type: 'circle',
+          source: 'tropical-points',
+          filter: ['==', ['get', 'isCenter'], true],
+          paint: {
+            'circle-radius': 10,
+            'circle-color': '#f43f5e',
+            'circle-opacity': 0.35,
+            'circle-stroke-width': 2,
             'circle-stroke-color': '#fff',
           },
         })
       }
 
-      for (const id of [
-        'tropical-cone-fill',
-        'tropical-cone-outline',
-        'tropical-track-line',
-        'tropical-fcst-points',
-      ]) {
+      for (const id of TROPICAL_LAYER_IDS) {
         if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis)
       }
+
+      // Always keep paths above radar + labels
+      raiseTropicalLayers(map)
 
       clearStormMarkers()
       if (!visible) return
@@ -217,6 +306,8 @@ export function GlobalRadarGlobe() {
           s.intensity,
           s.movement ? `Moving ${s.movement}` : '',
           s.pressure ? `${s.pressure} mb` : '',
+          s.track && s.track.length > 1 ? 'Forecast track shown' : '',
+          s.pastTrack && s.pastTrack.length > 1 ? 'Past path shown' : '',
         ]
           .filter(Boolean)
           .join(' · ')
@@ -230,7 +321,7 @@ export function GlobalRadarGlobe() {
         markersRef.current.push(marker)
       }
     },
-    [clearStormMarkers],
+    [clearStormMarkers, raiseTropicalLayers],
   )
 
   const ensureRadarBuffers = useCallback((map: MapLibreMap) => {
@@ -299,6 +390,7 @@ export function GlobalRadarGlobe() {
           maxzoom: 7,
           attribution: 'Radar © RainViewer',
         })
+        // Keep radar under labels so tropical paths (raised above) stay visible on top
         map.addLayer(
           {
             id: nextId,
@@ -319,11 +411,13 @@ export function GlobalRadarGlobe() {
         }
 
         bufRef.current = nextBuf
+        // Re-raise hurricane tracks above freshly inserted radar layer
+        raiseTropicalLayers(map)
       } catch (e) {
         console.warn('[globe] applyFrame failed', e)
       }
     },
-    [ensureRadarBuffers],
+    [ensureRadarBuffers, raiseTropicalLayers],
   )
 
   const stopLoop = useCallback(() => {
@@ -437,13 +531,13 @@ export function GlobalRadarGlobe() {
           if (!cancelled && tropical && mapRef.current) {
             setStorms(tropical.storms)
             applyTropicalLayers(mapRef.current, tropical, true)
-            // If storms active in Atlantic/EP, nudge view toward first storm slightly
+            // Keep global radar in view — only a gentle ease if storms exist
             if (tropical.storms[0]) {
               const s = tropical.storms[0]
               map.easeTo({
-                center: [s.lon, s.lat],
-                zoom: Math.max(map.getZoom(), 2.1),
-                duration: 1200,
+                center: [s.lon * 0.35, s.lat * 0.35 + 10],
+                zoom: Math.min(Math.max(map.getZoom(), 1.6), 2.4),
+                duration: 1400,
               })
             }
           }
@@ -483,7 +577,7 @@ export function GlobalRadarGlobe() {
     }
   }, [opacity])
 
-  // Toggle tropical layer visibility
+  // Toggle tropical layer visibility (radar always stays)
   useEffect(() => {
     const map = mapRef.current
     if (!map || !readyRef.current) return
@@ -491,8 +585,11 @@ export function GlobalRadarGlobe() {
     for (const id of [
       'tropical-cone-fill',
       'tropical-cone-outline',
+      'tropical-past-track',
       'tropical-track-line',
+      'tropical-track-glow',
       'tropical-fcst-points',
+      'tropical-center-glow',
     ]) {
       if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis)
     }
@@ -500,7 +597,8 @@ export function GlobalRadarGlobe() {
       const el = m.getElement()
       if (el) el.style.display = showTropical ? '' : 'none'
     }
-  }, [showTropical])
+    if (showTropical) raiseTropicalLayers(map)
+  }, [showTropical, raiseTropicalLayers])
 
   // Play / pause
   useEffect(() => {
@@ -600,9 +698,17 @@ export function GlobalRadarGlobe() {
                       .filter(Boolean)
                       .join(' · ')}
                   </span>
-                  {s.track && s.track.length > 1 && (
-                    <span className="globe-storm-card-track">Forecast track on map</span>
-                  )}
+                  {(s.track && s.track.length > 1) || (s.pastTrack && s.pastTrack.length > 1) ? (
+                    <span className="globe-storm-card-track">
+                      {[
+                        s.pastTrack && s.pastTrack.length > 1 ? 'Past path' : null,
+                        s.track && s.track.length > 1 ? 'Forecast track' : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' + ')}{' '}
+                      on map
+                    </span>
+                  ) : null}
                 </button>
               </li>
             ))}
@@ -681,9 +787,9 @@ export function GlobalRadarGlobe() {
           </label>
         </div>
         <p className="globe-hint">
-          Drag to rotate · scroll / pinch to zoom · radar (RainViewer)
+          Drag to rotate · scroll / pinch to zoom · radar stays on
           {storms.length
-            ? ` · ${storms.length} tropical cyclone${storms.length > 1 ? 's' : ''} (NHC tracks)`
+            ? ` · ${storms.length} storm${storms.length > 1 ? 's' : ''}: white = past path, pink dashed = forecast`
             : ' · no active NHC tropical cyclones'}
         </p>
       </div>
