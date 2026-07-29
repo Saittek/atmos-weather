@@ -10,6 +10,7 @@ import {
 import { fetchTropicalGlobeData } from '../api/weather'
 import type { TropicalGlobeData, TropicalStorm } from '../api/types'
 import { formatRadarTime } from '../utils/format'
+import { nightPolygonRing, terminatorLine } from '../utils/sunTerminator'
 
 const SPEED_MS = { slow: 900, normal: 520, fast: 300 } as const
 type SpeedKey = keyof typeof SPEED_MS
@@ -116,6 +117,20 @@ const REGIONS: { id: string; label: string; center: [number, number]; zoom: numb
 
 /** Sample longitudes used to pull max-zoom tiles into the cache around the sphere. */
 const WARM_LON_SAMPLES = [0, -90, 90, 180, -45, 45, -135, 135]
+
+/** Global IR / cloud tops (NASA GIBS — no API key). */
+const GIBS_IR_TILES =
+  'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-East_ABI_Band13_Clean_Infrared/default/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png'
+const IR_SOURCE = 'globe-ir'
+const IR_LAYER = 'globe-ir-layer'
+
+function prefersReducedMotion(): boolean {
+  try {
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  } catch {
+    return false
+  }
+}
 
 function buildStyle(basemap: BasemapDef) {
   const sources: Record<string, maplibregl.RasterSourceSpecification> = {
@@ -264,6 +279,7 @@ export function GlobalRadarGlobe() {
   const readyRef = useRef(false)
   const tropicalDataRef = useRef<TropicalGlobeData | null>(null)
   const showTropicalRef = useRef(true)
+  const showDayNightRef = useRef(true)
   const markersRef = useRef<maplibregl.Marker[]>([])
 
   /** Prevent overlapping radar swaps (main flicker source). */
@@ -292,6 +308,8 @@ export function GlobalRadarGlobe() {
   const [showTropical, setShowTropical] = useState(true)
   const [showRadar, setShowRadar] = useState(true)
   const [showLabels, setShowLabels] = useState(true)
+  const [showIR, setShowIR] = useState(false)
+  const [showDayNight, setShowDayNight] = useState(true)
   const [spinning, setSpinning] = useState(false)
   const [basemapId, setBasemapId] = useState<BasemapId>('satellite')
   const [activeRegion, setActiveRegion] = useState('world')
@@ -299,6 +317,7 @@ export function GlobalRadarGlobe() {
   opacityRef.current = opacity
   showRadarRef.current = showRadar
   showTropicalRef.current = showTropical
+  showDayNightRef.current = showDayNight
   spinningRef.current = spinning
   basemapIdRef.current = basemapId
 
@@ -472,6 +491,26 @@ export function GlobalRadarGlobe() {
           nodes.push(
             `<circle class="globe-svg-fcst-pt" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4.5" />`,
           )
+        }
+      }
+
+      // Day / night terminator + soft night fill (SVG, same project as tracks)
+      if (showDayNightRef.current) {
+        const now = new Date()
+        const term = terminatorLine(now, 80)
+        const dTerm = pathFromCoords(term)
+        if (dTerm.includes('L')) {
+          nodes.push(`<path class="globe-svg-terminator" d="${dTerm}" fill="none" />`)
+        }
+        // Night polygon — only front-side segments to avoid chords
+        const night = nightPolygonRing(now, 64)
+        const nightSegs = visibleSegments(night)
+        for (const seg of nightSegs) {
+          if (seg.length < 3) continue
+          const d = seg
+            .map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`)
+            .join(' ')
+          nodes.push(`<path class="globe-svg-night" d="${d} Z" />`)
         }
       }
 
@@ -836,6 +875,37 @@ export function GlobalRadarGlobe() {
           if (!cancelled && tropical && mapRef.current) {
             setStorms(tropical.storms)
             placeMarkers(mapRef.current, tropical, true)
+            // Default camera: frame active storms when any exist
+            if (tropical.storms.length) {
+              const list = tropical.storms
+              const lons = list.flatMap((s) => [
+                s.lon,
+                ...(s.track?.map((c) => c[0]) ?? []),
+                ...(s.pastTrack?.map((c) => c[0]) ?? []),
+              ])
+              const lats = list.flatMap((s) => [
+                s.lat,
+                ...(s.track?.map((c) => c[1]) ?? []),
+                ...(s.pastTrack?.map((c) => c[1]) ?? []),
+              ])
+              if (lons.length && lats.length) {
+                const minLon = Math.min(...lons)
+                const maxLon = Math.max(...lons)
+                const minLat = Math.min(...lats)
+                const maxLat = Math.max(...lats)
+                const span = Math.max(maxLon - minLon, maxLat - minLat, 8)
+                const z = span > 50 ? 1.5 : span > 25 ? 2.1 : span > 12 ? 2.6 : 3.2
+                setActiveRegion('storms')
+                map.easeTo({
+                  center: [(minLon + maxLon) / 2, (minLat + maxLat) / 2],
+                  zoom: z,
+                  bearing: 0,
+                  pitch: 0,
+                  duration: prefersReducedMotion() ? 0 : 1400,
+                  essential: true,
+                })
+              }
+            }
           }
         } catch {
           /* optional */
@@ -910,9 +980,13 @@ export function GlobalRadarGlobe() {
     scheduleOverlay()
   }, [showTropical, scheduleOverlay])
 
-  // Spin on/off
+  // Spin on/off — honor prefers-reduced-motion
   useEffect(() => {
     spinningRef.current = spinning
+    if (spinning && prefersReducedMotion()) {
+      setSpinning(false)
+      return
+    }
     if (spinning) startSpin()
     else {
       stopSpin()
@@ -920,6 +994,51 @@ export function GlobalRadarGlobe() {
     }
     return () => stopSpin()
   }, [spinning, startSpin, stopSpin, scheduleOverlay])
+
+  // Cloud IR layer (GIBS)
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !readyRef.current) return
+    try {
+      if (showIR) {
+        if (!map.getSource(IR_SOURCE)) {
+          map.addSource(IR_SOURCE, {
+            type: 'raster',
+            tiles: [GIBS_IR_TILES],
+            tileSize: 256,
+            maxzoom: 7,
+            attribution: 'IR © NASA GIBS / NOAA GOES',
+          })
+        }
+        if (!map.getLayer(IR_LAYER)) {
+          const before = map.getLayer(RADAR_ID) ? RADAR_ID : map.getLayer('labels') ? 'labels' : undefined
+          map.addLayer(
+            {
+              id: IR_LAYER,
+              type: 'raster',
+              source: IR_SOURCE,
+              paint: {
+                'raster-opacity': 0.55,
+                'raster-fade-duration': 0,
+              },
+            },
+            before,
+          )
+        } else {
+          map.setLayoutProperty(IR_LAYER, 'visibility', 'visible')
+        }
+      } else if (map.getLayer(IR_LAYER)) {
+        map.setLayoutProperty(IR_LAYER, 'visibility', 'none')
+      }
+    } catch (e) {
+      console.warn('[globe] IR layer', e)
+    }
+  }, [showIR])
+
+  useEffect(() => {
+    showDayNightRef.current = showDayNight
+    scheduleOverlay()
+  }, [showDayNight, scheduleOverlay])
 
   // Play / pause — single timer, no double-start
   useEffect(() => {
@@ -1090,6 +1209,26 @@ export function GlobalRadarGlobe() {
           </button>
           <button
             type="button"
+            className={`chip-btn ${showIR ? 'active' : ''}`}
+            onClick={() => setShowIR((v) => !v)}
+            aria-pressed={showIR}
+            disabled={loading}
+            title="Cloud tops / clean IR (NASA GIBS)"
+          >
+            IR
+          </button>
+          <button
+            type="button"
+            className={`chip-btn ${showDayNight ? 'active' : ''}`}
+            onClick={() => setShowDayNight((v) => !v)}
+            aria-pressed={showDayNight}
+            disabled={loading}
+            title="Day / night terminator"
+          >
+            Day/Night
+          </button>
+          <button
+            type="button"
             className={`chip-btn ${showTropical ? 'active' : ''}`}
             onClick={() => setShowTropical((v) => !v)}
             aria-pressed={showTropical}
@@ -1111,8 +1250,12 @@ export function GlobalRadarGlobe() {
             className={`chip-btn ${spinning ? 'active' : ''}`}
             onClick={() => setSpinning((v) => !v)}
             aria-pressed={spinning}
-            disabled={loading}
-            title="Rotate Earth around the poles (equator spins past)"
+            disabled={loading || prefersReducedMotion()}
+            title={
+              prefersReducedMotion()
+                ? 'Spin disabled (reduced motion preference)'
+                : 'Rotate Earth around the poles (equator spins past)'
+            }
           >
             Spin
           </button>
@@ -1148,6 +1291,18 @@ export function GlobalRadarGlobe() {
           <span className="globe-legend-swatch globe-legend-radar" />
           Global precip radar
         </div>
+        {showIR && (
+          <div className="globe-legend-item">
+            <span className="globe-legend-swatch globe-legend-ir" />
+            Cloud IR
+          </div>
+        )}
+        {showDayNight && (
+          <div className="globe-legend-item">
+            <span className="globe-legend-swatch globe-legend-night" />
+            Night side
+          </div>
+        )}
         <div className="globe-legend-item">
           <span className="globe-legend-swatch globe-legend-past" />
           Past track

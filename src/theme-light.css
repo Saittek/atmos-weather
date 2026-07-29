@@ -773,6 +773,48 @@ html.mobile-perf[data-theme='light'] .topbar {
   color: rgba(15, 23, 42, 0.72);
 }
 
+/* What matters now — light */
+[data-theme='light'] .what-matters-now {
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, 0.12);
+  color: #0f172a;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
+}
+[data-theme='light'] .what-matters-now.wmn-extreme {
+  background: linear-gradient(135deg, rgba(254, 226, 226, 0.95), #fff);
+  border-color: rgba(185, 28, 28, 0.4);
+}
+[data-theme='light'] .what-matters-now.wmn-severe {
+  background: linear-gradient(135deg, rgba(255, 237, 213, 0.95), #fff);
+  border-color: rgba(194, 65, 12, 0.35);
+}
+[data-theme='light'] .what-matters-now.wmn-moderate {
+  background: linear-gradient(135deg, rgba(254, 249, 195, 0.9), #fff);
+  border-color: rgba(161, 98, 7, 0.3);
+}
+[data-theme='light'] .wmn-kicker,
+[data-theme='light'] .wmn-when {
+  color: rgba(15, 23, 42, 0.58);
+}
+[data-theme='light'] .wmn-event,
+[data-theme='light'] .wmn-action {
+  color: #0f172a;
+}
+[data-theme='light'] .wmn-sev {
+  background: rgba(15, 23, 42, 0.06);
+  border-color: rgba(15, 23, 42, 0.12);
+  color: #0f172a;
+}
+[data-theme='light'] .wmn-action strong {
+  color: #0369a1;
+}
+[data-theme='light'] .search-section-label {
+  color: rgba(15, 23, 42, 0.55);
+}
+[data-theme='light'] .globe-svg-night {
+  fill: rgba(15, 23, 42, 0.28);
+}
+
 [data-theme='light'] .error-banner,
 [data-theme='light'] .status-toast {
   color: #0f172a;

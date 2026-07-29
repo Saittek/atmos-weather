@@ -1,16 +1,27 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { formatLocationLabel, searchLocations } from '../api/weather'
 import type { LocationResult } from '../api/types'
+import { loadRecentPlaces, pushRecentPlace } from '../utils/recentPlaces'
 
 interface Props {
   onSelect: (loc: LocationResult) => void
   onUseLocation: () => void
   geoLoading: boolean
+  /** Optional sticky home for one-tap access */
+  home?: LocationResult | null
+  onGoHome?: () => void
 }
 
-export function SearchBar({ onSelect, onUseLocation, geoLoading }: Props) {
+export function SearchBar({
+  onSelect,
+  onUseLocation,
+  geoLoading,
+  home,
+  onGoHome,
+}: Props) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<LocationResult[]>([])
+  const [recent, setRecent] = useState<LocationResult[]>(() => loadRecentPlaces())
   const [open, setOpen] = useState(false)
   const [searching, setSearching] = useState(false)
   const [activeIdx, setActiveIdx] = useState(-1)
@@ -62,6 +73,8 @@ export function SearchBar({ onSelect, onUseLocation, geoLoading }: Props) {
   }, [query])
 
   const pick = (r: LocationResult) => {
+    const next = pushRecentPlace(r)
+    setRecent(next)
     onSelect(r)
     setQuery('')
     setOpen(false)
@@ -69,17 +82,22 @@ export function SearchBar({ onSelect, onUseLocation, geoLoading }: Props) {
     setActiveIdx(-1)
   }
 
+  const showRecent = open && query.trim().length < 2 && recent.length > 0
+  const showResults =
+    open && (results.length > 0 || failed || (!searching && query.trim().length >= 2))
+
   const onKeyDown = (e: KeyboardEvent) => {
     if (!open) return
+    const list = showRecent ? recent : results
     if (e.key === 'ArrowDown') {
       e.preventDefault()
-      setActiveIdx((i) => Math.min(i + 1, results.length - 1))
+      setActiveIdx((i) => Math.min(i + 1, list.length - 1))
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
       setActiveIdx((i) => Math.max(i - 1, 0))
-    } else if (e.key === 'Enter' && activeIdx >= 0 && results[activeIdx]) {
+    } else if (e.key === 'Enter' && activeIdx >= 0 && list[activeIdx]) {
       e.preventDefault()
-      pick(results[activeIdx])
+      pick(list[activeIdx])
     } else if (e.key === 'Escape') {
       setOpen(false)
     }
@@ -98,7 +116,10 @@ export function SearchBar({ onSelect, onUseLocation, geoLoading }: Props) {
           data-placeholder-long="Search city, region, or place…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          onFocus={() => (results.length || failed) && setOpen(true)}
+          onFocus={() => {
+            setOpen(true)
+            setRecent(loadRecentPlaces())
+          }}
           onKeyDown={onKeyDown}
           aria-label="Search location"
           aria-autocomplete="list"
@@ -107,6 +128,17 @@ export function SearchBar({ onSelect, onUseLocation, geoLoading }: Props) {
           autoComplete="off"
         />
         {searching && <span className="search-spinner" aria-hidden />}
+        {home && onGoHome && (
+          <button
+            type="button"
+            className="geo-btn home-geo-btn"
+            onClick={onGoHome}
+            title={`Go home · ${home.name || 'Home'}`}
+            aria-label={`Go to home: ${home.name || 'Home'}`}
+          >
+            🏠
+          </button>
+        )}
         <button
           type="button"
           className="geo-btn"
@@ -118,7 +150,31 @@ export function SearchBar({ onSelect, onUseLocation, geoLoading }: Props) {
           {geoLoading ? '…' : '◎'}
         </button>
       </div>
-      {open && (results.length > 0 || failed || (!searching && query.trim().length >= 2)) && (
+      {showRecent && (
+        <ul className="search-results search-recent" role="listbox" id="search-results-list">
+          <li className="search-section-label" role="presentation">
+            Recent
+          </li>
+          {recent.map((r, i) => (
+            <li key={`recent-${r.latitude}-${r.longitude}-${r.name}`}>
+              <button
+                type="button"
+                role="option"
+                aria-selected={i === activeIdx}
+                className={i === activeIdx ? 'active' : ''}
+                onMouseEnter={() => setActiveIdx(i)}
+                onClick={() => pick(r)}
+              >
+                <span className="result-name">{r.name}</span>
+                <span className="result-meta">
+                  {formatLocationLabel(r).replace(`${r.name}, `, '')}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {showResults && !showRecent && (
         <ul className="search-results" role="listbox" id="search-results-list">
           {results.map((r, i) => (
             <li key={`${r.id}-${r.latitude}-${r.longitude}`}>

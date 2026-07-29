@@ -9100,3 +9100,176 @@ html.mobile-perf .earth-nav-glow {
     display: none;
   }
 }
+
+/* ===== What matters now ===== */
+.what-matters-now {
+  margin: 0.15rem 0 0.65rem;
+  padding: 0.85rem 1rem;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--surface-2, rgba(255, 255, 255, 0.06));
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+.what-matters-now.wmn-extreme {
+  border-color: rgba(220, 38, 38, 0.55);
+  background: linear-gradient(135deg, rgba(127, 29, 29, 0.45), rgba(15, 23, 42, 0.5));
+}
+.what-matters-now.wmn-severe {
+  border-color: rgba(234, 88, 12, 0.5);
+  background: linear-gradient(135deg, rgba(154, 52, 18, 0.4), rgba(15, 23, 42, 0.45));
+}
+.what-matters-now.wmn-moderate {
+  border-color: rgba(202, 138, 4, 0.45);
+  background: linear-gradient(135deg, rgba(113, 63, 18, 0.35), rgba(15, 23, 42, 0.4));
+}
+.what-matters-now.wmn-minor {
+  border-color: rgba(37, 99, 235, 0.4);
+}
+.wmn-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+}
+.wmn-badge {
+  font-size: 1.25rem;
+  line-height: 1.2;
+  flex-shrink: 0;
+}
+.wmn-head {
+  flex: 1;
+  min-width: 0;
+}
+.wmn-kicker {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+}
+.wmn-event {
+  margin: 0.15rem 0 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+.wmn-sev {
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.28rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+.wmn-when {
+  margin: 0.45rem 0 0;
+  font-size: 0.82rem;
+  color: var(--text-dim);
+}
+.wmn-areas {
+  opacity: 0.9;
+}
+.wmn-action {
+  margin: 0.45rem 0 0;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  color: var(--text);
+}
+.wmn-action strong {
+  color: var(--accent);
+  font-weight: 750;
+}
+.wmn-more {
+  margin-top: 0.55rem;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 650;
+  font-size: 0.82rem;
+  cursor: pointer;
+  padding: 0.35rem 0;
+  min-height: 44px;
+  text-align: left;
+}
+.wmn-more:hover {
+  text-decoration: underline;
+}
+
+/* Recent search section */
+.search-section-label {
+  padding: 0.35rem 0.75rem 0.2rem;
+  font-size: 0.68rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+}
+.home-geo-btn {
+  background: rgba(56, 189, 248, 0.18) !important;
+}
+
+/* Globe day/night + IR legend */
+.globe-svg-terminator {
+  stroke: #fde68a;
+  stroke-width: 1.5;
+  stroke-opacity: 0.85;
+  fill: none;
+}
+.globe-svg-night {
+  fill: rgba(2, 6, 23, 0.38);
+  stroke: none;
+  pointer-events: none;
+}
+.globe-legend-ir {
+  background: linear-gradient(90deg, #1e1b4b, #a5b4fc, #fef3c7);
+  height: 0.55rem;
+}
+.globe-legend-night {
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  height: 0.55rem;
+}
+
+/* ===== Accessibility: larger tap targets + reduced motion ===== */
+@media (max-width: 720px) {
+  .chip-btn,
+  .geo-btn,
+  .icon-chip,
+  .primary-btn,
+  .wmn-more {
+    min-height: 44px;
+  }
+  .geo-btn,
+  .icon-chip {
+    min-width: 44px;
+  }
+  .search-input {
+    min-height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient-orbs .orb,
+  .earth-nav-glow,
+  .w3d-stage,
+  .w3d-orbit,
+  .spinner,
+  .skeleton,
+  .ptr-indicator {
+    animation: none !important;
+  }
+  .globe-stage .chip-btn,
+  .panel,
+  .chip-btn {
+    transition: none !important;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}

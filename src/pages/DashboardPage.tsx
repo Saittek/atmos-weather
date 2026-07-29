@@ -33,6 +33,7 @@ import { useThreatProximity } from '../hooks/useThreatProximity'
 import { useHomeAlerts } from '../hooks/useHomeAlerts'
 import { sameExactPlace } from '../hooks/useWeather'
 import { ThreatBanner } from '../components/ThreatBanner'
+import { WhatMattersNow } from '../components/WhatMattersNow'
 import { useAuth } from '../hooks/useAuth'
 import { useRainWatch } from '../hooks/useRainWatch'
 import { isDaytimeNow } from '../utils/daylight'
@@ -380,10 +381,11 @@ export default function DashboardPage() {
             )}
           </div>
           <Deferred
-            force={stormMode || !isMobile || radarOpen}
-            rootMargin="200px 0px"
+            /* Defer radar until near viewport (or storm/user-open) so first paint is weather */
+            force={stormMode || radarOpen}
+            rootMargin={isMobile ? '120px 0px' : '320px 0px'}
             minHeight={isMobile ? 320 : 420}
-            placeholder={<MapChunkFallback label="Loading radar when visible…" />}
+            placeholder={<MapChunkFallback label="Radar loads when you scroll here…" />}
           >
             <Suspense fallback={<MapChunkFallback label="Loading live radar…" />}>
               <RadarMap
@@ -509,6 +511,8 @@ export default function DashboardPage() {
           onSelect={loadForLocation}
           onUseLocation={requestMyLocation}
           geoLoading={geoLoading}
+          home={homeLocation}
+          onGoHome={homeLocation ? () => goHome() : undefined}
         />
         <div className="topbar-right">
             <nav className="quick-nav" aria-label="App modes">
@@ -687,6 +691,18 @@ export default function DashboardPage() {
 
                 {/* Directly under “Right now” */}
                 <GlanceModules weather={weather} units={units} air={air} />
+
+                {/* One clear action strip — full NWS text stays in Alerts */}
+                {!alertsMinimized && (
+                  <WhatMattersNow
+                    alerts={activeAlerts}
+                    onOpenAlerts={() => {
+                      document
+                        .getElementById('alerts-panel')
+                        ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                    }}
+                  />
+                )}
 
                 <div id="alerts-panel">
                   {!alertsMinimized && <Alerts alerts={activeAlerts} />}
