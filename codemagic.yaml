@@ -17,6 +17,16 @@ workflows:
     max_build_duration: 90
     instance_type: mac_mini_m2
 
+    # Auto-build TestFlight when main is updated (enable webhook in Codemagic UI).
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+          source: true
+      cancel_previous_builds: true
+
     integrations:
       app_store_connect: Solara
 

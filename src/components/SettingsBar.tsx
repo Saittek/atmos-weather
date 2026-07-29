@@ -4,6 +4,8 @@ import type { DensityMode, ThemeMode } from '../api/types'
 import type { Units } from '../utils/format'
 import { UnitToggle } from './UnitToggle'
 import { AccountMenu } from './AccountMenu'
+import { getEntitlements } from '../lib/entitlements'
+import { isAnalyticsOptedOut, setAnalyticsOptOut } from '../lib/analytics'
 
 interface Props {
   units: Units
@@ -72,6 +74,8 @@ export function SettingsBar({
 }: Props) {
   const [moreOpen, setMoreOpen] = useState(false)
   const moreRef = useRef<HTMLDivElement>(null)
+  const [analyticsOff, setAnalyticsOff] = useState(() => isAnalyticsOptedOut())
+  const plan = getEntitlements()
 
   useEffect(() => {
     if (!moreOpen) return
@@ -98,6 +102,19 @@ export function SettingsBar({
 
   const settingsPanel = (
     <>
+      <div className="settings-more-section settings-plan-card">
+        <span className="settings-more-label">Plan</span>
+        <div className="settings-plan-row">
+          <strong>{plan.plan === 'pro' ? 'Solara Pro' : 'Solara Free'}</strong>
+          <span className="settings-plan-badge">{plan.plan === 'pro' ? 'Pro' : 'Free'}</span>
+        </div>
+        <p className="settings-plan-hint">
+          {plan.plan === 'pro'
+            ? 'Pro unlocks (when available): extended radar history, multi-widget, ad-free.'
+            : 'Core weather, radar, Earth, alerts, and chat stay free. Pro unlocks later — no payment yet.'}
+        </p>
+      </div>
+
       <div className="settings-more-section">
         <span className="settings-more-label">Units</span>
         <UnitToggle units={units} onChange={onUnits} />
@@ -174,6 +191,21 @@ export function SettingsBar({
           <span>
             <strong>Notify</strong>
             <em>Rain watch &amp; alerts (re-registers push when on)</em>
+          </span>
+        </label>
+        <label className="settings-more-row">
+          <input
+            type="checkbox"
+            checked={analyticsOff}
+            onChange={(e) => {
+              const off = e.target.checked
+              setAnalyticsOff(off)
+              setAnalyticsOptOut(off)
+            }}
+          />
+          <span>
+            <strong>Privacy analytics off</strong>
+            <em>Don&apos;t send anonymous page usage (no location stored)</em>
           </span>
         </label>
         {notifyAlerts && onQuietHours && (

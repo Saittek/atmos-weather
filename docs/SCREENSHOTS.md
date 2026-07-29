@@ -6,14 +6,18 @@ Use these shots for App Store Connect (iPhone 6.7" / 6.5" required). Capture fro
 
 | # | Screen | Caption idea |
 |---|--------|----------------|
-| 1 | Dashboard hero + rain risk + dress card | **Know if you’ll get wet — and what to wear** |
+| 1 | Dashboard hero + **next-hour** precip strip | **Know if you’ll get wet** |
 | 2 | Next 2 hours + hourly | **The next few hours, clearly** |
 | 3 | 7-day strip | **Your week at a glance** |
 | 4 | Live radar (open) | **Radar when it matters** |
-| 5 | Alerts (if available) or storm mode | **Stay ahead of severe weather** |
-| 6 | Rain widget `/widget` | **One-tap rain check on your home screen** |
-| 7 | Favorites / pins | **All your places, rain-watched** |
-| 8 | Settings / account | **Units, theme, cloud sync** |
+| 5 | **3D Earth** + hurricane track + radar | **Storms on a real globe** |
+| 6 | Storm Chasers + chase pack share | **Chase desk in your pocket** |
+| 7 | Alerts / What matters now | **Severity, timing, action** |
+| 8 | Rain widget `/widget` | **One-tap rain check on your home screen** |
+| 9 | Favorites / home pin | **All your places, rain-watched** |
+| 10 | Settings (theme + plan Free) | **Units, theme, cloud sync** |
+
+See also **`APP_STORE_LISTING.md`** for subtitle, description, and review notes.
 
 ## How to capture (Simulator)
 

@@ -5,13 +5,32 @@
 | Item | Status |
 |------|--------|
 | Auth rate limiting (login/register) | ✅ Worker `rateLimitAuth` |
+| Chat post IP rate limit + spam filter | ✅ 30/min IP + 4s/user + hourly cap + MOD filter |
 | Production `JWT_SECRET` required | ✅ No more silent `atmos-dev-secret-change-me` |
 | `JWT_SECRET` set on Worker | ✅ Cloudflare secret |
 | `CRON_SECRET` set on Worker | ✅ Cloudflare secret |
 | VAPID key **rotation** | ✅ New public key in `wrangler.toml` + private secret |
+| Health shows secret **presence** only | ✅ `/api/health` → `secrets.jwt/cron/vapidPrivate` |
 | Privacy policy / password 8+ / VAPID docs scrub | ✅ Earlier + this sprint |
 | Codemagic signs main **and** widget bundle IDs | ✅ `BUNDLE_ID` + `BUNDLE_ID_WIDGET` |
+| Codemagic push-to-main trigger | ✅ `ios-testflight` triggering on `main` |
 | GitHub push of feature work | ✅ (after this sprint commit) |
+
+## Rotate secrets (item 22)
+
+```bash
+# JWT (signs users out — do during low traffic)
+openssl rand -base64 48 | wrangler secret put JWT_SECRET
+
+# Cron (update any external cron callers)
+openssl rand -base64 32 | wrangler secret put CRON_SECRET
+
+# Web Push VAPID pair — after rotate, users re-enable Notify
+# Generate with web-push or similar; put private as secret, public in wrangler [vars]
+wrangler secret put VAPID_PRIVATE_KEY
+```
+
+Verify: `curl https://solaraweather.com/api/health` → all `secrets.*` true.
 
 ### Manual cron after rotation
 

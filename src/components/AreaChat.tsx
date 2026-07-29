@@ -196,7 +196,7 @@ export function AreaChat({ location }: Props) {
             <div>
               <strong>{room?.label || `Near ${location.name}`}</strong>
               <span>
-                Local weather chat · be kind · no spam
+                Local weather chat · be kind · no spam · rate limited
                 {activeNearby > 0 ? ` · ${activeNearby} active recently` : ''}
               </span>
             </div>

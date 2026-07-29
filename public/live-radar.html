@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Live Weather Radar — Solara</title>
+    <meta
+      name="description"
+      content="Free live weather radar with smooth loops, US & Canada severe alerts, and storm chaser tools. Open Solara radar for any place."
+    />
+    <meta name="robots" content="index,follow" />
+    <link rel="canonical" href="https://solaraweather.com/live-radar.html" />
+    <meta property="og:title" content="Live Weather Radar — Solara" />
+    <meta
+      property="og:description"
+      content="Animated radar, alerts, and forecasts. Jump straight into Solara’s full-page radar."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://solaraweather.com/live-radar.html" />
+    <meta property="og:image" content="https://solaraweather.com/icons/icon-512.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" type="image/png" href="/icons/favicon-32.png" />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #070b14;
+        --card: rgba(15, 23, 42, 0.85);
+        --text: #f1f5f9;
+        --mute: #94a3b8;
+        --accent: #38bdf8;
+        --border: rgba(148, 163, 184, 0.22);
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        background: radial-gradient(1200px 600px at 20% -10%, #0c4a6e 0%, transparent 50%),
+          radial-gradient(900px 500px at 100% 0%, #1e1b4b 0%, transparent 45%), var(--bg);
+        color: var(--text);
+        line-height: 1.55;
+      }
+      main {
+        max-width: 40rem;
+        margin: 0 auto;
+        padding: 2.5rem 1.25rem 4rem;
+      }
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.55rem;
+        text-decoration: none;
+        color: var(--text);
+        font-weight: 700;
+        margin-bottom: 1.5rem;
+      }
+      .brand img { width: 40px; height: 40px; border-radius: 10px; }
+      h1 { font-size: clamp(1.6rem, 4vw, 2.1rem); line-height: 1.2; margin: 0 0 0.75rem; }
+      .lead { color: var(--mute); font-size: 1.05rem; margin: 0 0 1.5rem; }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 1.1rem 1.2rem;
+        margin: 1rem 0;
+      }
+      ul { margin: 0.4rem 0 0; padding-left: 1.15rem; color: var(--mute); }
+      li { margin: 0.35rem 0; }
+      .actions { display: flex; flex-wrap: wrap; gap: 0.65rem; margin-top: 1.5rem; }
+      a.btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 48px;
+        padding: 0.65rem 1.1rem;
+        border-radius: 12px;
+        font-weight: 700;
+        text-decoration: none;
+        border: 1px solid var(--border);
+      }
+      a.btn-primary {
+        background: linear-gradient(135deg, #0ea5e9, #6366f1);
+        color: #fff;
+        border: none;
+      }
+      a.btn-ghost { color: var(--text); background: rgba(255,255,255,0.06); }
+      footer { margin-top: 2.5rem; color: var(--mute); font-size: 0.85rem; }
+      footer a { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <a class="brand" href="/">
+        <img src="/icons/solara-logo.png" alt="" width="40" height="40" />
+        Solara
+      </a>
+      <h1>Live weather radar</h1>
+      <p class="lead">
+        Smooth animated radar loops, severe weather context, and forecasts — free on the web.
+        Open the full Solara radar for your location in one tap.
+      </p>
+
+      <div class="card">
+        <strong>What you get</strong>
+        <ul>
+          <li>Full-page live radar with play / scrub controls</li>
+          <li>US NWS + Canada ECCC alerts where available</li>
+          <li>Storm Chasers desk for CAPE, threats, and chase packs</li>
+          <li>3D Earth view with global radar and hurricane tracks</li>
+        </ul>
+      </div>
+
+      <div class="actions">
+        <a class="btn btn-primary" href="/radar">Open live radar</a>
+        <a class="btn btn-ghost" href="/">Full forecast app</a>
+        <a class="btn btn-ghost" href="/chase">Storm chasers</a>
+        <a class="btn btn-ghost" href="/globe">3D Earth</a>
+      </div>
+
+      <footer>
+        <p>
+          Solara is a decision-support weather app — always check official NWS / ECCC products for
+          life-safety decisions.
+        </p>
+        <p>
+          <a href="/privacy.html">Privacy</a> · <a href="/support.html">Support</a> ·
+          <a href="/hurricane-tracker.html">Hurricane tracker</a>
+        </p>
+      </footer>
+    </main>
+  </body>
+</html>

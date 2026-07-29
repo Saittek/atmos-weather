@@ -57,6 +57,21 @@ function rateLimitAuth(request, bucket, limit = 12, windowMs = 15 * 60 * 1000) {
   return null
 }
 
+/** Coarse path buckets for privacy-light metrics (no lat/lon/query). */
+function sanitizeMetricPath(raw) {
+  const p = String(raw || '/')
+    .split('?')[0]
+    .split('#')[0]
+    .slice(0, 64)
+  if (p === '/' || p === '/w' || p === '/smoke') return p === '/smoke' ? '/smoke' : '/'
+  if (p.startsWith('/radar')) return '/radar'
+  if (p.startsWith('/globe') || p.startsWith('/earth')) return '/globe'
+  if (p.startsWith('/chase') || p.startsWith('/storm')) return '/chase'
+  if (p.startsWith('/widget')) return '/widget'
+  if (p.startsWith('/other')) return '/other'
+  return '/other'
+}
+
 function getJwtSecret(env) {
   const s = env.JWT_SECRET
   if (typeof s === 'string' && s.length >= 16 && s !== DEV_JWT_FALLBACK) return s
@@ -632,10 +647,66 @@ export default {
         return json({
           ok: true,
           service: 'solara-api',
-          features: ['auth', 'chat', 'fires', 'push', 'weather-videos', 'tropical'],
+          features: [
+            'auth',
+            'chat',
+            'fires',
+            'push',
+            'weather-videos',
+            'tropical',
+            'metrics',
+          ],
           runtime: 'cloudflare-worker',
           pushConfigured: Boolean(getVapidConfig(env)),
+          // Secret presence only — never values
+          secrets: {
+            jwt: Boolean(getJwtSecret(env)),
+            cron: Boolean(env.CRON_SECRET && String(env.CRON_SECRET).length >= 8),
+            vapidPrivate: Boolean(env.VAPID_PRIVATE_KEY),
+          },
         })
+      }
+
+      // ── Privacy-light page metrics (aggregate path counts only) ──
+      if (path === '/api/metrics/page' && method === 'POST') {
+        const limited = rateLimitAuth(request, 'metrics', 60, 60 * 1000)
+        if (limited) return limited
+        const body = await request.json().catch(() => ({}))
+        const raw = String(body?.path || '/')
+        const pathBucket = sanitizeMetricPath(raw)
+        const day = new Date().toISOString().slice(0, 10)
+        try {
+          await env.DB.prepare(
+            `INSERT INTO page_metrics (day, path, hits) VALUES (?, ?, 1)
+             ON CONFLICT(day, path) DO UPDATE SET hits = hits + 1`,
+          )
+            .bind(day, pathBucket)
+            .run()
+        } catch (e) {
+          // Table may not exist yet — soft-fail so clients never break
+          console.warn('metrics insert failed', e?.message || e)
+        }
+        return new Response(null, { status: 204, headers: { ...CORS_HEADERS } })
+      }
+
+      if (path === '/api/metrics/summary' && method === 'GET') {
+        // Optional: protect with CRON_SECRET so public can't scrape
+        const secret = request.headers.get('x-cron-secret') || url.searchParams.get('secret')
+        if (!env.CRON_SECRET || secret !== env.CRON_SECRET) {
+          return err('Unauthorized', 401)
+        }
+        const days = Math.min(30, Math.max(1, Number(url.searchParams.get('days')) || 7))
+        const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10)
+        try {
+          const rows = await env.DB.prepare(
+            `SELECT day, path, hits FROM page_metrics WHERE day >= ? ORDER BY day DESC, hits DESC`,
+          )
+            .bind(since)
+            .all()
+          return json({ days, rows: rows.results || [] })
+        } catch (e) {
+          return err('Metrics unavailable — run migrations', 503)
+        }
       }
 
       // ── Active hurricanes / tropical cyclones + forecast tracks (NHC) ──
@@ -824,6 +895,8 @@ export default {
         }
 
         if (method === 'POST') {
+          const chatLimited = rateLimitAuth(request, 'chat-post', 30, 60 * 1000)
+          if (chatLimited) return chatLimited
           const auth = await requireUser(request, env)
           if (auth.error) return auth.error
           const body = await request.json().catch(() => ({}))
@@ -849,6 +922,7 @@ export default {
           } catch (e) {
             if (e.code === 'EMPTY') return err(e.message)
             if (e.code === 'RATE') return err(e.message, 429)
+            if (e.code === 'MOD') return err(e.message, 400)
             console.error(e)
             return err('Could not send message', 500)
           }

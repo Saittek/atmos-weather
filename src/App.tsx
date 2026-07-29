@@ -1,8 +1,9 @@
 import { lazy, Suspense, useEffect } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import './App.css'
 import './theme-light.css'
 import { applyTheme, bootstrapTheme, readStoredTheme } from './lib/theme'
+import { trackPageView } from './lib/analytics'
 
 // Apply before first paint of lazy routes (dashboard is not the only entry)
 bootstrapTheme()
@@ -45,10 +46,20 @@ function ThemeSync() {
   return null
 }
 
+/** Privacy-light page views (path buckets only). */
+function AnalyticsRoute() {
+  const loc = useLocation()
+  useEffect(() => {
+    trackPageView(loc.pathname)
+  }, [loc.pathname])
+  return null
+}
+
 export default function App() {
   return (
     <>
       <ThemeSync />
+      <AnalyticsRoute />
       <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/" element={<DashboardPage />} />
