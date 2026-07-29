@@ -81,11 +81,18 @@ npx wrangler secret put APNS_PRODUCTION    # true
 Also in Xcode / Apple Developer:
 
 1. `npx cap sync ios`
-2. Enable **Push Notifications** capability
+2. Enable **Push Notifications** on App ID `com.solara.weather` (Identifiers → App IDs)
 3. Create an **APNs Auth Key** (.p8) and note Key ID + Team ID
 4. Use the same bundle id as `APNS_BUNDLE_ID`
+5. Add to `ios/App/App/App.entitlements`:
+   ```xml
+   <key>aps-environment</key>
+   <string>production</string>
+   ```
+   Then re-run Codemagic so a **new** App Store profile includes Push.  
+   (TestFlight currently ships **without** `aps-environment` so archive works before Push is enabled on the App ID.)
 
-Until secrets are set, native still gets **local notifications** for in-app threat proximity (TOR/SVR polygons near you).
+Until secrets + entitlement + App ID capability are set, native still gets **local notifications** for in-app threat proximity (TOR/SVR polygons near you). Web push is unchanged.
 
 ## Privacy
 

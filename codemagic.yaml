@@ -189,8 +189,65 @@ workflows:
           PY
           }
 
+          # Drop stale App Store profiles so --create picks up current App ID capabilities
+          # (App Groups, etc.). Avoids archive failing on outdated profile entitlements.
+          delete_app_store_profiles() {
+            local BID="$1"
+            echo "Deleting existing IOS_APP_STORE profiles for $BID (if any)..."
+            python3 - "$BID" << 'PY' || true
+          import json, subprocess, sys
+          bid = sys.argv[1]
+          def run(cmd):
+              try:
+                  return subprocess.check_output(cmd, stderr=subprocess.STDOUT, text=True)
+              except subprocess.CalledProcessError as e:
+                  print(e.output or str(e), file=sys.stderr)
+                  return None
+          raw = run(["app-store-connect", "profiles", "list", "--json"]) or run(
+              ["app-store-connect", "profiles", "list", "--type", "IOS_APP_STORE", "--json"]
+          )
+          if not raw:
+              print("Could not list profiles; skipping delete")
+              sys.exit(0)
+          try:
+              data = json.loads(raw)
+          except json.JSONDecodeError:
+              print("profiles list not JSON; skip")
+              sys.exit(0)
+          ids = []
+          def walk(o):
+              if isinstance(o, dict):
+                  attrs = o.get("attributes") or {}
+                  name = str(attrs.get("name") or o.get("name") or "")
+                  ptype = str(attrs.get("profileType") or attrs.get("type") or "").upper()
+                  cid = o.get("id")
+                  blob = json.dumps(o).upper()
+                  if cid and ("APP_STORE" in ptype or "APP_STORE" in blob or "IOS_APP_STORE" in blob):
+                      if bid.upper() in blob or bid.replace(".", "").upper() in blob or True:
+                          # Prefer profiles that mention the bundle id in the payload
+                          if bid in json.dumps(o) or "APP_STORE" in ptype or "IOS_APP_STORE" in ptype:
+                              if bid in json.dumps(o):
+                                  ids.append(cid)
+                  for v in o.values():
+                      walk(v)
+              elif isinstance(o, list):
+                  for i in o:
+                      walk(i)
+          walk(data)
+          seen = []
+          for i in ids:
+              if i not in seen:
+                  seen.append(i)
+          print(f"Profile ids to delete for {bid}: {seen}")
+          for cid in seen:
+              print(f"  delete profile {cid}")
+              subprocess.call(["app-store-connect", "profiles", "delete", cid])
+          PY
+          }
+
           fetch_files() {
             local BID="$1"
+            delete_app_store_profiles "$BID"
             echo "Fetching/creating signing files for $BID ..."
             app-store-connect fetch-signing-files "$BID" \
               --type IOS_APP_STORE \
@@ -329,7 +386,8 @@ workflows:
             echo "  2) App ID com.solara.weather.widget + App Group group.com.solara.weather"
             echo "  3) Codemagic 'Solara' integration can create App Store profiles for BOTH bundle IDs"
             echo "  4) Release uses Apple Distribution (not iPhone Developer)"
-            echo "  5) Main + widget App IDs need App Groups (+ Push if entitlements request aps-environment)"
+            echo "  5) Profile missing App Groups: enable group.com.solara.weather on both App IDs"
+            echo "  6) Profile missing Push/aps-environment: either enable Push on App ID OR remove aps-environment from App.entitlements"
             exit "$STATUS"
           fi
 
