@@ -21,13 +21,16 @@ export default function GlobePage() {
             🌍
           </span>
           <div>
-            <strong>Earth Radar</strong>
-            <span>Global mosaic · rotate &amp; zoom</span>
+            <strong>Earth</strong>
+            <span>Live global radar · hurricanes · 3D globe</span>
           </div>
         </div>
         <div className="globe-page-actions">
           <Link to="/radar" className="chip-btn hide-sm">
             Flat radar
+          </Link>
+          <Link to="/chase" className="chip-btn hide-sm">
+            Storm chaser
           </Link>
         </div>
       </header>
