@@ -234,7 +234,48 @@ workflows:
         script: keychain add-certificates
 
       - name: Apply signing to Xcode project
-        script: xcode-project use-profiles
+        script: |
+          set -euo pipefail
+          xcode-project use-profiles
+          cd "$XCODE_WORKSPACE_DIR"
+          echo "=== Post use-profiles: CODE_SIGN / profiles in pbxproj ==="
+          grep -E "CODE_SIGN_|PROVISIONING_PROFILE|PRODUCT_BUNDLE|DEVELOPMENT_TEAM|ProvisioningStyle" \
+            App.xcodeproj/project.pbxproj | sort -u || true
+          echo "=== Profile bundle IDs (decoded) ==="
+          python3 << 'PY'
+          import os, plistlib, subprocess, glob, sys
+          dirs = [
+              os.path.expanduser("~/Library/MobileDevice/Provisioning Profiles"),
+              os.path.expanduser("~/Library/Developer/Xcode/UserData/Provisioning Profiles"),
+          ]
+          found = []
+          for d in dirs:
+              for path in glob.glob(os.path.join(d, "*.mobileprovision")):
+                  try:
+                      raw = subprocess.check_output(
+                          ["security", "cms", "-D", "-i", path], stderr=subprocess.DEVNULL
+                      )
+                      pl = plistlib.loads(raw)
+                      name = pl.get("Name", "?")
+                      app_id = (pl.get("Entitlements") or {}).get("application-identifier", "?")
+                      groups = (pl.get("Entitlements") or {}).get("com.apple.security.application-groups", [])
+                      aps = (pl.get("Entitlements") or {}).get("aps-environment")
+                      found.append((name, app_id, groups, aps, path))
+                      print(f"  {name}")
+                      print(f"    app-id: {app_id}")
+                      print(f"    groups: {groups}")
+                      print(f"    aps: {aps}")
+                  except Exception as e:
+                      print(f"  decode fail {path}: {e}")
+          need = ["com.solara.weather", "com.solara.weather.widget"]
+          ids = " ".join(x[1] for x in found)
+          missing = [b for b in need if b not in ids]
+          if missing:
+              print(f"ERROR: No App Store profile covering: {missing}", file=sys.stderr)
+              print("Create App IDs + App Group group.com.solara.weather in Apple Developer.", file=sys.stderr)
+              sys.exit(1)
+          print("Profiles cover main app + widget OK")
+          PY
 
       - name: Increment iOS build number
         script: |
@@ -245,49 +286,112 @@ workflows:
         script: |
           set -euo pipefail
           cd "$XCODE_WORKSPACE_DIR"
+          mkdir -p build/ios/ipa /tmp/xcodebuild_logs
+
           echo "=== Code signing identities ==="
           security find-identity -v -p codesigning || true
-          echo "=== Provisioning profiles ==="
-          ls -la "$HOME/Library/MobileDevice/Provisioning Profiles" 2>/dev/null || \
-            ls -la "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles" 2>/dev/null || true
-          echo "=== Bundle IDs in project ==="
-          grep -E "PRODUCT_BUNDLE_IDENTIFIER|DEVELOPMENT_TEAM" App.xcodeproj/project.pbxproj | sort -u || true
+          echo "=== Bundle / team / sign settings in project ==="
+          grep -E "PRODUCT_BUNDLE_IDENTIFIER|DEVELOPMENT_TEAM|CODE_SIGN_IDENTITY|CODE_SIGN_STYLE|PROVISIONING_PROFILE" \
+            App.xcodeproj/project.pbxproj | sort -u || true
 
-          # Shared scheme App.xcscheme archives main app + embedded SolaraWidgetExtension
+          ARCHIVE_PATH="$PWD/build/ios/App.xcarchive"
+          EXPORT_PATH="$PWD/build/ios/ipa"
+          EXPORT_PLIST="$PWD/build/ios/ExportOptions.plist"
+          LOG=/tmp/xcodebuild_logs/archive_full.log
+
+          # Raw xcodebuild so the real error is in Codemagic logs (not buried by wrappers).
+          # use-profiles already applied Manual + profile specifiers per target.
           set +e
-          xcode-project build-ipa \
-            --project "$XCODE_PROJECT" \
-            --scheme "$XCODE_SCHEME" \
-            --archive-flags="-destination 'generic/platform=iOS'"
-          STATUS=$?
+          set -o pipefail
+          xcodebuild archive \
+            -project "$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME" \
+            -configuration Release \
+            -archivePath "$ARCHIVE_PATH" \
+            -destination "generic/platform=iOS" \
+            DEVELOPMENT_TEAM=94Y9ZFUHFD \
+            2>&1 | tee "$LOG"
+          STATUS=${PIPESTATUS[0]}
+          set +o pipefail
           set -e
 
           if [ "$STATUS" -ne 0 ]; then
             echo ""
-            echo "=== ARCHIVE FAILED (exit $STATUS) — log tails ==="
-            find /tmp/xcodebuild_logs -type f 2>/dev/null | while read -r f; do
-              echo "----- $f -----"
-              tail -n 150 "$f" || true
-            done
-            # Package resolution failures land here (gzip SLF)
-            find "$HOME/Library/Developer/Xcode/DerivedData" -path "*/Logs/Package/*.xcactivitylog" 2>/dev/null \
-              | tail -n 6 | while read -r log; do
-                echo "----- decode package log: $log -----"
-                gzip -dc "$log" 2>/dev/null | strings | grep -iE "error|fail|unable|missing|invalid|package|dependency|not found" | tail -n 50 || true
-              done
-            find /tmp -name "*xcodebuild*" -type f 2>/dev/null | head -n 20 | while read -r f; do
-              if grep -qiE "error:|Provisioning|CodeSign|No profiles|failed|undefined|cannot find|package" "$f" 2>/dev/null; then
-                echo "----- matches in $f -----"
-                grep -iE "error:|Provisioning|CodeSign|No profiles|failed|undefined|cannot find|package" "$f" | tail -n 40 || true
-              fi
-            done
+            echo "=== ARCHIVE FAILED (exit $STATUS) — error lines ==="
+            grep -iE "error:|fatal error|Provisioning|CodeSign|No profiles|requires a provisioning|entitlement|App Group|does not support|failed with|undefined symbol|cannot find|package |SwiftCompile|Command .* failed|errSec|identity" \
+              "$LOG" | tail -n 100 || true
+            echo ""
+            echo "=== Last 100 lines of archive log ==="
+            tail -n 100 "$LOG" || true
             echo ""
             echo "Common fixes for exit 65:"
             echo "  1) SPM: CapApp-SPM package identities (scripts/fix-ios-spm-paths.mjs)"
             echo "  2) App ID com.solara.weather.widget + App Group group.com.solara.weather"
             echo "  3) Codemagic 'Solara' integration can create App Store profiles for BOTH bundle IDs"
+            echo "  4) Release uses Apple Distribution (not iPhone Developer)"
+            echo "  5) Main + widget App IDs need App Groups (+ Push if entitlements request aps-environment)"
             exit "$STATUS"
           fi
+
+          echo "=== Archive OK — writing ExportOptions + exporting IPA ==="
+          EXPORT_PLIST_PATH="$EXPORT_PLIST" python3 << 'PY'
+          import os, plistlib, subprocess, glob
+          team = "94Y9ZFUHFD"
+          mapping = {}
+          for d in [
+              os.path.expanduser("~/Library/MobileDevice/Provisioning Profiles"),
+              os.path.expanduser("~/Library/Developer/Xcode/UserData/Provisioning Profiles"),
+          ]:
+              for path in glob.glob(os.path.join(d, "*.mobileprovision")):
+                  try:
+                      raw = subprocess.check_output(
+                          ["security", "cms", "-D", "-i", path], stderr=subprocess.DEVNULL
+                      )
+                      pl = plistlib.loads(raw)
+                      app_id = (pl.get("Entitlements") or {}).get("application-identifier", "")
+                      if "." in app_id:
+                          bid = app_id.split(".", 1)[1]
+                          mapping[bid] = pl.get("Name") or ""
+                  except Exception as e:
+                      print("skip", path, e)
+          out = {
+              "method": "app-store",
+              "teamID": team,
+              "signingStyle": "manual",
+              "signingCertificate": "Apple Distribution",
+              "uploadSymbols": True,
+              "provisioningProfiles": {
+                  "com.solara.weather": mapping.get("com.solara.weather", ""),
+                  "com.solara.weather.widget": mapping.get("com.solara.weather.widget", ""),
+              },
+          }
+          path = os.environ["EXPORT_PLIST_PATH"]
+          with open(path, "wb") as f:
+              plistlib.dump(out, f)
+          print("Wrote", path)
+          print("profile map:", mapping)
+          PY
+
+          set +e
+          set -o pipefail
+          xcodebuild -exportArchive \
+            -archivePath "$ARCHIVE_PATH" \
+            -exportPath "$EXPORT_PATH" \
+            -exportOptionsPlist "$EXPORT_PLIST" \
+            2>&1 | tee /tmp/xcodebuild_logs/export_full.log
+          EXP_STATUS=${PIPESTATUS[0]}
+          set +o pipefail
+          set -e
+
+          if [ "$EXP_STATUS" -ne 0 ]; then
+            echo "=== EXPORT FAILED ==="
+            grep -iE "error:|Error |failed|profile|sign" /tmp/xcodebuild_logs/export_full.log | tail -n 40 || true
+            tail -n 80 /tmp/xcodebuild_logs/export_full.log || true
+            exit "$EXP_STATUS"
+          fi
+
+          ls -la "$EXPORT_PATH" || true
+          echo "IPA export OK"
 
       - name: Ensure App Store Connect app exists
         script: |
@@ -403,12 +507,56 @@ workflows:
         script: |
           set -euo pipefail
           cd "$XCODE_WORKSPACE_DIR"
-          xcode-project build-ipa \
-            --project "$XCODE_PROJECT" \
-            --scheme "$XCODE_SCHEME" \
-            --archive-flags="-destination 'generic/platform=iOS'"
+          mkdir -p build/ios/ipa /tmp/xcodebuild_logs
+          ARCHIVE_PATH="$PWD/build/ios/App.xcarchive"
+          EXPORT_PATH="$PWD/build/ios/ipa"
+          EXPORT_PLIST="$PWD/build/ios/ExportOptions.plist"
+          set -o pipefail
+          xcodebuild archive \
+            -project "$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME" \
+            -configuration Release \
+            -archivePath "$ARCHIVE_PATH" \
+            -destination "generic/platform=iOS" \
+            DEVELOPMENT_TEAM=94Y9ZFUHFD \
+            2>&1 | tee /tmp/xcodebuild_logs/archive_full.log
+          EXPORT_PLIST_PATH="$EXPORT_PLIST" python3 << 'PY'
+          import os, plistlib, subprocess, glob
+          mapping = {}
+          for d in [
+              os.path.expanduser("~/Library/MobileDevice/Provisioning Profiles"),
+              os.path.expanduser("~/Library/Developer/Xcode/UserData/Provisioning Profiles"),
+          ]:
+              for path in glob.glob(os.path.join(d, "*.mobileprovision")):
+                  try:
+                      raw = subprocess.check_output(["security", "cms", "-D", "-i", path], stderr=subprocess.DEVNULL)
+                      pl = plistlib.loads(raw)
+                      app_id = (pl.get("Entitlements") or {}).get("application-identifier", "")
+                      if "." in app_id:
+                          mapping[app_id.split(".", 1)[1]] = pl.get("Name") or ""
+                  except Exception:
+                      pass
+          out = {
+              "method": "app-store",
+              "teamID": "94Y9ZFUHFD",
+              "signingStyle": "manual",
+              "signingCertificate": "Apple Distribution",
+              "uploadSymbols": True,
+              "provisioningProfiles": {
+                  "com.solara.weather": mapping.get("com.solara.weather", ""),
+                  "com.solara.weather.widget": mapping.get("com.solara.weather.widget", ""),
+              },
+          }
+          with open(os.environ["EXPORT_PLIST_PATH"], "wb") as f:
+              plistlib.dump(out, f)
+          PY
+          xcodebuild -exportArchive \
+            -archivePath "$ARCHIVE_PATH" \
+            -exportPath "$EXPORT_PATH" \
+            -exportOptionsPlist "$EXPORT_PLIST"
     artifacts:
       - ios/App/build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
     publishing:
       email:
         recipients:
