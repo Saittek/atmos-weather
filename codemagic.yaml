@@ -50,10 +50,33 @@ workflows:
 
       - name: Build web + Capacitor iOS
         script: |
+          set -euo pipefail
           export CAPACITOR=1
           export VITE_API_BASE="${VITE_API_BASE:-https://solaraweather.com}"
           npm run build -- --base ./
           npx cap sync ios
+          # Windows checkouts / some Cap versions write backslashes into Package.swift —
+          # SwiftPM on macOS cannot resolve those local paths (archive fails with code 65).
+          python3 << 'PY'
+          from pathlib import Path
+          p = Path("ios/App/CapApp-SPM/Package.swift")
+          if not p.exists():
+              raise SystemExit(f"Missing {p}")
+          text = p.read_text(encoding="utf-8")
+          fixed = text.replace("\\\\", "/").replace("\\", "/")
+          if fixed != text:
+              p.write_text(fixed, encoding="utf-8")
+              print("Normalized CapApp-SPM/Package.swift path separators for macOS")
+          else:
+              print("CapApp-SPM/Package.swift paths already POSIX")
+          print("--- Package.swift dependencies ---")
+          for line in fixed.splitlines():
+              if "path:" in line or "url:" in line:
+                  print(line)
+          PY
+          # Resolve packages early so archive errors are clearer
+          cd ios/App
+          xcodebuild -resolvePackageDependencies -project App.xcodeproj -scheme App || true
 
       - name: Set up keychain
         script: keychain initialize
@@ -219,12 +242,50 @@ workflows:
         script: |
           set -euo pipefail
           cd "$XCODE_WORKSPACE_DIR"
+          echo "=== Code signing identities ==="
+          security find-identity -v -p codesigning || true
+          echo "=== Provisioning profiles ==="
+          ls -la "$HOME/Library/MobileDevice/Provisioning Profiles" 2>/dev/null || \
+            ls -la "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles" 2>/dev/null || true
+          echo "=== Bundle IDs in project ==="
+          grep -E "PRODUCT_BUNDLE_IDENTIFIER|DEVELOPMENT_TEAM" App.xcodeproj/project.pbxproj | sort -u || true
+
           # Shared scheme App.xcscheme archives main app + embedded SolaraWidgetExtension
-          # destination flag avoids some Xcode archive host-architecture issues
+          set +e
           xcode-project build-ipa \
             --project "$XCODE_PROJECT" \
             --scheme "$XCODE_SCHEME" \
             --archive-flags="-destination 'generic/platform=iOS'"
+          STATUS=$?
+          set -e
+
+          if [ "$STATUS" -ne 0 ]; then
+            echo ""
+            echo "=== ARCHIVE FAILED (exit $STATUS) — log tails ==="
+            # Codemagic / xcode-project often writes here
+            find /tmp/xcodebuild_logs -type f 2>/dev/null | while read -r f; do
+              echo "----- $f -----"
+              tail -n 150 "$f" || true
+            done
+            # Fallback: recent build logs
+            find "$HOME/Library/Developer/Xcode/DerivedData" -name "*.xcactivitylog" 2>/dev/null \
+              | tail -n 2 | while read -r f; do
+                echo "----- activity log present: $f -----"
+              done
+            # Grep common failure signatures from any text logs
+            find /tmp -name "*xcodebuild*" -type f 2>/dev/null | head -n 20 | while read -r f; do
+              if grep -qiE "error:|Provisioning|CodeSign|No profiles|failed|undefined|cannot find" "$f" 2>/dev/null; then
+                echo "----- matches in $f -----"
+                grep -iE "error:|Provisioning|CodeSign|No profiles|failed|undefined|cannot find" "$f" | tail -n 40 || true
+              fi
+            done
+            echo ""
+            echo "Common fixes for exit 65:"
+            echo "  1) App ID com.solara.weather.widget exists + App Group group.com.solara.weather"
+            echo "  2) Codemagic integration 'Solara' can create App Store profiles for BOTH bundle IDs"
+            echo "  3) CapApp-SPM Package.swift must use forward-slash local paths (see normalize step)"
+            exit "$STATUS"
+          fi
 
       - name: Ensure App Store Connect app exists
         script: |
@@ -247,6 +308,7 @@ workflows:
       - ios/App/build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Logs/Build/*.xcactivitylog
 
     publishing:
       email:
