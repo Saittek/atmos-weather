@@ -38,12 +38,105 @@ function coordsFromLine(feature) {
   return []
 }
 
+/** All LineString coordinate arrays from a FeatureCollection (keeps segments separate). */
+function lineSegmentsFromFc(fc) {
+  const segs = []
+  for (const f of fc?.features ?? []) {
+    const g = f?.geometry
+    if (!g) continue
+    if (g.type === 'LineString' && g.coordinates?.length >= 2) {
+      segs.push(g.coordinates.map((c) => [c[0], c[1]]))
+    } else if (g.type === 'MultiLineString') {
+      for (const line of g.coordinates ?? []) {
+        if (line?.length >= 2) segs.push(line.map((c) => [c[0], c[1]]))
+      }
+    }
+  }
+  return segs
+}
+
+/**
+ * Chain short past-track segments into one continuous path by matching endpoints.
+ * NHC MapServer often returns many 2–8 point pieces instead of a single LineString.
+ */
+function mergeLineSegments(segments) {
+  if (!segments?.length) return []
+  const remaining = segments
+    .map((s) => s.map((c) => [Number(c[0]), Number(c[1])]))
+    .filter((s) => s.length >= 2)
+  if (!remaining.length) return []
+
+  // Prefer longest segment as seed (usually the best continuous piece)
+  remaining.sort((a, b) => b.length - a.length)
+  let chain = remaining.shift()
+  let guard = 0
+  while (remaining.length && guard < 500) {
+    guard++
+    const head = chain[0]
+    const tail = chain[chain.length - 1]
+    let bestIdx = -1
+    let bestMode = null // 'prepend' | 'append' | 'prepend-rev' | 'append-rev'
+    let bestDist = 0.35 // degrees — segments farther than this are separate pieces
+
+    for (let i = 0; i < remaining.length; i++) {
+      const seg = remaining[i]
+      const s0 = seg[0]
+      const s1 = seg[seg.length - 1]
+      const trials = [
+        { mode: 'append', d: Math.hypot(tail[0] - s0[0], tail[1] - s0[1]) },
+        { mode: 'append-rev', d: Math.hypot(tail[0] - s1[0], tail[1] - s1[1]) },
+        { mode: 'prepend', d: Math.hypot(head[0] - s1[0], head[1] - s1[1]) },
+        { mode: 'prepend-rev', d: Math.hypot(head[0] - s0[0], head[1] - s0[1]) },
+      ]
+      for (const t of trials) {
+        if (t.d < bestDist) {
+          bestDist = t.d
+          bestIdx = i
+          bestMode = t.mode
+        }
+      }
+    }
+    if (bestIdx < 0) break
+    const seg = remaining.splice(bestIdx, 1)[0]
+    if (bestMode === 'append') chain = chain.concat(seg.slice(1))
+    else if (bestMode === 'append-rev') chain = chain.concat(seg.slice(0, -1).reverse())
+    else if (bestMode === 'prepend') chain = seg.slice(0, -1).concat(chain)
+    else if (bestMode === 'prepend-rev') chain = seg.slice(1).reverse().concat(chain)
+  }
+
+  // If leftovers remain (gaps), sort by first-lon and concatenate with gaps kept as MultiLine later
+  if (remaining.length) {
+    const extras = remaining.sort((a, b) => a[0][0] - b[0][0])
+    return { primary: chain, extras }
+  }
+  return { primary: chain, extras: [] }
+}
+
 function polygonFromFeature(feature) {
   const g = feature?.geometry
   if (!g) return null
   if (g.type === 'Polygon') return g.coordinates
   if (g.type === 'MultiPolygon') return g.coordinates[0] || null
   return null
+}
+
+/** Downsample ring for lighter client rendering (globe fill can choke on 2k+ verts). */
+function simplifyRing(ring, maxPts = 96) {
+  if (!ring || ring.length <= maxPts) return ring
+  const out = []
+  const step = (ring.length - 1) / (maxPts - 1)
+  for (let i = 0; i < maxPts - 1; i++) {
+    const idx = Math.round(i * step)
+    out.push([ring[idx][0], ring[idx][1]])
+  }
+  // Close ring
+  const first = out[0]
+  const last = ring[ring.length - 1]
+  out.push([last[0], last[1]])
+  if (out[out.length - 1][0] !== first[0] || out[out.length - 1][1] !== first[1]) {
+    out.push([first[0], first[1]])
+  }
+  return out
 }
 
 function classificationLabel(code) {
@@ -126,9 +219,28 @@ export async function getTropicalGlobeData() {
         fetchGeoJson(base + 8), // Past Track (observed path)
       ])
 
-      if (track?.features?.[0]) {
-        const line = coordsFromLine(track.features[0])
-        if (line.length >= 2) {
+      if (track?.features?.length) {
+        // Prefer longest forecast line if multiple features
+        let best = []
+        for (const f of track.features) {
+          const line = coordsFromLine(f)
+          if (line.length > best.length) best = line
+        }
+        if (best.length >= 2) {
+          // Ensure path includes current center so track meets the storm marker
+          const first = best[0]
+          const last = best[best.length - 1]
+          const dFirst = Math.hypot(first[0] - lon, first[1] - lat)
+          const dLast = Math.hypot(last[0] - lon, last[1] - lat)
+          let line = best
+          if (dFirst > 0.15 && dLast > 0.15) {
+            // Insert current position at the nearer end
+            line = dFirst <= dLast ? [[lon, lat], ...best] : [...best, [lon, lat]]
+          } else if (dFirst <= dLast && dFirst > 0.01) {
+            line = [[lon, lat], ...best]
+          } else if (dLast < dFirst && dLast > 0.01) {
+            line = [...best, [lon, lat]]
+          }
           storm.track = line
           trackFeatures.push({
             type: 'Feature',
@@ -146,12 +258,14 @@ export async function getTropicalGlobeData() {
         }
       }
 
-      // Observed path already taken (best/past track)
+      // Observed path already taken (best/past track) — often many short segments
       if (pastTrack?.features?.length) {
-        for (const f of pastTrack.features) {
-          const line = coordsFromLine(f)
-          if (line.length < 2) continue
-          storm.pastTrack = line
+        const segs = lineSegmentsFromFc(pastTrack)
+        const merged = mergeLineSegments(segs)
+        const primary = merged.primary || []
+        const extras = merged.extras || []
+        if (primary.length >= 2) {
+          storm.pastTrack = primary
           pastTrackFeatures.push({
             type: 'Feature',
             properties: {
@@ -162,20 +276,43 @@ export async function getTropicalGlobeData() {
             },
             geometry: {
               type: 'LineString',
-              coordinates: line,
+              coordinates: primary,
             },
           })
+        }
+        // Keep extra disconnected pieces as MultiLine so history isn't lost
+        if (extras.length) {
+          pastTrackFeatures.push({
+            type: 'Feature',
+            properties: {
+              id,
+              name,
+              classification,
+              kind: 'past',
+            },
+            geometry: {
+              type: 'MultiLineString',
+              coordinates: extras,
+            },
+          })
+          // Expose full history on storm for SVG overlay
+          storm.pastTrackSegments = [primary, ...extras].filter((s) => s.length >= 2)
+        } else if (primary.length >= 2) {
+          storm.pastTrackSegments = [primary]
         }
       }
 
       if (cone?.features?.[0]) {
         const poly = polygonFromFeature(cone.features[0])
-        if (poly) {
+        if (poly && poly[0]) {
+          const ring = simplifyRing(poly[0], 100)
+          const holes = poly.slice(1).map((h) => simplifyRing(h, 40))
           coneFeatures.push({
             type: 'Feature',
             properties: { id, name },
-            geometry: { type: 'Polygon', coordinates: poly },
+            geometry: { type: 'Polygon', coordinates: [ring, ...holes] },
           })
+          storm.coneRing = ring
         }
       }
 

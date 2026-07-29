@@ -8,7 +8,7 @@ import {
   type RadarFrame,
 } from '../api/radar'
 import { fetchTropicalGlobeData } from '../api/weather'
-import type { TropicalGlobeData, TropicalStorm } from '../api/types'
+import type { GeoJsonFeatureCollection, TropicalGlobeData, TropicalStorm } from '../api/types'
 import { formatRadarTime } from '../utils/format'
 
 const SPEED_MS = { slow: 900, normal: 480, fast: 260 } as const
@@ -102,6 +102,7 @@ function waitForIdle(map: MapLibreMap, timeoutMs = 12000): Promise<void> {
 
 export function GlobalRadarGlobe() {
   const containerRef = useRef<HTMLDivElement>(null)
+  const trackSvgRef = useRef<SVGSVGElement>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
   const playingRef = useRef(false)
   const frameIdxRef = useRef(0)
@@ -112,6 +113,8 @@ export function GlobalRadarGlobe() {
   /** Which radar buffer is currently visible: 0 = A, 1 = B */
   const bufRef = useRef<0 | 1>(0)
   const readyRef = useRef(false)
+  const tropicalDataRef = useRef<TropicalGlobeData | null>(null)
+  const showTropicalRef = useRef(true)
 
   const [loading, setLoading] = useState(true)
   const [loadHint, setLoadHint] = useState('Loading Earth…')
@@ -127,6 +130,7 @@ export function GlobalRadarGlobe() {
   const markersRef = useRef<maplibregl.Marker[]>([])
 
   opacityRef.current = opacity
+  showTropicalRef.current = showTropical
 
   const clearStormMarkers = useCallback(() => {
     for (const m of markersRef.current) m.remove()
@@ -156,13 +160,138 @@ export function GlobalRadarGlobe() {
     }
   }, [])
 
+  /**
+   * Draw past/forecast tracks + cones as SVG on top of the canvas.
+   * MapLibre globe GeoJSON line/fill layers are unreliable; markers already work via project().
+   */
+  const redrawTrackOverlay = useCallback(() => {
+    const map = mapRef.current
+    const svg = trackSvgRef.current
+    const data = tropicalDataRef.current
+    if (!svg) return
+    if (!map || !data || !showTropicalRef.current || !data.storms.length) {
+      svg.innerHTML = ''
+      svg.style.display = 'none'
+      return
+    }
+
+    const canvas = map.getCanvas()
+    const w = canvas.clientWidth || canvas.width
+    const h = canvas.clientHeight || canvas.height
+    if (w < 2 || h < 2) return
+
+    svg.style.display = ''
+    svg.setAttribute('width', String(w))
+    svg.setAttribute('height', String(h))
+    svg.setAttribute('viewBox', `0 0 ${w} ${h}`)
+
+    const projectLine = (coords: [number, number][]): string => {
+      const parts: string[] = []
+      let penDown = false
+      for (const [lon, lat] of coords) {
+        if (!Number.isFinite(lon) || !Number.isFinite(lat)) {
+          penDown = false
+          continue
+        }
+        const p = map.project([lon, lat])
+        // Skip points far outside the viewport (behind globe / off-screen)
+        if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) {
+          penDown = false
+          continue
+        }
+        if (p.x < -w || p.x > w * 2 || p.y < -h || p.y > h * 2) {
+          penDown = false
+          continue
+        }
+        parts.push(`${penDown ? 'L' : 'M'}${p.x.toFixed(1)},${p.y.toFixed(1)}`)
+        penDown = true
+      }
+      return parts.join(' ')
+    }
+
+    const nodes: string[] = []
+
+    for (const s of data.storms) {
+      // Forecast cone (amber)
+      const ring =
+        s.coneRing ??
+        (data.cones?.features
+          ?.find((f) => f.properties?.id === s.id || f.properties?.name === s.name)
+          ?.geometry?.coordinates as [number, number][][] | undefined)?.[0]
+      if (ring && ring.length >= 3) {
+        const d = projectLine(ring as [number, number][])
+        if (d.includes('L')) {
+          nodes.push(
+            `<path class="globe-svg-cone" d="${d} Z" />`,
+            `<path class="globe-svg-cone-stroke" d="${d} Z" fill="none" />`,
+          )
+        }
+      }
+
+      // Past path (white)
+      const pastSegs: [number, number][][] =
+        s.pastTrackSegments?.length
+          ? s.pastTrackSegments
+          : s.pastTrack && s.pastTrack.length >= 2
+            ? [s.pastTrack]
+            : []
+      for (const seg of pastSegs) {
+        const d = projectLine(seg)
+        if (d.includes('L')) {
+          nodes.push(`<path class="globe-svg-past-glow" d="${d}" fill="none" />`)
+          nodes.push(`<path class="globe-svg-past" d="${d}" fill="none" />`)
+        }
+      }
+
+      // Forecast path (pink dashed)
+      if (s.track && s.track.length >= 2) {
+        const d = projectLine(s.track)
+        if (d.includes('L')) {
+          nodes.push(`<path class="globe-svg-fcst-glow" d="${d}" fill="none" />`)
+          nodes.push(`<path class="globe-svg-fcst" d="${d}" fill="none" />`)
+        }
+      }
+
+      // Forecast advisory points
+      if (s.forecastPoints?.length) {
+        for (const pt of s.forecastPoints) {
+          const p = map.project([pt.lon, pt.lat])
+          if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) continue
+          if (p.x < 0 || p.x > w || p.y < 0 || p.y > h) continue
+          nodes.push(
+            `<circle class="globe-svg-fcst-pt" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4.5" />`,
+          )
+        }
+      }
+    }
+
+    // Also draw any FeatureCollection tracks not mirrored on storms (safety net)
+    for (const f of data.tracks?.features ?? []) {
+      if (f.geometry?.type === 'LineString' && Array.isArray(f.geometry.coordinates)) {
+        const name = String(f.properties?.name ?? '')
+        if (data.storms.some((s) => s.name === name && (s.track?.length ?? 0) >= 2)) continue
+        const d = projectLine(f.geometry.coordinates as [number, number][])
+        if (d.includes('L')) {
+          nodes.push(`<path class="globe-svg-fcst" d="${d}" fill="none" />`)
+        }
+      }
+    }
+
+    svg.innerHTML = nodes.join('')
+  }, [])
+
   const applyTropicalLayers = useCallback(
     (map: MapLibreMap, data: TropicalGlobeData, visible: boolean) => {
       const vis = visible ? 'visible' : 'none'
+      tropicalDataRef.current = data
+      showTropicalRef.current = visible
 
       // Rebuild track FeatureCollections from storm arrays if server FC empty
-      let tracks = data.tracks
+      let tracks = data.tracks ?? { type: 'FeatureCollection' as const, features: [] }
       let pastTracks = data.pastTracks ?? { type: 'FeatureCollection' as const, features: [] }
+      let cones = data.cones ?? { type: 'FeatureCollection' as const, features: [] }
+      let points = data.points ?? { type: 'FeatureCollection' as const, features: [] }
+
       if (!tracks.features?.length && data.storms.some((s) => (s.track?.length ?? 0) >= 2)) {
         tracks = {
           type: 'FeatureCollection',
@@ -175,124 +304,181 @@ export function GlobalRadarGlobe() {
             })),
         }
       }
-      if (!pastTracks.features?.length && data.storms.some((s) => (s.pastTrack?.length ?? 0) >= 2)) {
-        pastTracks = {
+      if (!pastTracks.features?.length) {
+        const feats: GeoJsonFeatureCollection['features'] = []
+        for (const s of data.storms) {
+          const segs =
+            s.pastTrackSegments?.length
+              ? s.pastTrackSegments
+              : s.pastTrack && s.pastTrack.length >= 2
+                ? [s.pastTrack]
+                : []
+          for (const seg of segs) {
+            feats.push({
+              type: 'Feature',
+              properties: { id: s.id, name: s.name, kind: 'past' },
+              geometry: { type: 'LineString', coordinates: seg },
+            })
+          }
+        }
+        if (feats.length) pastTracks = { type: 'FeatureCollection', features: feats }
+      }
+      if (!cones.features?.length && data.storms.some((s) => (s.coneRing?.length ?? 0) >= 3)) {
+        cones = {
           type: 'FeatureCollection',
           features: data.storms
-            .filter((s) => (s.pastTrack?.length ?? 0) >= 2)
+            .filter((s) => (s.coneRing?.length ?? 0) >= 3)
             .map((s) => ({
               type: 'Feature' as const,
-              properties: { id: s.id, name: s.name, kind: 'past' },
-              geometry: { type: 'LineString', coordinates: s.pastTrack! },
+              properties: { id: s.id, name: s.name },
+              geometry: { type: 'Polygon', coordinates: [s.coneRing!] },
             })),
         }
       }
+      if (!points.features?.length) {
+        const feats: GeoJsonFeatureCollection['features'] = []
+        for (const s of data.storms) {
+          feats.push({
+            type: 'Feature',
+            properties: { id: s.id, name: s.name, isCenter: true, label: 'Now' },
+            geometry: { type: 'Point', coordinates: [s.lon, s.lat] },
+          })
+          for (const pt of s.forecastPoints ?? []) {
+            feats.push({
+              type: 'Feature',
+              properties: {
+                id: s.id,
+                name: s.name,
+                label: pt.label,
+                windKt: pt.windKt,
+              },
+              geometry: { type: 'Point', coordinates: [pt.lon, pt.lat] },
+            })
+          }
+        }
+        points = { type: 'FeatureCollection', features: feats }
+      }
 
-      const ensureSource = (id: string, fc: TropicalGlobeData['tracks']) => {
+      const ensureSource = (id: string, fc: { type: string; features: unknown[] }) => {
         const geo = fc as unknown as GeoJSON.GeoJSON
-        if (map.getSource(id)) {
-          ;(map.getSource(id) as maplibregl.GeoJSONSource).setData(geo)
-        } else {
-          map.addSource(id, { type: 'geojson', data: geo })
+        try {
+          if (map.getSource(id)) {
+            ;(map.getSource(id) as maplibregl.GeoJSONSource).setData(geo)
+          } else {
+            map.addSource(id, { type: 'geojson', data: geo })
+          }
+        } catch (e) {
+          console.warn('[globe] ensureSource', id, e)
         }
       }
 
-      ensureSource('tropical-cones', data.cones)
+      ensureSource('tropical-cones', cones)
       ensureSource('tropical-past-tracks', pastTracks)
       ensureSource('tropical-tracks', tracks)
-      ensureSource('tropical-points', data.points)
+      ensureSource('tropical-points', points)
 
-      if (!map.getLayer('tropical-cone-fill')) {
-        // Cone under tracks
-        map.addLayer({
-          id: 'tropical-cone-fill',
-          type: 'fill',
-          source: 'tropical-cones',
-          paint: {
-            'fill-color': '#fbbf24',
-            'fill-opacity': 0.22,
-          },
-        })
-        map.addLayer({
-          id: 'tropical-cone-outline',
-          type: 'line',
-          source: 'tropical-cones',
-          paint: {
-            'line-color': '#f59e0b',
-            'line-width': 2,
-            'line-opacity': 0.9,
-          },
-        })
-        // Observed path (where the storm has been)
-        map.addLayer({
-          id: 'tropical-past-track',
-          type: 'line',
-          source: 'tropical-past-tracks',
-          paint: {
-            'line-color': '#e2e8f0',
-            'line-width': 3,
-            'line-opacity': 0.95,
-          },
-        })
-        // Forecast path glow + main line
-        map.addLayer({
-          id: 'tropical-track-glow',
-          type: 'line',
-          source: 'tropical-tracks',
-          paint: {
-            'line-color': '#fb7185',
-            'line-width': 7,
-            'line-opacity': 0.35,
-            'line-blur': 2,
-          },
-        })
-        map.addLayer({
-          id: 'tropical-track-line',
-          type: 'line',
-          source: 'tropical-tracks',
-          paint: {
-            'line-color': '#fb7185',
-            'line-width': 3,
-            'line-opacity': 1,
-            'line-dasharray': [1.2, 1.2],
-          },
-        })
-        map.addLayer({
-          id: 'tropical-fcst-points',
-          type: 'circle',
-          source: 'tropical-points',
-          filter: ['!=', ['get', 'isCenter'], true],
-          paint: {
-            'circle-radius': 5,
-            'circle-color': '#fda4af',
-            'circle-stroke-width': 1.5,
-            'circle-stroke-color': '#fff',
-          },
-        })
-        map.addLayer({
-          id: 'tropical-center-glow',
-          type: 'circle',
-          source: 'tropical-points',
-          filter: ['==', ['get', 'isCenter'], true],
-          paint: {
-            'circle-radius': 10,
-            'circle-color': '#f43f5e',
-            'circle-opacity': 0.35,
-            'circle-stroke-width': 2,
-            'circle-stroke-color': '#fff',
-          },
-        })
+      const addLayerSafe = (layer: maplibregl.AddLayerObject) => {
+        try {
+          if (!map.getLayer(layer.id)) map.addLayer(layer)
+        } catch (e) {
+          console.warn('[globe] addLayer', layer.id, e)
+        }
       }
+
+      // MapLibre globe: keep GeoJSON as backup; SVG overlay is primary for paths
+      addLayerSafe({
+        id: 'tropical-cone-fill',
+        type: 'fill',
+        source: 'tropical-cones',
+        paint: {
+          'fill-color': '#fbbf24',
+          'fill-opacity': 0.18,
+        },
+      })
+      addLayerSafe({
+        id: 'tropical-cone-outline',
+        type: 'line',
+        source: 'tropical-cones',
+        paint: {
+          'line-color': '#f59e0b',
+          'line-width': 2.5,
+          'line-opacity': 0.95,
+        },
+      })
+      addLayerSafe({
+        id: 'tropical-past-track',
+        type: 'line',
+        source: 'tropical-past-tracks',
+        paint: {
+          'line-color': '#f8fafc',
+          'line-width': 4,
+          'line-opacity': 1,
+        },
+      })
+      addLayerSafe({
+        id: 'tropical-track-glow',
+        type: 'line',
+        source: 'tropical-tracks',
+        paint: {
+          'line-color': '#fb7185',
+          'line-width': 10,
+          'line-opacity': 0.4,
+          'line-blur': 1.5,
+        },
+      })
+      addLayerSafe({
+        id: 'tropical-track-line',
+        type: 'line',
+        source: 'tropical-tracks',
+        paint: {
+          'line-color': '#fb7185',
+          'line-width': 4,
+          'line-opacity': 1,
+        },
+      })
+      addLayerSafe({
+        id: 'tropical-fcst-points',
+        type: 'circle',
+        source: 'tropical-points',
+        filter: ['!=', ['get', 'isCenter'], true],
+        paint: {
+          'circle-radius': 5,
+          'circle-color': '#fda4af',
+          'circle-stroke-width': 1.5,
+          'circle-stroke-color': '#fff',
+        },
+      })
+      addLayerSafe({
+        id: 'tropical-center-glow',
+        type: 'circle',
+        source: 'tropical-points',
+        filter: ['==', ['get', 'isCenter'], true],
+        paint: {
+          'circle-radius': 10,
+          'circle-color': '#f43f5e',
+          'circle-opacity': 0.35,
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#fff',
+        },
+      })
 
       for (const id of TROPICAL_LAYER_IDS) {
-        if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis)
+        if (map.getLayer(id)) {
+          try {
+            map.setLayoutProperty(id, 'visibility', vis)
+          } catch {
+            /* ignore */
+          }
+        }
       }
 
-      // Always keep paths above radar + labels
       raiseTropicalLayers(map)
 
       clearStormMarkers()
-      if (!visible) return
+      if (!visible) {
+        redrawTrackOverlay()
+        return
+      }
 
       for (const s of data.storms) {
         const el = document.createElement('button')
@@ -320,8 +506,11 @@ export function GlobalRadarGlobe() {
           .addTo(map)
         markersRef.current.push(marker)
       }
+
+      // SVG paths always on top of canvas (same projection as markers)
+      redrawTrackOverlay()
     },
-    [clearStormMarkers, raiseTropicalLayers],
+    [clearStormMarkers, raiseTropicalLayers, redrawTrackOverlay],
   )
 
   const ensureRadarBuffers = useCallback((map: MapLibreMap) => {
@@ -531,14 +720,39 @@ export function GlobalRadarGlobe() {
           if (!cancelled && tropical && mapRef.current) {
             setStorms(tropical.storms)
             applyTropicalLayers(mapRef.current, tropical, true)
-            // Keep global radar in view — only a gentle ease if storms exist
-            if (tropical.storms[0]) {
-              const s = tropical.storms[0]
-              map.easeTo({
-                center: [s.lon * 0.35, s.lat * 0.35 + 10],
-                zoom: Math.min(Math.max(map.getZoom(), 1.6), 2.4),
-                duration: 1400,
+            // Frame storms so past + forecast paths fit (Pacific EP/CP this season)
+            if (tropical.storms.length) {
+              const lons = tropical.storms.flatMap((s) => {
+                const pts = [
+                  s.lon,
+                  ...(s.track?.map((c) => c[0]) ?? []),
+                  ...(s.pastTrack?.map((c) => c[0]) ?? []),
+                ]
+                return pts
               })
+              const lats = tropical.storms.flatMap((s) => {
+                const pts = [
+                  s.lat,
+                  ...(s.track?.map((c) => c[1]) ?? []),
+                  ...(s.pastTrack?.map((c) => c[1]) ?? []),
+                ]
+                return pts
+              })
+              if (lons.length && lats.length) {
+                const minLon = Math.min(...lons)
+                const maxLon = Math.max(...lons)
+                const minLat = Math.min(...lats)
+                const maxLat = Math.max(...lats)
+                const midLon = (minLon + maxLon) / 2
+                const midLat = (minLat + maxLat) / 2
+                const span = Math.max(maxLon - minLon, maxLat - minLat, 8)
+                const z = span > 50 ? 1.5 : span > 25 ? 2.1 : span > 12 ? 2.6 : 3.2
+                map.easeTo({
+                  center: [midLon, midLat],
+                  zoom: z,
+                  duration: 1600,
+                })
+              }
             }
           }
         } catch {
@@ -547,6 +761,9 @@ export function GlobalRadarGlobe() {
         if (cancelled) return
 
         setLoading(false)
+        // Keep SVG tracks aligned while the globe moves
+        map.on('render', redrawTrackOverlay)
+        map.on('resize', redrawTrackOverlay)
       } catch (e) {
         if (cancelled) return
         setError(e instanceof Error ? e.message : 'Failed to load Earth radar')
@@ -561,6 +778,12 @@ export function GlobalRadarGlobe() {
       readyRef.current = false
       stopLoop()
       clearStormMarkers()
+      try {
+        map.off('render', redrawTrackOverlay)
+        map.off('resize', redrawTrackOverlay)
+      } catch {
+        /* ignore */
+      }
       map.remove()
       mapRef.current = null
     }
@@ -580,7 +803,11 @@ export function GlobalRadarGlobe() {
   // Toggle tropical layer visibility (radar always stays)
   useEffect(() => {
     const map = mapRef.current
-    if (!map || !readyRef.current) return
+    showTropicalRef.current = showTropical
+    if (!map || !readyRef.current) {
+      redrawTrackOverlay()
+      return
+    }
     const vis = showTropical ? 'visible' : 'none'
     for (const id of [
       'tropical-cone-fill',
@@ -598,7 +825,8 @@ export function GlobalRadarGlobe() {
       if (el) el.style.display = showTropical ? '' : 'none'
     }
     if (showTropical) raiseTropicalLayers(map)
-  }, [showTropical, raiseTropicalLayers])
+    redrawTrackOverlay()
+  }, [showTropical, raiseTropicalLayers, redrawTrackOverlay])
 
   // Play / pause
   useEffect(() => {
@@ -646,6 +874,13 @@ export function GlobalRadarGlobe() {
   return (
     <div className="globe-stage">
       <div ref={containerRef} className="globe-canvas" role="img" aria-label="3D Earth with global radar" />
+      {/* SVG tracks sit above the WebGL canvas — globe GeoJSON lines are unreliable */}
+      <svg
+        ref={trackSvgRef}
+        className="globe-track-svg"
+        aria-hidden="true"
+        style={{ display: 'none' }}
+      />
 
       {loading && (
         <div className="globe-overlay-msg" role="status">

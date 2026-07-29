@@ -246,8 +246,12 @@ export interface TropicalStorm {
   advisoryUrl?: string
   /** Forecast track as [lon, lat] pairs */
   track?: [number, number][]
-  /** Observed path already taken */
+  /** Observed path already taken (merged primary chain) */
   pastTrack?: [number, number][]
+  /** All observed path segments when history is discontinuous */
+  pastTrackSegments?: [number, number][][]
+  /** Outer ring of forecast cone [lon, lat][] */
+  coneRing?: [number, number][]
   forecastPoints?: TropicalForecastPoint[]
 }
 
