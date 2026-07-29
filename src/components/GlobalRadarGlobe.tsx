@@ -11,12 +11,15 @@ import { fetchTropicalGlobeData } from '../api/weather'
 import type { TropicalGlobeData, TropicalStorm } from '../api/types'
 import { formatRadarTime } from '../utils/format'
 
-const SPEED_MS = { slow: 900, normal: 480, fast: 260 } as const
+const SPEED_MS = { slow: 900, normal: 520, fast: 300 } as const
 type SpeedKey = keyof typeof SPEED_MS
 
-const RADAR_A = 'radar-a'
-const RADAR_B = 'radar-b'
+/** Single radar layer — dual-buffer remove/add was a major source of flicker. */
+const RADAR_ID = 'radar-live'
 const RADAR_MAXZOOM = 7
+
+/** Degrees of longitude advanced per animation frame while spinning (~full turn ~45s). */
+const SPIN_DEG_PER_FRAME = 0.35
 
 type BasemapId = 'satellite' | 'voyager' | 'light' | 'dark'
 
@@ -27,12 +30,7 @@ type BasemapDef = {
   labels?: string[]
   maxzoom: number
   attribution: string
-  /** Atmosphere tint for globe sky */
-  sky: {
-    sky: string
-    horizon: string
-    fog: string
-  }
+  sky: { sky: string; horizon: string; fog: string }
 }
 
 const BASEMAPS: Record<BasemapId, BasemapDef> = {
@@ -99,7 +97,7 @@ const BASEMAPS: Record<BasemapId, BasemapDef> = {
 }
 
 const REGIONS: { id: string; label: string; center: [number, number]; zoom: number }[] = [
-  { id: 'world', label: 'World', center: [0, 12], zoom: 1.2 },
+  { id: 'world', label: 'World', center: [0, 8], zoom: 1.25 },
   { id: 'atl', label: 'Atlantic', center: [-55, 22], zoom: 2.4 },
   { id: 'epac', label: 'E. Pacific', center: [-120, 18], zoom: 2.5 },
   { id: 'cpac', label: 'C. Pacific', center: [-160, 20], zoom: 2.5 },
@@ -122,10 +120,7 @@ function buildStyle(basemap: BasemapDef) {
       id: 'basemap',
       type: 'raster',
       source: 'basemap',
-      paint: {
-        'raster-opacity': 1,
-        'raster-fade-duration': 0,
-      },
+      paint: { 'raster-opacity': 1, 'raster-fade-duration': 0 },
     },
   ]
   if (basemap.labels?.length) {
@@ -140,18 +135,10 @@ function buildStyle(basemap: BasemapDef) {
       id: 'labels',
       type: 'raster',
       source: 'labels',
-      paint: {
-        'raster-opacity': 0.85,
-        'raster-fade-duration': 0,
-      },
+      paint: { 'raster-opacity': 0.85, 'raster-fade-duration': 0 },
     })
   }
-  return {
-    version: 8 as const,
-    name: 'Solara Globe',
-    sources,
-    layers,
-  }
+  return { version: 8 as const, name: 'Solara Globe', sources, layers }
 }
 
 function escapeHtml(s: string): string {
@@ -162,25 +149,11 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;')
 }
 
-function waitForIdle(map: MapLibreMap, timeoutMs = 12000): Promise<void> {
-  return new Promise((resolve) => {
-    let done = false
-    const finish = () => {
-      if (done) return
-      done = true
-      map.off('idle', onIdle)
-      window.clearTimeout(timer)
-      resolve()
-    }
-    const onIdle = () => finish()
-    const timer = window.setTimeout(finish, timeoutMs)
-    map.once('idle', onIdle)
-    try {
-      map.triggerRepaint()
-    } catch {
-      /* ignore */
-    }
-  })
+function normalizeLon(lon: number): number {
+  let x = lon
+  while (x > 180) x -= 360
+  while (x < -180) x += 360
+  return x
 }
 
 function applySky(map: MapLibreMap, basemap: BasemapDef) {
@@ -202,21 +175,29 @@ export function GlobalRadarGlobe() {
   const containerRef = useRef<HTMLDivElement>(null)
   const trackSvgRef = useRef<SVGSVGElement>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
-  const playingRef = useRef(false)
-  const frameIdxRef = useRef(0)
+
   const framesRef = useRef<RadarFrame[]>([])
+  const frameIdxRef = useRef(0)
   const hostRef = useRef('https://tilecache.rainviewer.com')
   const opacityRef = useRef(0.78)
   const showRadarRef = useRef(true)
-  const timerRef = useRef<number | null>(null)
-  const spinRef = useRef<number | null>(null)
-  const bufRef = useRef<0 | 1>(0)
   const readyRef = useRef(false)
   const tropicalDataRef = useRef<TropicalGlobeData | null>(null)
   const showTropicalRef = useRef(true)
-  const basemapRef = useRef<BasemapId>('satellite')
   const markersRef = useRef<maplibregl.Marker[]>([])
-  const userMovedRef = useRef(false)
+
+  /** Prevent overlapping radar swaps (main flicker source). */
+  const radarBusyRef = useRef(false)
+  const radarKeyRef = useRef<string | null>(null)
+  const radarQueuedRef = useRef<number | null>(null)
+
+  const playTimerRef = useRef<number | null>(null)
+  const spinRafRef = useRef<number | null>(null)
+  const spinningRef = useRef(false)
+  const overlayRafRef = useRef<number | null>(null)
+  const basemapIdRef = useRef<BasemapId>('satellite')
+  const swappingBasemapRef = useRef(false)
+  const mountedRef = useRef(true)
 
   const [loading, setLoading] = useState(true)
   const [loadHint, setLoadHint] = useState('Loading Earth…')
@@ -238,99 +219,103 @@ export function GlobalRadarGlobe() {
   opacityRef.current = opacity
   showRadarRef.current = showRadar
   showTropicalRef.current = showTropical
-  basemapRef.current = basemapId
+  spinningRef.current = spinning
+  basemapIdRef.current = basemapId
 
   const clearStormMarkers = useCallback(() => {
     for (const m of markersRef.current) m.remove()
     markersRef.current = []
   }, [])
 
-  const redrawTrackOverlay = useCallback(() => {
-    const map = mapRef.current
-    const svg = trackSvgRef.current
-    const data = tropicalDataRef.current
-    if (!svg) return
-    if (!map || !data || !showTropicalRef.current || !data.storms.length) {
-      svg.innerHTML = ''
-      svg.style.display = 'none'
-      return
-    }
-
-    const canvas = map.getCanvas()
-    const w = canvas.clientWidth || canvas.width
-    const h = canvas.clientHeight || canvas.height
-    if (w < 2 || h < 2) return
-
-    svg.style.display = ''
-    svg.setAttribute('width', String(w))
-    svg.setAttribute('height', String(h))
-    svg.setAttribute('viewBox', `0 0 ${w} ${h}`)
-
-    const projectLine = (coords: [number, number][]): string => {
-      const parts: string[] = []
-      let penDown = false
-      for (const [lon, lat] of coords) {
-        if (!Number.isFinite(lon) || !Number.isFinite(lat)) {
-          penDown = false
-          continue
-        }
-        const p = map.project([lon, lat])
-        if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) {
-          penDown = false
-          continue
-        }
-        if (p.x < -w || p.x > w * 2 || p.y < -h || p.y > h * 2) {
-          penDown = false
-          continue
-        }
-        parts.push(`${penDown ? 'L' : 'M'}${p.x.toFixed(1)},${p.y.toFixed(1)}`)
-        penDown = true
-      }
-      return parts.join(' ')
-    }
-
-    const nodes: string[] = []
-
-    for (const s of data.storms) {
-      const ring =
-        s.coneRing ??
-        (data.cones?.features
-          ?.find((f) => f.properties?.id === s.id || f.properties?.name === s.name)
-          ?.geometry?.coordinates as [number, number][][] | undefined)?.[0]
-      if (ring && ring.length >= 3) {
-        const d = projectLine(ring as [number, number][])
-        if (d.includes('L')) {
-          nodes.push(
-            `<path class="globe-svg-cone" d="${d} Z" />`,
-            `<path class="globe-svg-cone-stroke" d="${d} Z" fill="none" />`,
-          )
-        }
+  /** Schedule at most one SVG redraw per animation frame. */
+  const scheduleOverlay = useCallback(() => {
+    if (overlayRafRef.current != null) return
+    overlayRafRef.current = window.requestAnimationFrame(() => {
+      overlayRafRef.current = null
+      const map = mapRef.current
+      const svg = trackSvgRef.current
+      const data = tropicalDataRef.current
+      if (!svg) return
+      if (!map || !data || !showTropicalRef.current || !data.storms.length) {
+        svg.innerHTML = ''
+        svg.style.display = 'none'
+        return
       }
 
-      const pastSegs: [number, number][][] =
-        s.pastTrackSegments?.length
-          ? s.pastTrackSegments
-          : s.pastTrack && s.pastTrack.length >= 2
-            ? [s.pastTrack]
-            : []
-      for (const seg of pastSegs) {
-        const d = projectLine(seg)
-        if (d.includes('L')) {
-          nodes.push(`<path class="globe-svg-past-glow" d="${d}" fill="none" />`)
-          nodes.push(`<path class="globe-svg-past" d="${d}" fill="none" />`)
+      const canvas = map.getCanvas()
+      const w = canvas.clientWidth || canvas.width
+      const h = canvas.clientHeight || canvas.height
+      if (w < 2 || h < 2) return
+
+      svg.style.display = ''
+      svg.setAttribute('width', String(w))
+      svg.setAttribute('height', String(h))
+      svg.setAttribute('viewBox', `0 0 ${w} ${h}`)
+
+      const projectLine = (coords: [number, number][]): string => {
+        const parts: string[] = []
+        let penDown = false
+        for (const [lon, lat] of coords) {
+          if (!Number.isFinite(lon) || !Number.isFinite(lat)) {
+            penDown = false
+            continue
+          }
+          const p = map.project([lon, lat])
+          if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) {
+            penDown = false
+            continue
+          }
+          // Drop points clearly off-screen / back of globe
+          if (p.x < -80 || p.x > w + 80 || p.y < -80 || p.y > h + 80) {
+            penDown = false
+            continue
+          }
+          parts.push(`${penDown ? 'L' : 'M'}${p.x.toFixed(1)},${p.y.toFixed(1)}`)
+          penDown = true
         }
+        return parts.join(' ')
       }
 
-      if (s.track && s.track.length >= 2) {
-        const d = projectLine(s.track)
-        if (d.includes('L')) {
-          nodes.push(`<path class="globe-svg-fcst-glow" d="${d}" fill="none" />`)
-          nodes.push(`<path class="globe-svg-fcst" d="${d}" fill="none" />`)
+      const nodes: string[] = []
+      for (const s of data.storms) {
+        const ring =
+          s.coneRing ??
+          (data.cones?.features
+            ?.find((f) => f.properties?.id === s.id || f.properties?.name === s.name)
+            ?.geometry?.coordinates as [number, number][][] | undefined)?.[0]
+        if (ring && ring.length >= 3) {
+          const d = projectLine(ring as [number, number][])
+          if (d.includes('L')) {
+            nodes.push(
+              `<path class="globe-svg-cone" d="${d} Z" />`,
+              `<path class="globe-svg-cone-stroke" d="${d} Z" fill="none" />`,
+            )
+          }
         }
-      }
 
-      if (s.forecastPoints?.length) {
-        for (const pt of s.forecastPoints) {
+        const pastSegs: [number, number][][] =
+          s.pastTrackSegments?.length
+            ? s.pastTrackSegments
+            : s.pastTrack && s.pastTrack.length >= 2
+              ? [s.pastTrack]
+              : []
+        for (const seg of pastSegs) {
+          const d = projectLine(seg)
+          if (d.includes('L')) {
+            nodes.push(`<path class="globe-svg-past-glow" d="${d}" fill="none" />`)
+            nodes.push(`<path class="globe-svg-past" d="${d}" fill="none" />`)
+          }
+        }
+
+        if (s.track && s.track.length >= 2) {
+          const d = projectLine(s.track)
+          if (d.includes('L')) {
+            nodes.push(`<path class="globe-svg-fcst-glow" d="${d}" fill="none" />`)
+            nodes.push(`<path class="globe-svg-fcst" d="${d}" fill="none" />`)
+          }
+        }
+
+        for (const pt of s.forecastPoints ?? []) {
           const p = map.project([pt.lon, pt.lat])
           if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) continue
           if (p.x < 0 || p.x > w || p.y < 0 || p.y > h) continue
@@ -339,191 +324,217 @@ export function GlobalRadarGlobe() {
           )
         }
       }
-    }
-
-    for (const f of data.tracks?.features ?? []) {
-      if (f.geometry?.type === 'LineString' && Array.isArray(f.geometry.coordinates)) {
-        const name = String(f.properties?.name ?? '')
-        if (data.storms.some((s) => s.name === name && (s.track?.length ?? 0) >= 2)) continue
-        const d = projectLine(f.geometry.coordinates as [number, number][])
-        if (d.includes('L')) {
-          nodes.push(`<path class="globe-svg-fcst" d="${d}" fill="none" />`)
-        }
-      }
-    }
-
-    svg.innerHTML = nodes.join('')
+      svg.innerHTML = nodes.join('')
+    })
   }, [])
 
-  const applyTropicalLayers = useCallback(
+  const placeMarkers = useCallback(
     (map: MapLibreMap, data: TropicalGlobeData, visible: boolean) => {
       tropicalDataRef.current = data
       showTropicalRef.current = visible
       clearStormMarkers()
       if (!visible) {
-        redrawTrackOverlay()
+        scheduleOverlay()
         return
       }
-
       for (const s of data.storms) {
         const el = document.createElement('button')
         el.type = 'button'
         el.className = 'globe-storm-marker'
         const isHu = /hurricane|major/i.test(s.classification)
         el.innerHTML = `<span class="globe-storm-dot ${isHu ? 'is-hu' : ''}"></span><span class="globe-storm-label">${escapeHtml(s.name)} · ${escapeHtml(s.classification)}</span>`
-        el.title = [
-          s.name,
-          s.classification,
-          s.intensity,
-          s.movement ? `Moving ${s.movement}` : '',
-          s.pressure ? `${s.pressure} mb` : '',
-        ]
+        el.title = [s.name, s.classification, s.intensity, s.movement, s.pressure ? `${s.pressure} mb` : '']
           .filter(Boolean)
           .join(' · ')
         el.addEventListener('click', (e) => {
           e.stopPropagation()
-          userMovedRef.current = true
-          map.flyTo({ center: [s.lon, s.lat], zoom: Math.max(map.getZoom(), 3.2), essential: true })
+          setSpinning(false)
+          map.easeTo({
+            center: [s.lon, s.lat],
+            zoom: Math.max(map.getZoom(), 3.1),
+            bearing: 0,
+            pitch: 0,
+            duration: 900,
+            essential: true,
+          })
         })
-        const marker = new maplibregl.Marker({ element: el, anchor: 'left' })
-          .setLngLat([s.lon, s.lat])
-          .addTo(map)
-        markersRef.current.push(marker)
-      }
-      redrawTrackOverlay()
-    },
-    [clearStormMarkers, redrawTrackOverlay],
-  )
-
-  /** Radar sits above basemap, under labels so place names stay readable. */
-  const placeRadarLayer = useCallback((map: MapLibreMap, layerId: string) => {
-    if (!map.getLayer(layerId)) return
-    try {
-      if (map.getLayer('labels')) {
-        map.moveLayer(layerId, 'labels')
-      } else {
-        map.moveLayer(layerId)
-      }
-    } catch {
-      /* ignore */
-    }
-  }, [])
-
-  const applyFrame = useCallback(
-    (idx: number, op?: number) => {
-      const map = mapRef.current
-      const list = framesRef.current
-      if (!map || !readyRef.current || !list.length) return
-      if (!map.isStyleLoaded()) return
-
-      const frame = list[Math.max(0, Math.min(idx, list.length - 1))]
-      if (!frame) return
-
-      const opacityVal = showRadarRef.current ? (op ?? opacityRef.current) : 0
-      const url = rainViewerTileUrl(hostRef.current, frame.key)
-      if (!url.includes('{z}')) return
-
-      const nextBuf: 0 | 1 = bufRef.current === 0 ? 1 : 0
-      const nextId = nextBuf === 0 ? RADAR_A : RADAR_B
-      const prevId = bufRef.current === 0 ? RADAR_A : RADAR_B
-
-      try {
-        if (map.getLayer(nextId)) map.removeLayer(nextId)
-        if (map.getSource(nextId)) map.removeSource(nextId)
-
-        map.addSource(nextId, {
-          type: 'raster',
-          tiles: [url],
-          tileSize: 256,
-          maxzoom: RADAR_MAXZOOM,
-          attribution: 'Radar © RainViewer',
-        })
-
-        const beforeId = map.getLayer('labels') ? 'labels' : undefined
-        map.addLayer(
-          {
-            id: nextId,
-            type: 'raster',
-            source: nextId,
-            paint: {
-              'raster-opacity': opacityVal,
-              'raster-fade-duration': 0,
-              'raster-resampling': 'linear',
-            },
-          },
-          beforeId,
+        markersRef.current.push(
+          new maplibregl.Marker({ element: el, anchor: 'left' }).setLngLat([s.lon, s.lat]).addTo(map),
         )
-
-        if (map.getLayer(prevId)) {
-          map.setPaintProperty(prevId, 'raster-opacity', 0)
-        }
-
-        bufRef.current = nextBuf
-        placeRadarLayer(map, nextId)
-        map.triggerRepaint()
-      } catch (e) {
-        console.warn('[globe] applyFrame failed', e)
       }
+      scheduleOverlay()
     },
-    [placeRadarLayer],
+    [clearStormMarkers, scheduleOverlay],
   )
 
-  const stopLoop = useCallback(() => {
-    if (timerRef.current != null) {
-      window.clearInterval(timerRef.current)
-      timerRef.current = null
+  /**
+   * Apply one radar frame. Single layer, skip if same path, queue if busy.
+   * Never stacks dual buffers that thrash WebGL on globe.
+   */
+  const applyFrame = useCallback((idx: number, force = false) => {
+    const map = mapRef.current
+    const list = framesRef.current
+    if (!map || !readyRef.current || !list.length || swappingBasemapRef.current) return
+    if (!map.isStyleLoaded()) return
+
+    const safeIdx = Math.max(0, Math.min(idx, list.length - 1))
+    const frame = list[safeIdx]
+    if (!frame) return
+
+    if (radarBusyRef.current) {
+      radarQueuedRef.current = safeIdx
+      return
+    }
+
+    const opacityVal = showRadarRef.current ? opacityRef.current : 0
+    const url = rainViewerTileUrl(hostRef.current, frame.key)
+    if (!url.includes('{z}')) return
+
+    // Same tile path — only touch opacity
+    if (!force && radarKeyRef.current === frame.key && map.getLayer(RADAR_ID)) {
+      try {
+        map.setPaintProperty(RADAR_ID, 'raster-opacity', opacityVal)
+      } catch {
+        /* ignore */
+      }
+      return
+    }
+
+    radarBusyRef.current = true
+    try {
+      if (map.getLayer(RADAR_ID)) map.removeLayer(RADAR_ID)
+      if (map.getSource(RADAR_ID)) map.removeSource(RADAR_ID)
+
+      map.addSource(RADAR_ID, {
+        type: 'raster',
+        tiles: [url],
+        tileSize: 256,
+        maxzoom: RADAR_MAXZOOM,
+        attribution: 'Radar © RainViewer',
+      })
+
+      const beforeId = map.getLayer('labels') ? 'labels' : undefined
+      map.addLayer(
+        {
+          id: RADAR_ID,
+          type: 'raster',
+          source: RADAR_ID,
+          paint: {
+            'raster-opacity': opacityVal,
+            'raster-fade-duration': 0,
+            'raster-resampling': 'linear',
+          },
+        },
+        beforeId,
+      )
+      radarKeyRef.current = frame.key
+    } catch (e) {
+      console.warn('[globe] applyFrame failed', e)
+    } finally {
+      radarBusyRef.current = false
+      const queued = radarQueuedRef.current
+      if (queued != null && queued !== safeIdx) {
+        radarQueuedRef.current = null
+        // Defer so we don't recurse in the same stack
+        window.setTimeout(() => applyFrame(queued), 0)
+      } else {
+        radarQueuedRef.current = null
+      }
     }
   }, [])
 
-  const startLoop = useCallback(() => {
-    stopLoop()
-    timerRef.current = window.setInterval(() => {
-      if (!playingRef.current || !framesRef.current.length) return
+  const stopPlayTimer = useCallback(() => {
+    if (playTimerRef.current != null) {
+      window.clearInterval(playTimerRef.current)
+      playTimerRef.current = null
+    }
+  }, [])
+
+  const startPlayTimer = useCallback(() => {
+    stopPlayTimer()
+    playTimerRef.current = window.setInterval(() => {
+      if (!framesRef.current.length) return
       const next = (frameIdxRef.current + 1) % framesRef.current.length
       frameIdxRef.current = next
       setFrameIdx(next)
       applyFrame(next)
     }, SPEED_MS[speed])
-  }, [applyFrame, speed, stopLoop])
+  }, [applyFrame, speed, stopPlayTimer])
 
   const stopSpin = useCallback(() => {
-    if (spinRef.current != null) {
-      window.clearInterval(spinRef.current)
-      spinRef.current = null
+    if (spinRafRef.current != null) {
+      window.cancelAnimationFrame(spinRafRef.current)
+      spinRafRef.current = null
     }
   }, [])
 
+  /**
+   * Equatorial spin: advance center longitude, keep latitude, bearing 0 (north-up).
+   * This is Earth rotating about its polar axis — not a camera roll via setBearing.
+   */
   const startSpin = useCallback(() => {
     stopSpin()
-    spinRef.current = window.setInterval(() => {
+    let lastOverlay = 0
+    const tick = () => {
+      if (!spinningRef.current) {
+        spinRafRef.current = null
+        return
+      }
       const map = mapRef.current
-      if (!map) return
-      const b = map.getBearing()
-      map.setBearing(b - 0.12)
-    }, 50)
-  }, [stopSpin])
+      if (map && !swappingBasemapRef.current) {
+        try {
+          const c = map.getCenter()
+          // Softly pull view toward low latitudes so spin feels equatorial
+          const targetLat = Math.max(-20, Math.min(20, c.lat * 0.97))
+          const lon = normalizeLon(c.lng - SPIN_DEG_PER_FRAME)
+          // jumpTo avoids ease animation pile-up (major glitch when spinning)
+          map.jumpTo({
+            center: [lon, targetLat],
+            bearing: 0,
+            pitch: 0,
+          })
+          const now = performance.now()
+          // Overlay ~8fps while spinning (full rate fights the GPU)
+          if (now - lastOverlay > 120) {
+            lastOverlay = now
+            scheduleOverlay()
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      spinRafRef.current = window.requestAnimationFrame(tick)
+    }
+    spinRafRef.current = window.requestAnimationFrame(tick)
+  }, [scheduleOverlay, stopSpin])
 
   const flyRegion = useCallback((regionId: string) => {
     const map = mapRef.current
     const r = REGIONS.find((x) => x.id === regionId)
     if (!map || !r) return
-    userMovedRef.current = true
+    setSpinning(false)
     setActiveRegion(regionId)
-    map.easeTo({ center: r.center, zoom: r.zoom, duration: 1200, bearing: 0, pitch: 0 })
+    map.easeTo({
+      center: r.center,
+      zoom: r.zoom,
+      duration: 1100,
+      bearing: 0,
+      pitch: 0,
+      essential: true,
+    })
   }, [])
 
   const focusStorms = useCallback(() => {
     const map = mapRef.current
-    const list = storms
-    if (!map || !list.length) return
-    userMovedRef.current = true
+    if (!map || !storms.length) return
+    setSpinning(false)
     setActiveRegion('storms')
-    const lons = list.flatMap((s) => [
+    const lons = storms.flatMap((s) => [
       s.lon,
       ...(s.track?.map((c) => c[0]) ?? []),
       ...(s.pastTrack?.map((c) => c[0]) ?? []),
     ])
-    const lats = list.flatMap((s) => [
+    const lats = storms.flatMap((s) => [
       s.lat,
       ...(s.track?.map((c) => c[1]) ?? []),
       ...(s.pastTrack?.map((c) => c[1]) ?? []),
@@ -537,48 +548,55 @@ export function GlobalRadarGlobe() {
     map.easeTo({
       center: [(minLon + maxLon) / 2, (minLat + maxLat) / 2],
       zoom: z,
-      duration: 1400,
+      bearing: 0,
+      pitch: 0,
+      duration: 1200,
+      essential: true,
     })
   }, [storms])
 
-  // Init map
+  // ── Mount map once ──────────────────────────────────────────────
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
-
+    mountedRef.current = true
     let cancelled = false
     const initial = BASEMAPS.satellite
 
     const map = new maplibregl.Map({
       container: el,
       style: buildStyle(initial),
-      center: [0, 12],
-      zoom: 1.2,
-      minZoom: 0.6,
-      maxZoom: 6,
+      center: [0, 8],
+      zoom: 1.25,
+      minZoom: 0.7,
+      maxZoom: 5.5,
       pitch: 0,
       bearing: 0,
-      maxTileCacheSize: 700,
+      maxTileCacheSize: 500,
       fadeDuration: 0,
       refreshExpiredTiles: false,
       attributionControl: { compact: true },
-      dragRotate: true,
+      // Drag pans the globe (longitude); twist/roll causes “glitchy” feel with spin
+      dragRotate: false,
       touchPitch: false,
+      pitchWithRotate: false,
       renderWorldCopies: false,
     })
     mapRef.current = map
-    map.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), 'top-right')
+    map.addControl(
+      new maplibregl.NavigationControl({ showCompass: false, visualizePitch: false }),
+      'top-right',
+    )
 
-    const onUserMove = () => {
-      userMovedRef.current = true
-    }
-    map.on('dragstart', onUserMove)
-    map.on('zoomstart', onUserMove)
+    const onMoveEnd = () => scheduleOverlay()
+    // Only redraw tracks when motion settles — not on every pixel of drag/spin
+    map.on('moveend', onMoveEnd)
+    map.on('zoomend', onMoveEnd)
 
     const ro = new ResizeObserver(() => {
       try {
         map.resize()
-        redrawTrackOverlay()
+        scheduleOverlay()
       } catch {
         /* ignore */
       }
@@ -597,17 +615,18 @@ export function GlobalRadarGlobe() {
         try {
           map.setProjection({ type: 'globe' })
         } catch {
-          /* flat fallback */
+          /* flat ok */
         }
         applySky(map, initial)
+        map.jumpTo({ center: [0, 8], zoom: 1.25, bearing: 0, pitch: 0 })
 
-        map.jumpTo({ center: [0, 12], zoom: 1.2, bearing: 0, pitch: 0 })
         setLoadHint('Loading world map…')
-        await waitForIdle(map, 12000)
+        // Short settle — long idle waits caused racey double-inits
+        await new Promise((r) => setTimeout(r, 400))
         if (cancelled) return
 
         setLoadHint('Loading global radar…')
-        const { host, frames: fr, nowIndex: ni } = await loadGlobalRadarLoop({ maxPast: 14 })
+        const { host, frames: fr, nowIndex: ni } = await loadGlobalRadarLoop({ maxPast: 12 })
         if (cancelled) return
 
         if (!fr.length) {
@@ -622,37 +641,28 @@ export function GlobalRadarGlobe() {
         setFrames(fr)
         setNowIndex(ni)
         setFrameIdx(ni)
-
         readyRef.current = true
-        applyFrame(ni, opacityRef.current)
 
-        setLoadHint('Painting radar…')
-        await waitForIdle(map, 8000)
-        if (cancelled) return
-        applyFrame(ni, opacityRef.current)
+        // One radar paint only
+        applyFrame(ni, true)
 
         setLoadHint('Loading tropical cyclones…')
         try {
           const tropical = await fetchTropicalGlobeData()
           if (!cancelled && tropical && mapRef.current) {
             setStorms(tropical.storms)
-            applyTropicalLayers(mapRef.current, tropical, true)
-            applyFrame(frameIdxRef.current, opacityRef.current)
+            placeMarkers(mapRef.current, tropical, true)
           }
         } catch {
-          /* tropical optional */
+          /* optional */
         }
         if (cancelled) return
 
         setLoading(false)
-        map.on('move', redrawTrackOverlay)
-        map.on('zoom', redrawTrackOverlay)
-        map.on('rotate', redrawTrackOverlay)
-        map.on('pitch', redrawTrackOverlay)
-        map.on('resize', redrawTrackOverlay)
+        scheduleOverlay()
       } catch (e) {
         if (cancelled) return
-        setError(e instanceof Error ? e.message : 'Failed to load Earth radar')
+        setError(e instanceof Error ? e.message : 'Failed to load Earth')
         setLoading(false)
       }
     }
@@ -661,42 +671,43 @@ export function GlobalRadarGlobe() {
 
     return () => {
       cancelled = true
+      mountedRef.current = false
       readyRef.current = false
-      stopLoop()
+      stopPlayTimer()
       stopSpin()
       clearStormMarkers()
+      if (overlayRafRef.current != null) {
+        window.cancelAnimationFrame(overlayRafRef.current)
+        overlayRafRef.current = null
+      }
       ro.disconnect()
       try {
-        map.off('move', redrawTrackOverlay)
-        map.off('zoom', redrawTrackOverlay)
-        map.off('rotate', redrawTrackOverlay)
-        map.off('pitch', redrawTrackOverlay)
-        map.off('resize', redrawTrackOverlay)
-        map.off('dragstart', onUserMove)
-        map.off('zoomstart', onUserMove)
+        map.off('moveend', onMoveEnd)
+        map.off('zoomend', onMoveEnd)
       } catch {
         /* ignore */
       }
       map.remove()
       mapRef.current = null
+      radarKeyRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount once
   }, [])
 
-  // Opacity / radar visibility
+  // Opacity / radar visibility without rebuilding tiles
   useEffect(() => {
     const map = mapRef.current
-    if (!map || !readyRef.current) return
-    const visibleId = bufRef.current === 0 ? RADAR_A : RADAR_B
-    if (map.getLayer(visibleId)) {
-      map.setPaintProperty(visibleId, 'raster-opacity', showRadar ? opacity : 0)
+    if (!map || !readyRef.current || !map.getLayer(RADAR_ID)) return
+    try {
+      map.setPaintProperty(RADAR_ID, 'raster-opacity', showRadar ? opacity : 0)
+    } catch {
+      /* ignore */
     }
   }, [opacity, showRadar])
 
-  // Labels toggle
   useEffect(() => {
     const map = mapRef.current
-    if (!map || !map.getLayer('labels')) return
+    if (!map?.getLayer('labels')) return
     try {
       map.setLayoutProperty('labels', 'visibility', showLabels ? 'visible' : 'none')
     } catch {
@@ -704,110 +715,110 @@ export function GlobalRadarGlobe() {
     }
   }, [showLabels])
 
-  // Tropical toggle
   useEffect(() => {
     showTropicalRef.current = showTropical
     for (const m of markersRef.current) {
       const el = m.getElement()
       if (el) el.style.display = showTropical ? '' : 'none'
     }
-    redrawTrackOverlay()
-  }, [showTropical, redrawTrackOverlay])
+    scheduleOverlay()
+  }, [showTropical, scheduleOverlay])
 
-  // Spin
+  // Spin on/off
   useEffect(() => {
+    spinningRef.current = spinning
     if (spinning) startSpin()
-    else stopSpin()
-    return () => stopSpin()
-  }, [spinning, startSpin, stopSpin])
-
-  // Play / pause
-  useEffect(() => {
-    playingRef.current = playing
-    if (playing) {
-      if (framesRef.current.length > 1) {
-        const next = (frameIdxRef.current + 1) % framesRef.current.length
-        frameIdxRef.current = next
-        setFrameIdx(next)
-        applyFrame(next)
-      }
-      startLoop()
-    } else {
-      stopLoop()
+    else {
+      stopSpin()
+      scheduleOverlay()
     }
-    return () => stopLoop()
-  }, [playing, startLoop, stopLoop, applyFrame])
+    return () => stopSpin()
+  }, [spinning, startSpin, stopSpin, scheduleOverlay])
 
+  // Play / pause — single timer, no double-start
   useEffect(() => {
-    if (playing) startLoop()
-  }, [speed, playing, startLoop])
+    if (playing) {
+      startPlayTimer()
+    } else {
+      stopPlayTimer()
+    }
+    return () => stopPlayTimer()
+  }, [playing, startPlayTimer, stopPlayTimer])
 
-  // Basemap switch — rebuild basemap + labels sources, keep radar
+  // Speed change restarts timer only while playing
+  useEffect(() => {
+    if (playing) startPlayTimer()
+  }, [speed, playing, startPlayTimer])
+
+  const lastBasemapApplied = useRef<BasemapId | null>(null)
+
+  // Basemap switch — skip initial satellite (already in style); no thrash on mount
   useEffect(() => {
     const map = mapRef.current
     if (!map || !readyRef.current) return
-    const def = BASEMAPS[basemapId]
-
-    const swap = async () => {
-      try {
-        // Tear down radar buffers (re-added after basemap swap)
-        for (const id of [RADAR_A, RADAR_B]) {
-          if (map.getLayer(id)) map.removeLayer(id)
-          if (map.getSource(id)) map.removeSource(id)
-        }
-        if (map.getLayer('labels')) map.removeLayer('labels')
-        if (map.getSource('labels')) map.removeSource('labels')
-        if (map.getLayer('basemap')) map.removeLayer('basemap')
-        if (map.getSource('basemap')) map.removeSource('basemap')
-
-        map.addSource('basemap', {
-          type: 'raster',
-          tiles: def.tiles,
-          tileSize: 256,
-          maxzoom: def.maxzoom,
-          attribution: def.attribution,
-        })
-        map.addLayer({
-          id: 'basemap',
-          type: 'raster',
-          source: 'basemap',
-          paint: { 'raster-opacity': 1, 'raster-fade-duration': 0 },
-        })
-
-        if (def.labels?.length) {
-          map.addSource('labels', {
-            type: 'raster',
-            tiles: def.labels,
-            tileSize: 256,
-            maxzoom: Math.min(def.maxzoom, 10),
-            attribution: '© CARTO',
-          })
-          map.addLayer({
-            id: 'labels',
-            type: 'raster',
-            source: 'labels',
-            paint: {
-              'raster-opacity': 0.85,
-              'raster-fade-duration': 0,
-            },
-            layout: {
-              visibility: showLabels ? 'visible' : 'none',
-            },
-          })
-        }
-
-        applySky(map, def)
-        bufRef.current = 0
-        applyFrame(frameIdxRef.current, opacityRef.current)
-        redrawTrackOverlay()
-      } catch (e) {
-        console.warn('[globe] basemap swap failed', e)
-      }
+    if (lastBasemapApplied.current === basemapId) return
+    if (lastBasemapApplied.current === null && basemapId === 'satellite') {
+      lastBasemapApplied.current = 'satellite'
+      return
     }
 
-    void swap()
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- showLabels read at swap time
-  }, [basemapId, applyFrame, redrawTrackOverlay])
+    const def = BASEMAPS[basemapId]
+    const wasSpinning = spinningRef.current
+    setSpinning(false)
+    swappingBasemapRef.current = true
+    radarKeyRef.current = null
+
+    try {
+      if (map.getLayer(RADAR_ID)) map.removeLayer(RADAR_ID)
+      if (map.getSource(RADAR_ID)) map.removeSource(RADAR_ID)
+      if (map.getLayer('labels')) map.removeLayer('labels')
+      if (map.getSource('labels')) map.removeSource('labels')
+      if (map.getLayer('basemap')) map.removeLayer('basemap')
+      if (map.getSource('basemap')) map.removeSource('basemap')
+
+      map.addSource('basemap', {
+        type: 'raster',
+        tiles: def.tiles,
+        tileSize: 256,
+        maxzoom: def.maxzoom,
+        attribution: def.attribution,
+      })
+      map.addLayer({
+        id: 'basemap',
+        type: 'raster',
+        source: 'basemap',
+        paint: { 'raster-opacity': 1, 'raster-fade-duration': 0 },
+      })
+
+      if (def.labels?.length) {
+        map.addSource('labels', {
+          type: 'raster',
+          tiles: def.labels,
+          tileSize: 256,
+          maxzoom: Math.min(def.maxzoom, 10),
+          attribution: '© CARTO',
+        })
+        map.addLayer({
+          id: 'labels',
+          type: 'raster',
+          source: 'labels',
+          paint: { 'raster-opacity': 0.85, 'raster-fade-duration': 0 },
+          layout: { visibility: showLabels ? 'visible' : 'none' },
+        })
+      }
+
+      applySky(map, def)
+      lastBasemapApplied.current = basemapId
+    } catch (e) {
+      console.warn('[globe] basemap swap failed', e)
+    }
+
+    swappingBasemapRef.current = false
+    applyFrame(frameIdxRef.current, true)
+    scheduleOverlay()
+    if (wasSpinning) setSpinning(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- showLabels at swap time
+  }, [basemapId, applyFrame, scheduleOverlay, showLabels])
 
   const goNow = () => {
     setPlaying(false)
@@ -867,7 +878,6 @@ export function GlobalRadarGlobe() {
         </div>
       )}
 
-      {/* Top-right tools under nav control */}
       <div className="globe-side-tools" aria-label="Globe tools">
         <div className="globe-basemap-row" role="group" aria-label="Map style">
           {(Object.keys(BASEMAPS) as BasemapId[]).map((id) => (
@@ -877,7 +887,6 @@ export function GlobalRadarGlobe() {
               className={`chip-btn globe-basemap-btn ${basemapId === id ? 'active' : ''}`}
               onClick={() => setBasemapId(id)}
               disabled={loading}
-              title={`${BASEMAPS[id].label} basemap`}
             >
               {BASEMAPS[id].label}
             </button>
@@ -917,7 +926,7 @@ export function GlobalRadarGlobe() {
             onClick={() => setSpinning((v) => !v)}
             aria-pressed={spinning}
             disabled={loading}
-            title="Slow auto-rotate"
+            title="Rotate Earth around the poles (equator spins past)"
           >
             Spin
           </button>
@@ -947,7 +956,6 @@ export function GlobalRadarGlobe() {
         </div>
       </div>
 
-      {/* Legend */}
       <div className="globe-legend" aria-hidden={loading}>
         <div className="globe-legend-title">Legend</div>
         <div className="globe-legend-item">
@@ -988,11 +996,13 @@ export function GlobalRadarGlobe() {
                   type="button"
                   className="globe-storm-card"
                   onClick={() => {
-                    userMovedRef.current = true
+                    setSpinning(false)
                     setActiveRegion('storms')
-                    mapRef.current?.flyTo({
+                    mapRef.current?.easeTo({
                       center: [s.lon, s.lat],
                       zoom: 3.4,
+                      bearing: 0,
+                      pitch: 0,
                       essential: true,
                     })
                   }}
@@ -1006,16 +1016,6 @@ export function GlobalRadarGlobe() {
                       .filter(Boolean)
                       .join(' · ')}
                   </span>
-                  {(s.track && s.track.length > 1) || (s.pastTrack && s.pastTrack.length > 1) ? (
-                    <span className="globe-storm-card-track">
-                      {[
-                        s.pastTrack && s.pastTrack.length > 1 ? 'Past path' : null,
-                        s.track && s.track.length > 1 ? 'Forecast' : null,
-                      ]
-                        .filter(Boolean)
-                        .join(' + ')}
-                    </span>
-                  ) : null}
                 </button>
               </li>
             ))}
@@ -1039,11 +1039,7 @@ export function GlobalRadarGlobe() {
             disabled={!frames.length || loading}
             onChange={(e) => scrub(Number(e.target.value))}
             aria-label="Radar frame timeline"
-            style={
-              {
-                ['--globe-progress' as string]: `${progress * 100}%`,
-              } as Record<string, string>
-            }
+            style={{ ['--globe-progress' as string]: `${progress * 100}%` } as Record<string, string>}
           />
           <div className="globe-timeline-marks">
             <span>Past</span>
@@ -1062,27 +1058,14 @@ export function GlobalRadarGlobe() {
             className="chip-btn globe-play-btn"
             onClick={() => setPlaying((p) => !p)}
             disabled={!frames.length || loading}
-            title={playing ? 'Pause' : 'Play loop'}
             aria-pressed={playing}
           >
             {playing ? '❚❚ Pause' : '▶ Play'}
           </button>
-          <button
-            type="button"
-            className="chip-btn"
-            onClick={() => step(-1)}
-            disabled={!frames.length || loading}
-            title="Previous frame"
-          >
+          <button type="button" className="chip-btn" onClick={() => step(-1)} disabled={!frames.length || loading}>
             ‹
           </button>
-          <button
-            type="button"
-            className="chip-btn"
-            onClick={() => step(1)}
-            disabled={!frames.length || loading}
-            title="Next frame"
-          >
+          <button type="button" className="chip-btn" onClick={() => step(1)} disabled={!frames.length || loading}>
             ›
           </button>
           <button
@@ -1090,7 +1073,6 @@ export function GlobalRadarGlobe() {
             className={`chip-btn ${isNow ? 'active' : ''}`}
             onClick={goNow}
             disabled={!frames.length || loading}
-            title="Jump to latest observation"
           >
             Now
           </button>
@@ -1130,8 +1112,9 @@ export function GlobalRadarGlobe() {
           </label>
         </div>
         <p className="globe-hint">
-          Drag to rotate · scroll to zoom · satellite / color maps · white = past · pink = forecast
-          {storms.length ? ` · ${storms.length} active storm${storms.length > 1 ? 's' : ''}` : ''}
+          Drag to turn the globe · Spin = rotate around the poles (equator slides past) · white past ·
+          pink forecast
+          {storms.length ? ` · ${storms.length} storm${storms.length > 1 ? 's' : ''}` : ''}
         </p>
       </div>
     </div>
