@@ -344,10 +344,20 @@ workflows:
         script: npm ci || npm install
       - name: Build web + Capacitor iOS
         script: |
+          set -euo pipefail
           export CAPACITOR=1
           export VITE_API_BASE="${VITE_API_BASE:-https://solaraweather.com}"
           npm run build -- --base ./
           npx cap sync ios
+          python3 << 'PY'
+          from pathlib import Path
+          p = Path("ios/App/CapApp-SPM/Package.swift")
+          t = p.read_text(encoding="utf-8")
+          f = t.replace("\\\\", "/").replace("\\", "/")
+          if f != t:
+              p.write_text(f, encoding="utf-8")
+              print("Normalized Package.swift paths")
+          PY
       - name: Set up keychain
         script: keychain initialize
       - name: Automatic code signing
