@@ -18,6 +18,15 @@ type SpeedKey = keyof typeof SPEED_MS
 const RADAR_ID = 'radar-live'
 const RADAR_MAXZOOM = 7
 
+/** Camera zoom range — high max keeps sharp tiles available when zooming in. */
+const GLOBE_MIN_ZOOM = 0.7
+const GLOBE_MAX_ZOOM = 6.5
+/** Comfortable full-earth view after tile warm-up. */
+const GLOBE_WORLD_ZOOM = 1.35
+const GLOBE_WORLD_CENTER: [number, number] = [0, 8]
+/** Large cache so high-zoom basemap/radar tiles stay loaded while spinning. */
+const GLOBE_TILE_CACHE = 2200
+
 /** Degrees of longitude advanced per animation frame while spinning (~full turn ~90s at 60fps). */
 const SPIN_DEG_PER_FRAME = 0.12
 
@@ -44,7 +53,7 @@ const BASEMAPS: Record<BasemapId, BasemapDef> = {
       'https://a.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}@2x.png',
       'https://b.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}@2x.png',
     ],
-    maxzoom: 12,
+    maxzoom: 14,
     attribution: 'Imagery © Esri · Labels © CARTO',
     sky: { sky: '#0c1a2e', horizon: '#1e3a5f', fog: '#071018' },
   },
@@ -60,7 +69,7 @@ const BASEMAPS: Record<BasemapId, BasemapDef> = {
       'https://a.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}@2x.png',
       'https://b.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}@2x.png',
     ],
-    maxzoom: 10,
+    maxzoom: 13,
     attribution: '© OpenStreetMap · © CARTO',
     sky: { sky: '#87b8e8', horizon: '#c5dcf5', fog: '#6a9fd4' },
   },
@@ -75,7 +84,7 @@ const BASEMAPS: Record<BasemapId, BasemapDef> = {
       'https://a.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}@2x.png',
       'https://b.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}@2x.png',
     ],
-    maxzoom: 10,
+    maxzoom: 13,
     attribution: '© OpenStreetMap · © CARTO',
     sky: { sky: '#9ec5ea', horizon: '#dbeafe', fog: '#7eb0df' },
   },
@@ -90,20 +99,23 @@ const BASEMAPS: Record<BasemapId, BasemapDef> = {
       'https://a.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}@2x.png',
       'https://b.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}@2x.png',
     ],
-    maxzoom: 10,
+    maxzoom: 13,
     attribution: '© OpenStreetMap · © CARTO',
     sky: { sky: '#020617', horizon: '#0f172a', fog: '#020617' },
   },
 }
 
 const REGIONS: { id: string; label: string; center: [number, number]; zoom: number }[] = [
-  { id: 'world', label: 'World', center: [0, 8], zoom: 1.25 },
-  { id: 'atl', label: 'Atlantic', center: [-55, 22], zoom: 2.4 },
-  { id: 'epac', label: 'E. Pacific', center: [-120, 18], zoom: 2.5 },
-  { id: 'cpac', label: 'C. Pacific', center: [-160, 20], zoom: 2.5 },
-  { id: 'wpac', label: 'W. Pacific', center: [140, 18], zoom: 2.3 },
-  { id: 'nio', label: 'N. Indian', center: [75, 15], zoom: 2.6 },
+  { id: 'world', label: 'World', center: GLOBE_WORLD_CENTER, zoom: GLOBE_WORLD_ZOOM },
+  { id: 'atl', label: 'Atlantic', center: [-55, 22], zoom: 2.6 },
+  { id: 'epac', label: 'E. Pacific', center: [-120, 18], zoom: 2.7 },
+  { id: 'cpac', label: 'C. Pacific', center: [-160, 20], zoom: 2.7 },
+  { id: 'wpac', label: 'W. Pacific', center: [140, 18], zoom: 2.5 },
+  { id: 'nio', label: 'N. Indian', center: [75, 15], zoom: 2.8 },
 ]
+
+/** Sample longitudes used to pull max-zoom tiles into the cache around the sphere. */
+const WARM_LON_SAMPLES = [0, -90, 90, 180, -45, 45, -135, 135]
 
 function buildStyle(basemap: BasemapDef) {
   const sources: Record<string, maplibregl.RasterSourceSpecification> = {
@@ -129,7 +141,7 @@ function buildStyle(basemap: BasemapDef) {
       tiles: basemap.labels,
       tileSize: 256,
       attribution: '© CARTO',
-      maxzoom: Math.min(basemap.maxzoom, 10),
+      maxzoom: Math.min(basemap.maxzoom, 12),
     }
     layers.push({
       id: 'labels',
@@ -193,6 +205,50 @@ function applySky(map: MapLibreMap, basemap: BasemapDef) {
   } catch {
     /* optional */
   }
+}
+
+function waitMs(ms: number): Promise<void> {
+  return new Promise((r) => window.setTimeout(r, ms))
+}
+
+/**
+ * Pull highest-detail basemap tiles into MapLibre's cache by briefly visiting
+ * max zoom at sample longitudes, then return to the world view.
+ */
+async function warmGlobeTiles(
+  map: MapLibreMap,
+  cancelled: () => boolean,
+  onHint?: (s: string) => void,
+): Promise<void> {
+  const warmZoom = Math.min(map.getMaxZoom(), GLOBE_MAX_ZOOM)
+  onHint?.('Loading high-detail Earth…')
+  // First: max zoom at home longitude so local tiles fill immediately
+  map.jumpTo({ center: GLOBE_WORLD_CENTER, zoom: warmZoom, bearing: 0, pitch: 0 })
+  await waitMs(280)
+  if (cancelled()) return
+
+  for (let i = 0; i < WARM_LON_SAMPLES.length; i++) {
+    if (cancelled()) return
+    onHint?.(`Caching Earth tiles ${i + 1}/${WARM_LON_SAMPLES.length}…`)
+    map.jumpTo({
+      center: [WARM_LON_SAMPLES[i], 8],
+      zoom: warmZoom,
+      bearing: 0,
+      pitch: 0,
+    })
+    // Let the tile pipeline request + decode a frame of high-zoom imagery
+    await waitMs(160)
+  }
+  if (cancelled()) return
+
+  // Settle on full-earth view — high-zoom tiles remain in maxTileCacheSize
+  map.jumpTo({
+    center: GLOBE_WORLD_CENTER,
+    zoom: GLOBE_WORLD_ZOOM,
+    bearing: 0,
+    pitch: 0,
+  })
+  await waitMs(200)
 }
 
 export function GlobalRadarGlobe() {
@@ -672,13 +728,14 @@ export function GlobalRadarGlobe() {
     const map = new maplibregl.Map({
       container: el,
       style: buildStyle(initial),
-      center: [0, 8],
-      zoom: 1.25,
-      minZoom: 0.7,
-      maxZoom: 5.5,
+      // Boot at max zoom so first tiles requested are highest detail
+      center: GLOBE_WORLD_CENTER,
+      zoom: GLOBE_MAX_ZOOM,
+      minZoom: GLOBE_MIN_ZOOM,
+      maxZoom: GLOBE_MAX_ZOOM,
       pitch: 0,
       bearing: 0,
-      maxTileCacheSize: 500,
+      maxTileCacheSize: GLOBE_TILE_CACHE,
       fadeDuration: 0,
       refreshExpiredTiles: false,
       attributionControl: { compact: true },
@@ -727,11 +784,9 @@ export function GlobalRadarGlobe() {
           /* flat ok */
         }
         applySky(map, initial)
-        map.jumpTo({ center: [0, 8], zoom: 1.25, bearing: 0, pitch: 0 })
 
-        setLoadHint('Loading world map…')
-        // Short settle — long idle waits caused racey double-inits
-        await new Promise((r) => setTimeout(r, 400))
+        // Load Earth at max zoom around the sphere so detail stays in the tile cache
+        await warmGlobeTiles(map, () => cancelled, setLoadHint)
         if (cancelled) return
 
         setLoadHint('Loading global radar…')
@@ -752,8 +807,28 @@ export function GlobalRadarGlobe() {
         setFrameIdx(ni)
         readyRef.current = true
 
-        // One radar paint only
+        // Paint radar at world view, then briefly re-warm radar tiles at high zoom
         applyFrame(ni, true)
+        try {
+          const warmZ = Math.min(map.getMaxZoom(), RADAR_MAXZOOM)
+          map.jumpTo({ center: GLOBE_WORLD_CENTER, zoom: warmZ, bearing: 0, pitch: 0 })
+          await waitMs(220)
+          if (!cancelled) {
+            applyFrame(ni, true)
+            await waitMs(180)
+          }
+          if (!cancelled) {
+            map.jumpTo({
+              center: GLOBE_WORLD_CENTER,
+              zoom: GLOBE_WORLD_ZOOM,
+              bearing: 0,
+              pitch: 0,
+            })
+            applyFrame(ni, true)
+          }
+        } catch {
+          /* non-fatal */
+        }
 
         setLoadHint('Loading tropical cyclones…')
         try {
