@@ -18,8 +18,8 @@ type SpeedKey = keyof typeof SPEED_MS
 const RADAR_ID = 'radar-live'
 const RADAR_MAXZOOM = 7
 
-/** Degrees of longitude advanced per animation frame while spinning (~full turn ~45s). */
-const SPIN_DEG_PER_FRAME = 0.35
+/** Degrees of longitude advanced per animation frame while spinning (~full turn ~90s at 60fps). */
+const SPIN_DEG_PER_FRAME = 0.12
 
 type BasemapId = 'satellite' | 'voyager' | 'light' | 'dark'
 
