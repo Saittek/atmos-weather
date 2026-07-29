@@ -13,9 +13,8 @@ Use these shots for App Store Connect (iPhone 6.7" / 6.5" required). Capture fro
 | 5 | **3D Earth** + hurricane track + radar | **Storms on a real globe** |
 | 6 | Storm Chasers + chase pack share | **Chase desk in your pocket** |
 | 7 | Alerts / What matters now | **Severity, timing, action** |
-| 8 | Rain widget `/widget` | **One-tap rain check on your home screen** |
-| 9 | Favorites / home pin | **All your places, rain-watched** |
-| 10 | Settings (theme + plan Free) | **Units, theme, cloud sync** |
+| 8 | Favorites / home pin | **All your places, rain-watched** |
+| 9 | Settings (theme + plan Free) | **Units, theme, cloud sync** |
 
 See also **`APP_STORE_LISTING.md`** for subtitle, description, and review notes.
 
@@ -34,15 +33,6 @@ To re-test: clear site data or run in the browser console:
 ```js
 localStorage.removeItem('solara-onboarding-v1')
 ```
-
-## Home screen “widget”
-
-Until native WidgetKit / Live Activities ship:
-
-- PWA / home-screen shortcut → **https://solaraweather.com/widget**
-- iOS: Safari → Share → **Add to Home Screen**
-- Android: browser install / add to home screen
-- App Store listing can mention “Rain Widget shortcut” and plan “Live Activities” in What’s New later
 
 ## Privacy / support URLs (required)
 

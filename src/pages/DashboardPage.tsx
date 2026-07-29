@@ -361,9 +361,6 @@ export default function DashboardPage() {
             <Link to={radarPath} className="primary-btn radar-open-btn">
               📡 Full-page radar
             </Link>
-            <Link to="/widget" className="chip-btn hide-sm">
-              ☔ Rain widget
-            </Link>
             {isMobile && wantRadar && !stormMode && (
               <button
                 type="button"
@@ -534,14 +531,6 @@ export default function DashboardPage() {
               )}
               <Link to={radarPath} className="chip-btn icon-chip nav-chip" title="Full-page radar" aria-label="Radar">
                 📡
-              </Link>
-              <Link
-                to="/widget"
-                className="chip-btn icon-chip nav-chip hide-sm"
-                title="Home rain widget"
-                aria-label="Rain widget"
-              >
-                ☔
               </Link>
             </nav>
             <SettingsBar

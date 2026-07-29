@@ -82,7 +82,7 @@ async function main() {
   }
 
   // Client routes (SPA fallback should still 200)
-  for (const p of ['/radar', '/globe', '/chase', '/widget']) {
+  for (const p of ['/radar', '/globe', '/chase']) {
     const { res } = await get(p)
     if (res.ok) ok(`GET ${p} (SPA)`)
     else fail(`GET ${p}`, `${res.status}`)

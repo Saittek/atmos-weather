@@ -119,9 +119,6 @@ export default function RadarPage() {
           <span>{place.name}</span>
         </div>
         <div className="radar-page-actions">
-          <Link to="/widget" className="chip-btn hide-sm">
-            ☔ Widget
-          </Link>
           <Link to="/" className="chip-btn hide-sm">
             Home
           </Link>

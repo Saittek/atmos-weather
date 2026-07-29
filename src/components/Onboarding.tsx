@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Link } from 'react-router-dom'
-import { isNativeApp } from '../lib/native'
 
 const KEY = 'solara-onboarding-v1'
 
@@ -18,8 +16,8 @@ const STEPS = [
   },
   {
     emoji: '🏠',
-    title: 'Home screen rain widget',
-    body: 'Add the Rain Widget for one-tap checks. On iPhone: Share → Add to Home Screen from the widget page.',
+    title: 'Set your home',
+    body: 'Pin home in Saved places for one-tap return, alerts that matter there, and clearer “at home” context.',
   },
 ] as const
 
@@ -51,10 +49,6 @@ export function Onboarding() {
 
   const s = STEPS[step]
   const last = step >= STEPS.length - 1
-  const iosHint =
-    !isNativeApp() &&
-    /iPhone|iPad|iPod/i.test(navigator.userAgent) &&
-    step === 2
 
   return createPortal(
     <div className="onboard-overlay" role="dialog" aria-modal="true" aria-labelledby="onboard-title">
@@ -70,15 +64,6 @@ export function Onboarding() {
         </div>
         <h2 id="onboard-title">{s.title}</h2>
         <p>{s.body}</p>
-        {iosHint && (
-          <p className="onboard-ios-hint">
-            Safari → <strong>Share</strong> → <strong>Add to Home Screen</strong> on{' '}
-            <Link to="/widget" onClick={finish}>
-              Rain Widget
-            </Link>
-            .
-          </p>
-        )}
         <div className="onboard-actions">
           {!last ? (
             <>

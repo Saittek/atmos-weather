@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>
@@ -90,15 +89,12 @@ export function InstallPrompt({ compact }: Props) {
         <span>
           {iosGuide
             ? compact
-              ? 'Safari → Share → Add to Home Screen for a home-screen weather icon.'
-              : 'On iPhone: tap Share, then Add to Home Screen. Use the Weather widget page for a compact home icon.'
+              ? 'Safari → Share → Add to Home Screen for a home-screen icon.'
+              : 'On iPhone: tap Share, then Add to Home Screen for one-tap Solara.'
             : compact
               ? 'Install to your home screen for one-tap weather checks.'
-              : 'Home screen app with weather widget, radar, and dashboard shortcuts.'}
+              : 'Home screen app with radar, alerts, and full forecasts.'}
         </span>
-        <Link to="/widget" className="install-widget-link" onClick={dismiss}>
-          Open weather widget →
-        </Link>
       </div>
       <div className="install-prompt-actions">
         {deferred && (
