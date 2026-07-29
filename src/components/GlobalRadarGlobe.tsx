@@ -11,7 +11,6 @@ import { fetchTropicalGlobeData } from '../api/weather'
 import type { TropicalGlobeData, TropicalStorm } from '../api/types'
 import { formatRadarTime } from '../utils/format'
 import {
-  destinationPoint,
   solarElevationSin,
   subsolarPoint,
   terminatorLine,
@@ -195,6 +194,23 @@ function normalizeLon(lon: number): number {
  * camera center. map.project() still returns coords for the back side — those
  * make hurricane paths jump across the disk while rotating.
  */
+/** cos(angular distance) from camera look-at to a lon/lat on the unit sphere. */
+function frontCosC(
+  lon: number,
+  lat: number,
+  centerLng: number,
+  centerLat: number,
+): number {
+  const toRad = Math.PI / 180
+  const φ1 = centerLat * toRad
+  const λ1 = centerLng * toRad
+  const φ2 = lat * toRad
+  const λ2 = lon * toRad
+  return (
+    Math.sin(φ1) * Math.sin(φ2) + Math.cos(φ1) * Math.cos(φ2) * Math.cos(λ2 - λ1)
+  )
+}
+
 function isFrontOfGlobe(
   lon: number,
   lat: number,
@@ -203,15 +219,12 @@ function isFrontOfGlobe(
   /** 0 = horizon; higher hides near-limb points that jitter */
   margin = 0.12,
 ): boolean {
-  const toRad = Math.PI / 180
-  const φ1 = centerLat * toRad
-  const λ1 = centerLng * toRad
-  const φ2 = lat * toRad
-  const λ2 = lon * toRad
-  // Great-circle cos(c) between camera target and point on unit sphere
-  const cosC =
-    Math.sin(φ1) * Math.sin(φ2) + Math.cos(φ1) * Math.cos(φ2) * Math.cos(λ2 - λ1)
-  return cosC > margin
+  return frontCosC(lon, lat, centerLng, centerLat) > margin
+}
+
+function smoothstep01(t: number): number {
+  const x = Math.max(0, Math.min(1, t))
+  return x * x * (3 - 2 * x)
 }
 
 function applySky(map: MapLibreMap, basemap: BasemapDef) {
@@ -340,10 +353,11 @@ export function GlobalRadarGlobe() {
   }, [])
 
   /**
-   * Day/night canvas overlay.
-   * - Soft terminator via solar-elevation alpha (no blocky fillRect grid)
-   * - When zoomed in: shade the full viewport (limb is off-screen — old R-circle shrank)
-   * - When zoomed out: soft circular mask to the globe disk so sky stays clear
+   * Day/night canvas — locked to the Earth surface at every zoom.
+   *
+   * No “guess the globe radius” circle (that shrank when zoomed). Instead each
+   * pixel is: unproject → re-project (must land back on itself = on globe) →
+   * front-hemisphere soft limb → soft solar terminator.
    */
   const paintDayNight = useCallback((map: MapLibreMap, date = new Date()) => {
     const canvas = dayNightCanvasRef.current
@@ -359,8 +373,8 @@ export function GlobalRadarGlobe() {
     }
     canvas.style.display = ''
 
-    // Paint at moderate internal resolution, then scale up smoothly (anti-aliased edges)
-    const maxEdge = 900
+    // Internal buffer (upscaled with smoothing for soft edges)
+    const maxEdge = 960
     const scale = Math.min(1, maxEdge / Math.max(cssW, cssH))
     const sw = Math.max(2, Math.round(cssW * scale))
     const sh = Math.max(2, Math.round(cssH * scale))
@@ -383,30 +397,7 @@ export function GlobalRadarGlobe() {
     const center = map.getCenter()
     const cLng = center.lng
     const cLat = center.lat
-    const zoom = map.getZoom()
-    const centerPt = map.project([cLng, cLat])
 
-    // Limb radius in CSS pixels — use MAX sample so we never under-cover the disk
-    let Rcss = 0
-    for (let b = 0; b < 360; b += 12) {
-      for (const ang of [80, 86, 89, 89.9]) {
-        const [lon, lat] = destinationPoint(cLng, cLat, ang, b)
-        if (!isFrontOfGlobe(lon, lat, cLng, cLat, -0.2)) continue
-        const p = map.project([lon, lat])
-        if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) continue
-        const d = Math.hypot(p.x - centerPt.x, p.y - centerPt.y)
-        if (d > Rcss && d < Math.hypot(cssW, cssH) * 1.2) Rcss = d
-      }
-    }
-    if (Rcss < 8) Rcss = Math.min(cssW, cssH) * 0.45
-    // Slight overscan so the mask never sits inside the planet
-    Rcss *= 1.03
-
-    // When zoomed in the limb is off-screen — don't clip to a circle smaller than the Earth
-    const limbOnScreen = zoom < 2.6 && Rcss < Math.max(cssW, cssH) * 0.72
-    const useCircleMask = limbOnScreen
-
-    // Low-res buffer (reuse canvas)
     let buf = dayNightBufRef.current
     if (!buf) {
       buf = document.createElement('canvas')
@@ -423,28 +414,18 @@ export function GlobalRadarGlobe() {
 
     const sx = sw / cssW
     const sy = sh / cssH
-    const cx = centerPt.x * sx
-    const cy = centerPt.y * sy
-    const Rs = Rcss * Math.min(sx, sy)
-    const softRing = Math.max(1.5, Rs * 0.012) // soft disk edge in buffer px
-    // Terminator softness in sin(elevation) space (~a few degrees)
-    const termSoft = 0.07
-    const maxA = 175 // 0–255 night opacity before multiply
+    // Re-project error threshold (css px): sky samples fail this; surface passes
+    const maxReprojErr = Math.max(2.25, 3.25 / scale)
+    // Soft limb: fade as cosC → 0 (horizon of the planet)
+    const limbSoft = 0.055
+    // Soft terminator in sin(solar elevation)
+    const termSoft = 0.065
+    const maxA = 178
 
     for (let y = 0; y < sh; y++) {
       for (let x = 0; x < sw; x++) {
         const cssX = (x + 0.5) / sx
         const cssY = (y + 0.5) / sy
-
-        let diskA = 1
-        if (useCircleMask) {
-          const dist = Math.hypot(x + 0.5 - cx, y + 0.5 - cy)
-          if (dist > Rs + softRing) continue
-          if (dist > Rs - softRing) {
-            const t = (Rs + softRing - dist) / (2 * softRing)
-            diskA = t * t * (3 - 2 * t)
-          }
-        }
 
         let ll: { lng: number; lat: number }
         try {
@@ -453,21 +434,31 @@ export function GlobalRadarGlobe() {
           continue
         }
         if (!Number.isFinite(ll.lng) || !Number.isFinite(ll.lat)) continue
-        // Cull sky / far side; more lenient so zoomed limb still shades
-        if (!isFrontOfGlobe(ll.lng, ll.lat, cLng, cLat, useCircleMask ? 0.02 : -0.05)) {
+
+        // Must land back on the same screen pixel → on the rendered globe surface
+        let p2: { x: number; y: number }
+        try {
+          p2 = map.project([ll.lng, ll.lat])
+        } catch {
           continue
         }
+        if (!Number.isFinite(p2.x) || !Number.isFinite(p2.y)) continue
+        if (Math.hypot(p2.x - cssX, p2.y - cssY) > maxReprojErr) continue
+
+        // Front of globe only; soft fade at the limb so edges match Earth, not a smaller disk
+        const cosC = frontCosC(ll.lng, ll.lat, cLng, cLat)
+        if (cosC <= 0) continue
+        const limbA =
+          cosC >= limbSoft ? 1 : smoothstep01(cosC / limbSoft)
 
         const sinEl = solarElevationSin(ll.lng, ll.lat, date)
-        // Day: skip. Night: full. Near terminator: smooth ramp.
         let nightA = 0
         if (sinEl <= -termSoft) nightA = 1
         else if (sinEl < termSoft) {
-          const t = (termSoft - sinEl) / (2 * termSoft)
-          nightA = t * t * (3 - 2 * t)
+          nightA = smoothstep01((termSoft - sinEl) / (2 * termSoft))
         } else continue
 
-        const a = Math.round(maxA * nightA * diskA)
+        const a = Math.round(maxA * nightA * limbA)
         if (a < 1) continue
         const i = (y * sw + x) * 4
         data[i] = 4
@@ -478,27 +469,27 @@ export function GlobalRadarGlobe() {
     }
     bctx.putImageData(img, 0, 0)
 
-    // Upscale with smoothing → soft edges
     ctx.imageSmoothingEnabled = true
     ctx.imageSmoothingQuality = 'high'
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     ctx.drawImage(buf, 0, 0, sw, sh, 0, 0, cssW, cssH)
 
-    // Gold terminator (denser samples, soft stroke)
-    const term = terminatorLine(date, 256)
-    ctx.strokeStyle = 'rgba(253, 230, 138, 0.9)'
+    // Gold terminator — only where re-project stays on the globe
+    const term = terminatorLine(date, 288)
+    ctx.strokeStyle = 'rgba(253, 230, 138, 0.92)'
     ctx.lineWidth = 2
     ctx.lineJoin = 'round'
     ctx.lineCap = 'round'
-    ctx.shadowColor = 'rgba(251, 191, 36, 0.45)'
+    ctx.shadowColor = 'rgba(251, 191, 36, 0.4)'
     ctx.shadowBlur = 4
     ctx.beginPath()
     let pen = false
     let prevX = 0
     let prevY = 0
-    const jumpLim = Math.max(40, Rcss * 0.45)
+    const jumpLim = Math.max(48, Math.min(cssW, cssH) * 0.2)
     for (const [lon, lat] of term) {
-      if (!isFrontOfGlobe(lon, lat, cLng, cLat, 0.02)) {
+      const cosC = frontCosC(lon, lat, cLng, cLat)
+      if (cosC <= 0.02) {
         pen = false
         continue
       }
@@ -507,12 +498,17 @@ export function GlobalRadarGlobe() {
         pen = false
         continue
       }
-      if (useCircleMask) {
-        const d = Math.hypot(p.x - centerPt.x, p.y - centerPt.y)
-        if (d > Rcss + 6) {
+      // Stay on surface (reject sky projections of terminator samples)
+      try {
+        const back = map.unproject([p.x, p.y])
+        const p3 = map.project([back.lng, back.lat])
+        if (Math.hypot(p3.x - p.x, p3.y - p.y) > maxReprojErr * 1.5) {
           pen = false
           continue
         }
+      } catch {
+        pen = false
+        continue
       }
       if (pen && Math.hypot(p.x - prevX, p.y - prevY) > jumpLim) pen = false
       if (!pen) ctx.moveTo(p.x, p.y)
@@ -524,20 +520,26 @@ export function GlobalRadarGlobe() {
     ctx.stroke()
     ctx.shadowBlur = 0
 
-    // Sun marker
+    // Sun marker when on the front surface
     const sun = subsolarPoint(date)
-    if (isFrontOfGlobe(sun.lon, sun.lat, cLng, cLat, 0.12)) {
+    if (frontCosC(sun.lon, sun.lat, cLng, cLat) > 0.12) {
       const sp = map.project([sun.lon, sun.lat])
       if (Number.isFinite(sp.x) && Number.isFinite(sp.y)) {
-        if (!useCircleMask || Math.hypot(sp.x - centerPt.x, sp.y - centerPt.y) < Rcss) {
-          const g = ctx.createRadialGradient(sp.x, sp.y, 0, sp.x, sp.y, 16)
-          g.addColorStop(0, 'rgba(254, 243, 199, 0.95)')
-          g.addColorStop(0.4, 'rgba(251, 191, 36, 0.5)')
-          g.addColorStop(1, 'rgba(251, 191, 36, 0)')
-          ctx.fillStyle = g
-          ctx.beginPath()
-          ctx.arc(sp.x, sp.y, 16, 0, Math.PI * 2)
-          ctx.fill()
+        try {
+          const back = map.unproject([sp.x, sp.y])
+          const p3 = map.project([back.lng, back.lat])
+          if (Math.hypot(p3.x - sp.x, p3.y - sp.y) <= maxReprojErr * 2) {
+            const g = ctx.createRadialGradient(sp.x, sp.y, 0, sp.x, sp.y, 16)
+            g.addColorStop(0, 'rgba(254, 243, 199, 0.95)')
+            g.addColorStop(0.4, 'rgba(251, 191, 36, 0.5)')
+            g.addColorStop(1, 'rgba(251, 191, 36, 0)')
+            ctx.fillStyle = g
+            ctx.beginPath()
+            ctx.arc(sp.x, sp.y, 16, 0, Math.PI * 2)
+            ctx.fill()
+          }
+        } catch {
+          /* ignore */
         }
       }
     }
