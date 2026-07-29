@@ -7731,7 +7731,8 @@ html.mobile-perf .earth-nav-glow {
   font-weight: 700;
   padding: 0.2rem 0.5rem;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--surface-2, rgba(255, 255, 255, 0.08));
+  color: var(--text);
 }
 .summary-wet-pill.wet-wet {
   background: rgba(14, 165, 233, 0.25);
@@ -7756,9 +7757,13 @@ html.mobile-perf .earth-nav-glow {
 
 .glance-modules {
   margin: 0.35rem 0 0.75rem;
+  color: var(--text);
 }
 .glance-header {
   margin-bottom: 0.55rem !important;
+}
+.glance-header h2 {
+  color: var(--text);
 }
 .glance-grid {
   display: grid;
@@ -7774,7 +7779,8 @@ html.mobile-perf .earth-nav-glow {
   padding: 0.7rem 0.75rem 0.75rem;
   border-radius: 16px;
   border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
-  background: rgba(15, 23, 42, 0.55);
+  background: var(--surface-2, rgba(15, 23, 42, 0.55));
+  color: var(--text);
   min-height: 6.5rem;
   display: flex;
   flex-direction: column;
@@ -7802,6 +7808,7 @@ html.mobile-perf .earth-nav-glow {
   font-weight: 800;
   letter-spacing: -0.03em;
   line-height: 1.15;
+  color: var(--text);
 }
 .glance-sub {
   margin: 0;
@@ -7815,17 +7822,17 @@ html.mobile-perf .earth-nav-glow {
   width: 1.6rem;
   height: 1.6rem;
   border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid var(--border);
   display: grid;
   place-items: center;
   font-size: 0.85rem;
-  color: #7dd3fc;
+  color: var(--accent, #7dd3fc);
 }
 .glance-meter {
   margin-top: 0.4rem;
   height: 4px;
   border-radius: 99px;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--surface, rgba(255, 255, 255, 0.1));
   overflow: hidden;
 }
 .glance-meter-fill {
