@@ -67,7 +67,8 @@ export function isNativeIosWidgetSupported(): boolean {
 }
 
 /**
- * Always publish the location just loaded so the Home Screen tile updates.
+ * Publish weather for the Home Screen tile.
+ * Prefers exact home pin when the loaded place is home (or only home weather was passed).
  */
 export async function publishNativeWidgetSnapshot(opts: {
   location: LocationResult
@@ -79,7 +80,25 @@ export async function publishNativeWidgetSnapshot(opts: {
   if (!opts.weather?.current || !opts.location) return
 
   try {
-    const snapshot = buildWidgetSnapshot(opts.location, opts.weather, opts.units)
+    // Tile should show home when user has a home pin and we're viewing home
+    // (or when caller passes home as location). Never invent coords without weather.
+    let place = opts.location
+    const home = opts.homeLocation
+    if (home && Number.isFinite(home.latitude) && Number.isFinite(home.longitude)) {
+      const sameHome =
+        Math.abs(home.latitude - opts.location.latitude) < 0.0008 &&
+        Math.abs(home.longitude - opts.location.longitude) < 0.0008
+      if (sameHome) {
+        place = {
+          ...opts.location,
+          name: (home.name || opts.location.name || 'Home').replace(/\s*\(Home\)\s*$/i, '').trim() || 'Home',
+          latitude: home.latitude,
+          longitude: home.longitude,
+        }
+      }
+    }
+
+    const snapshot = buildWidgetSnapshot(place, opts.weather, opts.units)
     if (!Number.isFinite(snapshot.lat) || !Number.isFinite(snapshot.lon)) return
 
     const result = await SolaraWidget.setSnapshot({ json: JSON.stringify(snapshot) })

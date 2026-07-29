@@ -682,6 +682,102 @@ html.mobile-perf[data-theme='light'] .topbar {
   color: #0f172a;
 }
 
+/* ===== Area chat (light) ===== */
+[data-theme='light'] .area-chat-panel {
+  background: rgba(255, 255, 255, 0.97) !important;
+  border-color: rgba(15, 23, 42, 0.12) !important;
+  color: #0f172a !important;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
+}
+
+[data-theme='light'] .area-chat-head {
+  border-bottom-color: rgba(15, 23, 42, 0.1);
+}
+
+[data-theme='light'] .area-chat-head strong,
+[data-theme='light'] .area-chat-msg p {
+  color: #0f172a !important;
+}
+
+[data-theme='light'] .area-chat-head span,
+[data-theme='light'] .area-chat-meta,
+[data-theme='light'] .area-chat-meta time,
+[data-theme='light'] .area-chat-empty {
+  color: rgba(15, 23, 42, 0.6) !important;
+}
+
+[data-theme='light'] .area-chat-msg {
+  background: rgba(15, 23, 42, 0.04);
+  border-color: rgba(15, 23, 42, 0.08);
+}
+
+[data-theme='light'] .area-chat-msg.mine {
+  background: rgba(3, 105, 161, 0.1);
+  border-color: rgba(3, 105, 161, 0.2);
+}
+
+[data-theme='light'] .area-chat-compose {
+  border-top-color: rgba(15, 23, 42, 0.1);
+  background: rgba(248, 250, 252, 0.95);
+}
+
+[data-theme='light'] .area-chat-compose input {
+  background: #fff;
+  color: #0f172a;
+  border-color: rgba(15, 23, 42, 0.15);
+}
+
+[data-theme='light'] .area-chat-error {
+  background: rgba(254, 226, 226, 0.9);
+  color: #991b1b;
+  border-color: rgba(185, 28, 28, 0.3);
+}
+
+[data-theme='light'] .area-chat-signin p {
+  color: rgba(15, 23, 42, 0.7);
+}
+
+/* Map overlays / radar chrome on light dashboard embeds */
+[data-theme='light'] .radar-time-badge,
+[data-theme='light'] .radar-legend,
+[data-theme='light'] .radar-buffer-bar {
+  background: rgba(255, 255, 255, 0.92) !important;
+  color: #0f172a !important;
+  border-color: rgba(15, 23, 42, 0.12) !important;
+}
+
+[data-theme='light'] .radar-overlay-msg {
+  background: rgba(248, 250, 252, 0.75);
+  color: #0f172a;
+}
+
+[data-theme='light'] .ventusky-bar {
+  background: rgba(255, 255, 255, 0.95);
+  color: #0f172a;
+  border-top-color: rgba(15, 23, 42, 0.1);
+}
+
+[data-theme='light'] .settings-quiet-hours {
+  color: rgba(15, 23, 42, 0.7);
+}
+
+[data-theme='light'] .settings-quiet-hours input[type='time'] {
+  background: #fff;
+  color: #0f172a;
+  border-color: rgba(15, 23, 42, 0.15);
+}
+
+/* Empty / error states */
+[data-theme='light'] .empty-state-rich,
+[data-theme='light'] .muted-center {
+  color: rgba(15, 23, 42, 0.72);
+}
+
+[data-theme='light'] .error-banner,
+[data-theme='light'] .status-toast {
+  color: #0f172a;
+}
+
 /* Soften wet-decision icons if any forced dark filters */
 [data-theme='light'] .wet-decision-icon {
   color: var(--text);

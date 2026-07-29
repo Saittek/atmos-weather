@@ -12,6 +12,9 @@ interface Props {
   severeMode: boolean
   stormMode: boolean
   notifyAlerts: boolean
+  quietHoursEnabled?: boolean
+  quietStart?: string
+  quietEnd?: string
   isFavorite: boolean
   cloudSynced: boolean
   hasHome?: boolean
@@ -22,6 +25,11 @@ interface Props {
   onSevereMode: (v: boolean) => void
   onStormMode: (v: boolean) => void
   onNotify: (v: boolean) => void
+  onQuietHours?: (patch: {
+    quietHoursEnabled?: boolean
+    quietStart?: string
+    quietEnd?: string
+  }) => void
   onToggleFavorite: () => void
   onGoHome?: () => void
   onSetHome?: () => void
@@ -39,6 +47,9 @@ export function SettingsBar({
   severeMode,
   stormMode,
   notifyAlerts,
+  quietHoursEnabled = false,
+  quietStart = '22:00',
+  quietEnd = '07:00',
   isFavorite,
   cloudSynced,
   hasHome,
@@ -48,6 +59,7 @@ export function SettingsBar({
   onDensity,
   onSevereMode,
   onStormMode,
+  onQuietHours,
   onNotify,
   onToggleFavorite,
   onGoHome,
@@ -161,9 +173,46 @@ export function SettingsBar({
           />
           <span>
             <strong>Notify</strong>
-            <em>Rain watch &amp; alerts</em>
+            <em>Rain watch &amp; alerts (re-registers push when on)</em>
           </span>
         </label>
+        {notifyAlerts && onQuietHours && (
+          <>
+            <label className="settings-more-row">
+              <input
+                type="checkbox"
+                checked={quietHoursEnabled}
+                onChange={(e) =>
+                  onQuietHours({ quietHoursEnabled: e.target.checked })
+                }
+              />
+              <span>
+                <strong>Quiet hours</strong>
+                <em>Mute non-Extreme alerts overnight</em>
+              </span>
+            </label>
+            {quietHoursEnabled && (
+              <div className="settings-quiet-hours">
+                <label>
+                  From
+                  <input
+                    type="time"
+                    value={quietStart}
+                    onChange={(e) => onQuietHours({ quietStart: e.target.value })}
+                  />
+                </label>
+                <label>
+                  To
+                  <input
+                    type="time"
+                    value={quietEnd}
+                    onChange={(e) => onQuietHours({ quietEnd: e.target.value })}
+                  />
+                </label>
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       <div className="settings-more-section">

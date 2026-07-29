@@ -25,9 +25,7 @@ enum SolaraWidgetStore {
     }
 
     static func loadSnapshotJSON() -> String? {
-        if let raw = defaults?.string(forKey: snapshotKey), !raw.isEmpty {
-            return raw
-        }
+        // Prefer App Group file (plugin writes file first; UserDefaults can lag)
         if let dir = FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: appGroupId
         ) {
@@ -35,6 +33,9 @@ enum SolaraWidgetStore {
             if let raw = try? String(contentsOf: file, encoding: .utf8), !raw.isEmpty {
                 return raw
             }
+        }
+        if let raw = defaults?.string(forKey: snapshotKey), !raw.isEmpty {
+            return raw
         }
         return nil
     }

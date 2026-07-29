@@ -26,9 +26,10 @@ import type { Units } from '../utils/format'
 import { useAuth } from './useAuth'
 import { getCurrentPosition } from '../lib/native'
 import { publishNativeWidgetSnapshot } from '../lib/nativeWidget'
-import { loadOfflineBundle, saveOfflineBundle } from '../utils/offlineCache'
+import { loadOfflineBundle, offlineAgeLabel, saveOfflineBundle } from '../utils/offlineCache'
 import { filterActiveAlerts } from '../utils/activeAlerts'
 import { applyTheme } from '../lib/theme'
+import { shouldSuppressAlertNotify } from '../utils/quietHours'
 
 const STORAGE_KEY = 'atmos-weather-prefs-v2'
 const NOTIFIED_KEY = 'atmos-notified-alerts'
@@ -46,6 +47,12 @@ export interface Prefs {
   /** Radar-first, intense UI — the signature “stand out” mode */
   stormMode: boolean
   notifyAlerts: boolean
+  /** Mute non-Extreme push/local alerts in this local-time window */
+  quietHoursEnabled: boolean
+  /** "HH:MM" 24h */
+  quietStart: string
+  /** "HH:MM" 24h */
+  quietEnd: string
 }
 
 function loadPrefs(): Prefs {
@@ -63,6 +70,9 @@ function loadPrefs(): Prefs {
         severeMode: p.severeMode ?? true,
         stormMode: p.stormMode ?? false,
         notifyAlerts: p.notifyAlerts ?? false,
+        quietHoursEnabled: p.quietHoursEnabled ?? false,
+        quietStart: typeof p.quietStart === 'string' ? p.quietStart : '22:00',
+        quietEnd: typeof p.quietEnd === 'string' ? p.quietEnd : '07:00',
       }
     }
     const old = localStorage.getItem('atmos-weather-prefs')
@@ -78,6 +88,9 @@ function loadPrefs(): Prefs {
         severeMode: true,
         stormMode: false,
         notifyAlerts: false,
+        quietHoursEnabled: false,
+        quietStart: '22:00',
+        quietEnd: '07:00',
       }
     }
   } catch {
@@ -92,6 +105,9 @@ function loadPrefs(): Prefs {
     severeMode: true,
     stormMode: false,
     notifyAlerts: false,
+    quietHoursEnabled: false,
+    quietStart: '22:00',
+    quietEnd: '07:00',
   }
 }
 
@@ -114,6 +130,9 @@ function prefsToCloud(p: Prefs): CloudPrefs {
     severeMode: p.severeMode,
     stormMode: p.stormMode,
     notifyAlerts: p.notifyAlerts,
+    quietHoursEnabled: p.quietHoursEnabled,
+    quietStart: p.quietStart,
+    quietEnd: p.quietEnd,
   }
 }
 
@@ -143,6 +162,9 @@ function cloudToPrefs(c: CloudPrefs, local: Prefs): Prefs {
     severeMode: c.severeMode ?? local.severeMode,
     stormMode: c.stormMode ?? local.stormMode,
     notifyAlerts: c.notifyAlerts ?? local.notifyAlerts,
+    quietHoursEnabled: c.quietHoursEnabled ?? local.quietHoursEnabled,
+    quietStart: c.quietStart ?? local.quietStart,
+    quietEnd: c.quietEnd ?? local.quietEnd,
   }
 }
 
@@ -362,6 +384,15 @@ export function useWeather() {
         setLoading(false)
         setRefreshing(false)
 
+        // Save forecast ASAP so offline + widget have something even if air fails
+        saveOfflineBundle({
+          location: loc,
+          weather: w,
+          air: null,
+          alerts: [],
+          savedAt: Date.now(),
+        })
+
         // Home Screen WidgetKit tile (iOS native app only)
         void publishNativeWidgetSnapshot({
           location: loc,
@@ -373,69 +404,81 @@ export function useWeather() {
         // Phase 1b — air + alerts (don't block the first paint)
         const loadAirAlerts = async () => {
           if (gen !== fetchGen.current) return
-          const [a, al] = await Promise.all([
-            fetchAirQuality(loc.latitude, loc.longitude, { lite: mobile }),
-            fetchAlerts(loc.latitude, loc.longitude),
-          ])
-          if (gen !== fetchGen.current) return
-          const activeAlerts = filterActiveAlerts(al)
-          setAir(a)
-          setAlerts(activeAlerts)
-          saveOfflineBundle({
-            location: loc,
-            weather: w,
-            air: a,
-            alerts: activeAlerts,
-            savedAt: Date.now(),
-          })
-          const severe = activeAlerts.some((x) =>
-            ['Extreme', 'Severe', 'Moderate'].includes(x.severity),
-          )
-          setSevereActive(severe)
+          try {
+            const [a, al] = await Promise.all([
+              fetchAirQuality(loc.latitude, loc.longitude, { lite: mobile }),
+              fetchAlerts(loc.latitude, loc.longitude),
+            ])
+            if (gen !== fetchGen.current) return
+            const activeAlerts = filterActiveAlerts(al)
+            setAir(a)
+            setAlerts(activeAlerts)
+            saveOfflineBundle({
+              location: loc,
+              weather: w,
+              air: a,
+              alerts: activeAlerts,
+              savedAt: Date.now(),
+            })
+            const severe = activeAlerts.some((x) =>
+              ['Extreme', 'Severe', 'Moderate'].includes(x.severity),
+            )
+            setSevereActive(severe)
 
-          const notify = prefsRef.current.notifyAlerts
-          if (
-            notify &&
-            'Notification' in window &&
-            Notification.permission === 'granted'
-          ) {
-            for (const top of activeAlerts.slice(0, 3)) {
-              if (!['Extreme', 'Severe', 'Moderate'].includes(top.severity)) continue
-              if (notifiedRef.current.has(top.id)) continue
-              notifiedRef.current.add(top.id)
-              try {
-                new Notification(`Solara: ${top.event}`, {
-                  body: top.headline,
-                  icon: '/icons/icon-192.png',
-                  tag: top.id,
-                })
-              } catch {
-                /* ignore */
-              }
-            }
-            saveNotified(notifiedRef.current)
-            const aqi = a?.current?.us_aqi
-            if (aqi != null && aqi >= 100) {
-              const aqiKey = `aqi-${locationKey(loc)}-${Math.floor(aqi / 25)}`
-              try {
-                const raw = sessionStorage.getItem(AQI_NOTIFIED_KEY)
-                const set = new Set(raw ? (JSON.parse(raw) as string[]) : [])
-                if (!set.has(aqiKey)) {
-                  set.add(aqiKey)
-                  sessionStorage.setItem(
-                    AQI_NOTIFIED_KEY,
-                    JSON.stringify([...set].slice(-30)),
-                  )
-                  new Notification('Solara air quality', {
-                    body: `AQI ${aqi} near ${loc.name} — limit outdoor time if sensitive`,
-                    icon: '/icons/icon-192.png',
-                    tag: aqiKey,
-                  })
+            const notify = prefsRef.current.notifyAlerts
+            const quietPrefs = prefsRef.current
+            if (
+              notify &&
+              'Notification' in window &&
+              Notification.permission === 'granted'
+            ) {
+              for (const top of activeAlerts.slice(0, 3)) {
+                if (!['Extreme', 'Severe', 'Moderate'].includes(top.severity)) continue
+                if (
+                  shouldSuppressAlertNotify(quietPrefs, top.severity)
+                ) {
+                  continue
                 }
-              } catch {
-                /* ignore */
+                if (notifiedRef.current.has(top.id)) continue
+                notifiedRef.current.add(top.id)
+                try {
+                  new Notification(`Solara: ${top.event}`, {
+                    body: top.headline,
+                    icon: '/icons/icon-192.png',
+                    tag: top.id,
+                  })
+                } catch {
+                  /* ignore */
+                }
+              }
+              saveNotified(notifiedRef.current)
+              if (!shouldSuppressAlertNotify(quietPrefs, 'Moderate')) {
+                const aqi = a?.current?.us_aqi
+                if (aqi != null && aqi >= 100) {
+                  const aqiKey = `aqi-${locationKey(loc)}-${Math.floor(aqi / 25)}`
+                  try {
+                    const raw = sessionStorage.getItem(AQI_NOTIFIED_KEY)
+                    const set = new Set(raw ? (JSON.parse(raw) as string[]) : [])
+                    if (!set.has(aqiKey)) {
+                      set.add(aqiKey)
+                      sessionStorage.setItem(
+                        AQI_NOTIFIED_KEY,
+                        JSON.stringify([...set].slice(-30)),
+                      )
+                      new Notification('Solara air quality', {
+                        body: `AQI ${aqi} near ${loc.name} — limit outdoor time if sensitive`,
+                        icon: '/icons/icon-192.png',
+                        tag: aqiKey,
+                      })
+                    }
+                  } catch {
+                    /* ignore */
+                  }
+                }
               }
             }
+          } catch {
+            /* keep forecast; offline already has weather */
           }
         }
 
@@ -482,8 +525,11 @@ export function useWeather() {
         }
       } catch (e) {
         if (gen !== fetchGen.current) return
-        // Offline fallback: last good snapshot
-        const cached = loadOfflineBundle()
+        // Offline fallback: prefer this place, else last good snapshot
+        const cached =
+          loadOfflineBundle(loc) ||
+          loadOfflineBundle(prefsRef.current.homeLocation) ||
+          loadOfflineBundle()
         if (cached?.weather) {
           const cachedAlerts = filterActiveAlerts(cached.alerts ?? [])
           setLocation(cached.location)
@@ -498,11 +544,23 @@ export function useWeather() {
             ),
           )
           setError(null)
+          // Keep Home Screen widget filled with last known forecast
+          void publishNativeWidgetSnapshot({
+            location: cached.location,
+            weather: cached.weather,
+            units: prefsRef.current.units,
+            homeLocation: prefsRef.current.homeLocation,
+          })
           showStatus(
-            `Offline · showing last weather from ${new Date(cached.savedAt).toLocaleTimeString()}`,
+            `Offline · last weather ${offlineAgeLabel(cached.savedAt)} (${new Date(cached.savedAt).toLocaleString()})`,
+            5000,
           )
         } else {
-          setError(e instanceof Error ? e.message : 'Failed to load weather')
+          setError(
+            e instanceof Error
+              ? `${e.message} — check connection and try again`
+              : 'Could not load weather — check connection and try again',
+          )
         }
       } finally {
         if (gen === fetchGen.current) {
@@ -563,8 +621,8 @@ export function useWeather() {
         }
         // Web Push (background) + native hooks when available
         try {
-          const { subscribeWebPush } = await import('../api/push')
-          const result = await subscribeWebPush()
+          const { ensurePushSubscription } = await import('../api/push')
+          const result = await ensurePushSubscription()
           if (!result.ok) {
             // Still allow in-app/local notify when push subscribe needs sign-in
             if (result.reason?.toLowerCase().includes('sign in')) {
@@ -590,6 +648,17 @@ export function useWeather() {
       return true
     },
     [patchPrefs, showStatus],
+  )
+
+  const setQuietHours = useCallback(
+    (patch: {
+      quietHoursEnabled?: boolean
+      quietStart?: string
+      quietEnd?: string
+    }) => {
+      patchPrefs(patch)
+    },
+    [patchPrefs],
   )
 
   const toggleFavorite = useCallback(
@@ -733,6 +802,13 @@ export function useWeather() {
     else if (prefs.homeLocation) void loadForLocation(prefs.homeLocation)
     else if (prefs.lastLocation) void loadForLocation(prefs.lastLocation)
     else requestMyLocation()
+
+    // Re-register push if user already enabled notify (token/VAPID refresh)
+    if (prefs.notifyAlerts) {
+      void import('../api/push')
+        .then(({ ensurePushSubscription }) => ensurePushSubscription())
+        .catch(() => {})
+    }
     // Only on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -820,6 +896,9 @@ export function useWeather() {
     severeMode: prefs.severeMode,
     stormMode: prefs.stormMode,
     notifyAlerts: prefs.notifyAlerts,
+    quietHoursEnabled: prefs.quietHoursEnabled,
+    quietStart: prefs.quietStart,
+    quietEnd: prefs.quietEnd,
     severeActive,
     cloudSynced,
     cloudStatus,
@@ -831,6 +910,7 @@ export function useWeather() {
     setSevereMode,
     setStormMode,
     setNotifyAlerts,
+    setQuietHours,
     toggleFavorite,
     isFavorite,
     setHomeLocation,

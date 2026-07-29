@@ -116,6 +116,9 @@ function defaultUserData() {
     severeMode: true,
     stormMode: false,
     notifyAlerts: false,
+    quietHoursEnabled: false,
+    quietStart: '22:00',
+    quietEnd: '07:00',
   }
 }
 
@@ -173,6 +176,15 @@ function cleanUserData(incoming) {
     severeMode: Boolean(src.severeMode),
     stormMode: Boolean(src.stormMode),
     notifyAlerts: Boolean(src.notifyAlerts),
+    quietHoursEnabled: Boolean(src.quietHoursEnabled),
+    quietStart:
+      typeof src.quietStart === 'string' && /^\d{1,2}:\d{2}$/.test(src.quietStart)
+        ? src.quietStart
+        : '22:00',
+    quietEnd:
+      typeof src.quietEnd === 'string' && /^\d{1,2}:\d{2}$/.test(src.quietEnd)
+        ? src.quietEnd
+        : '07:00',
   }
 }
 
@@ -695,6 +707,14 @@ export default {
         )
           .bind(id, auth.user.id, token, platform, createdAt)
           .run()
+        // Match web subscribe: enable notifyAlerts so cron includes this user
+        const data = parseUserData(auth.user.data)
+        if (!data.notifyAlerts) {
+          data.notifyAlerts = true
+          await env.DB.prepare('UPDATE users SET data = ? WHERE id = ?')
+            .bind(JSON.stringify(data), auth.user.id)
+            .run()
+        }
         return json({ ok: true, id }, 201)
       }
 

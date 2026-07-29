@@ -171,6 +171,9 @@ export default function DashboardPage() {
     severeMode,
     stormMode,
     notifyAlerts,
+    quietHoursEnabled,
+    quietStart,
+    quietEnd,
     severeActive,
     setUnits,
     setTheme,
@@ -178,6 +181,7 @@ export default function DashboardPage() {
     setSevereMode,
     setStormMode,
     setNotifyAlerts,
+    setQuietHours,
     toggleFavorite,
     isFavorite,
     setHomeLocation,
@@ -538,6 +542,9 @@ export default function DashboardPage() {
               severeMode={severeMode}
               stormMode={stormMode}
               notifyAlerts={notifyAlerts}
+              quietHoursEnabled={quietHoursEnabled}
+              quietStart={quietStart}
+              quietEnd={quietEnd}
               isFavorite={isFavorite(location)}
               cloudSynced={cloudSynced}
               hasHome={Boolean(homeLocation)}
@@ -548,6 +555,7 @@ export default function DashboardPage() {
               onSevereMode={setSevereMode}
               onStormMode={setStormMode}
               onNotify={(v) => void setNotifyAlerts(v)}
+              onQuietHours={setQuietHours}
               onToggleFavorite={() => location && toggleFavorite(location)}
               onGoHome={() => goHome()}
               onSetHome={() => {

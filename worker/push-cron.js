@@ -18,6 +18,31 @@ function placeKey(lat, lon) {
   return `${Number(lat).toFixed(2)},${Number(lon).toFixed(2)}`
 }
 
+function parseHm(hm, fallbackMins) {
+  if (typeof hm !== 'string' || !/^\d{1,2}:\d{2}$/.test(hm)) return fallbackMins
+  const [h, m] = hm.split(':').map(Number)
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return fallbackMins
+  return ((h % 24) * 60 + (m % 60) + 24 * 60) % (24 * 60)
+}
+
+/** Quiet hours in the worker (UTC wall clock — clients store local preference). */
+function inQuietHours(data, date = new Date()) {
+  if (!data?.quietHoursEnabled) return false
+  const start = parseHm(data.quietStart, 22 * 60)
+  const end = parseHm(data.quietEnd, 7 * 60)
+  const now = date.getUTCHours() * 60 + date.getUTCMinutes()
+  if (start === end) return false
+  if (start < end) return now >= start && now < end
+  return now >= start || now < end
+}
+
+function shouldSkipForQuiet(data, severity) {
+  if (!inQuietHours(data)) return false
+  const s = String(severity || '').toLowerCase()
+  if (s === 'extreme') return false
+  return true
+}
+
 /**
  * @param {import('@cloudflare/workers-types').D1Database} db
  * @param {any} env
@@ -35,13 +60,17 @@ export async function runAlertPushCron(env) {
 
   /** @type {Map<string, { lat: number, lon: number, name: string, userIds: Set<string> }>} */
   const places = new Map()
-  /** @type {Map<string, { id: string, severeOnly: boolean }>} */
+  /** @type {Map<string, { id: string, severeOnly: boolean, data: any }>} */
   const userMeta = new Map()
 
   for (const row of rows) {
     const data = parseUserData(row.data)
     if (!data.notifyAlerts) continue
-    userMeta.set(row.id, { id: row.id, severeOnly: data.severeMode !== false })
+    userMeta.set(row.id, {
+      id: row.id,
+      severeOnly: data.severeMode !== false,
+      data,
+    })
 
     const locs = []
     // Exact home first — highest priority for alerts
@@ -100,6 +129,7 @@ export async function runAlertPushCron(env) {
 
       for (const alert of alerts) {
         if (!isNotifiableAlert(alert, { severeOnly: meta.severeOnly })) continue
+        if (shouldSkipForQuiet(meta.data, alert.severity)) continue
         const alertKey = `${alert.source}:${alert.id}`
 
         const already = await db

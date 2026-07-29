@@ -26,6 +26,9 @@ export interface CloudPrefs {
   severeMode: boolean
   stormMode?: boolean
   notifyAlerts: boolean
+  quietHoursEnabled?: boolean
+  quietStart?: string
+  quietEnd?: string
 }
 
 export interface AuthResponse {

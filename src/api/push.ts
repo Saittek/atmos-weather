@@ -39,8 +39,19 @@ async function fetchVapidPublicKey(): Promise<string | null> {
   }
 }
 
+/**
+ * Ensure push subscription is registered with the server.
+ * Always re-POSTs the current browser subscription (idempotent upsert) so
+ * VAPID rotation / expired endpoints recover without toggling Notify off/on.
+ */
+export async function ensurePushSubscription(): Promise<{ ok: boolean; reason?: string }> {
+  return subscribeWebPush({ forceServerSync: true })
+}
+
 /** Subscribe browser/PWA to Web Push (requires signed-in account for server delivery). */
-export async function subscribeWebPush(): Promise<{ ok: boolean; reason?: string }> {
+export async function subscribeWebPush(opts?: {
+  forceServerSync?: boolean
+}): Promise<{ ok: boolean; reason?: string }> {
   if (isNativeApp()) {
     return subscribeNativePush()
   }
@@ -73,7 +84,11 @@ export async function subscribeWebPush(): Promise<{ ok: boolean; reason?: string
       })
     }
 
+    // Always sync to server (forceServerSync default true via ensurePushSubscription)
     const json = sub.toJSON()
+    if (!json.endpoint) {
+      return { ok: false, reason: 'Invalid push subscription' }
+    }
     const res = await fetch(apiUrl('/api/push/subscribe'), {
       method: 'POST',
       headers: await authHeaders(),
@@ -85,6 +100,29 @@ export async function subscribeWebPush(): Promise<{ ok: boolean; reason?: string
     })
     if (!res.ok) {
       const err = (await res.json().catch(() => ({}))) as { error?: string }
+      // VAPID key rotation: drop old sub and create a new one
+      if (res.status === 400 || res.status === 410 || opts?.forceServerSync) {
+        try {
+          await sub.unsubscribe()
+          sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(publicKey) as BufferSource,
+          })
+          const json2 = sub.toJSON()
+          const res2 = await fetch(apiUrl('/api/push/subscribe'), {
+            method: 'POST',
+            headers: await authHeaders(),
+            body: JSON.stringify({
+              endpoint: json2.endpoint,
+              keys: json2.keys,
+              userAgent: navigator.userAgent,
+            }),
+          })
+          if (res2.ok) return { ok: true }
+        } catch {
+          /* fall through */
+        }
+      }
       return { ok: false, reason: err.error || 'Could not save subscription' }
     }
     return { ok: true }

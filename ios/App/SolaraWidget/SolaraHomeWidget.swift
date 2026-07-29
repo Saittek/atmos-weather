@@ -32,7 +32,8 @@ struct SolaraProvider: TimelineProvider {
         // 1) Prefer snapshot written by the main app (App Group file / suite)
         if let existing = SolaraWidgetStore.loadSnapshot() {
             let age = Date().timeIntervalSince1970 - existing.updatedAt
-            if age <= 15 * 60 {
+            // Match SolaraWidgetStore.staleAfter (45 min) so tile doesn't thrash
+            if age <= SolaraWidgetStore.staleAfter {
                 finish(existing)
                 return
             }
