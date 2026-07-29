@@ -55,28 +55,31 @@ workflows:
           export VITE_API_BASE="${VITE_API_BASE:-https://solaraweather.com}"
           npm run build -- --base ./
           npx cap sync ios
-          # Windows checkouts / some Cap versions write backslashes into Package.swift —
-          # SwiftPM on macOS cannot resolve those local paths (archive fails with code 65).
-          python3 << 'PY'
-          from pathlib import Path
-          p = Path("ios/App/CapApp-SPM/Package.swift")
-          if not p.exists():
-              raise SystemExit(f"Missing {p}")
-          text = p.read_text(encoding="utf-8")
-          fixed = text.replace("\\\\", "/").replace("\\", "/")
-          if fixed != text:
-              p.write_text(fixed, encoding="utf-8")
-              print("Normalized CapApp-SPM/Package.swift path separators for macOS")
-          else:
-              print("CapApp-SPM/Package.swift paths already POSIX")
-          print("--- Package.swift dependencies ---")
-          for line in fixed.splitlines():
-              if "path:" in line or "url:" in line:
-                  print(line)
-          PY
-          # Resolve packages early so archive errors are clearer
+          # Rewrite CapApp-SPM for modern SwiftPM package identities (Xcode 26).
+          # Capacitor's generated name: "CapacitorApp" does not match path identity "app".
+          node scripts/fix-ios-spm-paths.mjs
+          echo "=== Resolve Swift packages (fail early if SPM is broken) ==="
           cd ios/App
-          xcodebuild -resolvePackageDependencies -project App.xcodeproj -scheme App || true
+          set +e
+          xcodebuild -resolvePackageDependencies \
+            -project App.xcodeproj \
+            -scheme App \
+            2>&1 | tee /tmp/spm-resolve.log
+          SPM_STATUS=${PIPESTATUS[0]}
+          set -e
+          if [ "$SPM_STATUS" -ne 0 ]; then
+            echo "=== SPM resolve FAILED ==="
+            tail -n 80 /tmp/spm-resolve.log || true
+            # Decode package activity logs if present
+            find "$HOME/Library/Developer/Xcode/DerivedData" -path "*/Logs/Package/*.xcactivitylog" 2>/dev/null \
+              | tail -n 4 | while read -r log; do
+                echo "----- decode $log -----"
+                # xcactivitylog is a gzip stream of SLF text
+                gzip -dc "$log" 2>/dev/null | strings | grep -iE "error|fail|unable|missing|invalid|package" | tail -n 40 || true
+              done
+            exit "$SPM_STATUS"
+          fi
+          echo "SPM resolve OK"
 
       - name: Set up keychain
         script: keychain initialize
@@ -262,28 +265,27 @@ workflows:
           if [ "$STATUS" -ne 0 ]; then
             echo ""
             echo "=== ARCHIVE FAILED (exit $STATUS) — log tails ==="
-            # Codemagic / xcode-project often writes here
             find /tmp/xcodebuild_logs -type f 2>/dev/null | while read -r f; do
               echo "----- $f -----"
               tail -n 150 "$f" || true
             done
-            # Fallback: recent build logs
-            find "$HOME/Library/Developer/Xcode/DerivedData" -name "*.xcactivitylog" 2>/dev/null \
-              | tail -n 2 | while read -r f; do
-                echo "----- activity log present: $f -----"
+            # Package resolution failures land here (gzip SLF)
+            find "$HOME/Library/Developer/Xcode/DerivedData" -path "*/Logs/Package/*.xcactivitylog" 2>/dev/null \
+              | tail -n 6 | while read -r log; do
+                echo "----- decode package log: $log -----"
+                gzip -dc "$log" 2>/dev/null | strings | grep -iE "error|fail|unable|missing|invalid|package|dependency|not found" | tail -n 50 || true
               done
-            # Grep common failure signatures from any text logs
             find /tmp -name "*xcodebuild*" -type f 2>/dev/null | head -n 20 | while read -r f; do
-              if grep -qiE "error:|Provisioning|CodeSign|No profiles|failed|undefined|cannot find" "$f" 2>/dev/null; then
+              if grep -qiE "error:|Provisioning|CodeSign|No profiles|failed|undefined|cannot find|package" "$f" 2>/dev/null; then
                 echo "----- matches in $f -----"
-                grep -iE "error:|Provisioning|CodeSign|No profiles|failed|undefined|cannot find" "$f" | tail -n 40 || true
+                grep -iE "error:|Provisioning|CodeSign|No profiles|failed|undefined|cannot find|package" "$f" | tail -n 40 || true
               fi
             done
             echo ""
             echo "Common fixes for exit 65:"
-            echo "  1) App ID com.solara.weather.widget exists + App Group group.com.solara.weather"
-            echo "  2) Codemagic integration 'Solara' can create App Store profiles for BOTH bundle IDs"
-            echo "  3) CapApp-SPM Package.swift must use forward-slash local paths (see normalize step)"
+            echo "  1) SPM: CapApp-SPM package identities (scripts/fix-ios-spm-paths.mjs)"
+            echo "  2) App ID com.solara.weather.widget + App Group group.com.solara.weather"
+            echo "  3) Codemagic 'Solara' integration can create App Store profiles for BOTH bundle IDs"
             exit "$STATUS"
           fi
 
@@ -349,15 +351,9 @@ workflows:
           export VITE_API_BASE="${VITE_API_BASE:-https://solaraweather.com}"
           npm run build -- --base ./
           npx cap sync ios
-          python3 << 'PY'
-          from pathlib import Path
-          p = Path("ios/App/CapApp-SPM/Package.swift")
-          t = p.read_text(encoding="utf-8")
-          f = t.replace("\\\\", "/").replace("\\", "/")
-          if f != t:
-              p.write_text(f, encoding="utf-8")
-              print("Normalized Package.swift paths")
-          PY
+          node scripts/fix-ios-spm-paths.mjs
+          cd ios/App
+          xcodebuild -resolvePackageDependencies -project App.xcodeproj -scheme App
       - name: Set up keychain
         script: keychain initialize
       - name: Automatic code signing
