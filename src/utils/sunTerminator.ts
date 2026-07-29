@@ -47,15 +47,25 @@ export function subsolarPoint(date: Date = new Date()): { lon: number; lat: numb
   return { lon: subsolarLongitude(date), lat: solarDeclination(date) }
 }
 
-/** True when the sun is below the geometric horizon (civil-ish limb, no refraction). */
-export function isNight(lon: number, lat: number, date: Date = new Date()): boolean {
+/**
+ * sin(solar elevation). Positive = day, negative = night, ~0 at the terminator.
+ * Used for soft day/night blending (not a hard cut).
+ */
+export function solarElevationSin(
+  lon: number,
+  lat: number,
+  date: Date = new Date(),
+): number {
   const { lon: sunLon, lat: sunLat } = subsolarPoint(date)
   const φ = toRad(lat)
   const δ = toRad(sunLat)
   const Δλ = toRad(lon - sunLon)
-  // sin(elevation) = sin(φ)sin(δ) + cos(φ)cos(δ)cos(Δλ)
-  const sinEl = Math.sin(φ) * Math.sin(δ) + Math.cos(φ) * Math.cos(δ) * Math.cos(Δλ)
-  return sinEl < 0
+  return Math.sin(φ) * Math.sin(δ) + Math.cos(φ) * Math.cos(δ) * Math.cos(Δλ)
+}
+
+/** True when the sun is below the geometric horizon (civil-ish limb, no refraction). */
+export function isNight(lon: number, lat: number, date: Date = new Date()): boolean {
+  return solarElevationSin(lon, lat, date) < 0
 }
 
 /**
