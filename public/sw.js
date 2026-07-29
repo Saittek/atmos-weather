@@ -1,5 +1,5 @@
 /* Solara PWA — network-first HTML, cache hashed assets only + Web Push */
-const CACHE = 'solara-v5'
+const CACHE = 'solara-v6'
 
 self.addEventListener('install', (event) => {
   // Activate immediately so mobile clients leave broken old caches
@@ -128,18 +128,33 @@ self.addEventListener('fetch', (event) => {
 
   if (url.origin !== self.location.origin) return
 
-  // Hashed JS/CSS: cache-first (filename changes every deploy)
+  // Hashed JS/CSS: cache-first (filename changes every deploy).
+  // Never cache SPA HTML fallbacks as JS (causes white-screen after deploys).
   if (url.pathname.startsWith('/assets/')) {
     event.respondWith(
-      caches.match(request).then((cached) => {
-        if (cached) return cached
-        return fetch(request).then((res) => {
-          if (res.ok) {
-            const copy = res.clone()
-            caches.open(CACHE).then((c) => c.put(request, copy)).catch(() => {})
+      caches.match(request).then(async (cached) => {
+        if (cached) {
+          const ct = cached.headers.get('content-type') || ''
+          if (ct.includes('javascript') || ct.includes('css') || ct.includes('text/css')) {
+            return cached
           }
-          return res
-        })
+          // Bad cache entry (HTML mistaken for asset) — drop it
+          caches.open(CACHE).then((c) => c.delete(request)).catch(() => {})
+        }
+        const res = await fetch(request)
+        const ct = res.headers.get('content-type') || ''
+        const looksLikeAsset =
+          res.ok &&
+          (ct.includes('javascript') ||
+            ct.includes('css') ||
+            ct.includes('text/css') ||
+            ct.includes('wasm') ||
+            ct.includes('font'))
+        if (looksLikeAsset) {
+          const copy = res.clone()
+          caches.open(CACHE).then((c) => c.put(request, copy)).catch(() => {})
+        }
+        return res
       }),
     )
     return

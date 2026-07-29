@@ -29,20 +29,22 @@ export default defineConfig({
     },
     rollupOptions: {
       output: {
+        /**
+         * Only split pure heavy libs. Never put React into a map/globe chunk —
+         * dual React copies crash the SPA on a blank white screen.
+         */
         manualChunks(id) {
-          if (!id.includes('node_modules')) return
-          if (id.includes('maplibre-gl')) return 'globe-vendor'
-          if (id.includes('leaflet') || id.includes('react-leaflet')) return 'map-vendor'
-          if (id.includes('@capacitor')) return 'cap-vendor'
+          const norm = id.replace(/\\/g, '/')
+          if (!norm.includes('node_modules/')) return
+          if (norm.includes('node_modules/maplibre-gl/')) return 'globe-vendor'
+          // Leaflet only (not react-leaflet — that must share React with the app)
           if (
-            id.includes('react-dom') ||
-            id.includes('react-router') ||
-            id.includes('/react/') ||
-            id.endsWith('/react/index.js') ||
-            id.includes('\\react\\')
+            norm.includes('node_modules/leaflet/') &&
+            !norm.includes('react-leaflet')
           ) {
-            return 'react-vendor'
+            return 'map-vendor'
           }
+          if (norm.includes('node_modules/@capacitor/')) return 'cap-vendor'
         },
       },
     },
