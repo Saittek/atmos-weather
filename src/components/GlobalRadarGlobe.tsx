@@ -10,7 +10,12 @@ import {
 import { fetchTropicalGlobeData } from '../api/weather'
 import type { TropicalGlobeData, TropicalStorm } from '../api/types'
 import { formatRadarTime } from '../utils/format'
-import { dayNightGeoJSON } from '../utils/sunTerminator'
+import {
+  destinationPoint,
+  isNight,
+  subsolarPoint,
+  terminatorLine,
+} from '../utils/sunTerminator'
 
 const SPEED_MS = { slow: 900, normal: 520, fast: 300 } as const
 type SpeedKey = keyof typeof SPEED_MS
@@ -124,11 +129,7 @@ const GIBS_IR_TILES =
 const IR_SOURCE = 'globe-ir'
 const IR_LAYER = 'globe-ir-layer'
 
-/** Day/night shade + terminator (MapLibre, works with globe projection). */
-const NIGHT_SOURCE = 'globe-night'
-const NIGHT_LAYER = 'globe-night-fill'
-const TERM_SOURCE = 'globe-terminator'
-const TERM_LAYER = 'globe-terminator-line'
+
 
 function prefersReducedMotion(): boolean {
   try {
@@ -275,6 +276,7 @@ async function warmGlobeTiles(
 export function GlobalRadarGlobe() {
   const containerRef = useRef<HTMLDivElement>(null)
   const trackSvgRef = useRef<SVGSVGElement>(null)
+  const dayNightCanvasRef = useRef<HTMLCanvasElement>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
 
   const framesRef = useRef<RadarFrame[]>([])
@@ -296,6 +298,9 @@ export function GlobalRadarGlobe() {
   const playTimerRef = useRef<number | null>(null)
   const spinRafRef = useRef<number | null>(null)
   const spinningRef = useRef(false)
+  /** True while user is dragging/zooming — spin pauses longitude so you can still pan. */
+  const userInteractingRef = useRef(false)
+  const interactEndTimerRef = useRef<number | null>(null)
   const overlayRafRef = useRef<number | null>(null)
   const basemapIdRef = useRef<BasemapId>('satellite')
   const swappingBasemapRef = useRef(false)
@@ -333,12 +338,134 @@ export function GlobalRadarGlobe() {
   }, [])
 
   /**
-   * Project storm geometry onto the SVG layer.
+   * Paint day/night onto a canvas over the globe (unproject screen samples).
+   * Much more reliable than GeoJSON fill on MapLibre globe + visible on satellite.
+   */
+  const paintDayNight = useCallback((map: MapLibreMap, date = new Date()) => {
+    const canvas = dayNightCanvasRef.current
+    if (!canvas) return
+    const mapCanvas = map.getCanvas()
+    const w = mapCanvas.clientWidth || mapCanvas.width
+    const h = mapCanvas.clientHeight || mapCanvas.height
+    if (w < 2 || h < 2) return
+
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w
+      canvas.height = h
+    }
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.clearRect(0, 0, w, h)
+
+    if (!showDayNightRef.current) {
+      canvas.style.display = 'none'
+      return
+    }
+    canvas.style.display = ''
+
+    const center = map.getCenter()
+    const cLng = center.lng
+    const cLat = center.lat
+    const centerPt = map.project([cLng, cLat])
+
+    // Estimate on-screen globe radius from limb samples
+    let R = 0
+    let nR = 0
+    for (let b = 0; b < 360; b += 30) {
+      const [lon, lat] = destinationPoint(cLng, cLat, 89.5, b)
+      if (!isFrontOfGlobe(lon, lat, cLng, cLat, -0.08)) continue
+      const p = map.project([lon, lat])
+      const d = Math.hypot(p.x - centerPt.x, p.y - centerPt.y)
+      if (d > 20 && d < Math.max(w, h) * 0.95) {
+        R += d
+        nR++
+      }
+    }
+    R = nR ? R / nR : Math.min(w, h) * 0.42
+    const pad = 4
+    const R2 = (R + pad) * (R + pad)
+    const step = R > 300 ? 5 : R > 180 ? 4 : 3
+
+    // Night shade (multiply blend in CSS darkens basemap)
+    ctx.fillStyle = 'rgba(4, 12, 40, 0.72)'
+    const y0 = Math.max(0, Math.floor(centerPt.y - R - pad))
+    const y1 = Math.min(h, Math.ceil(centerPt.y + R + pad))
+    const x0 = Math.max(0, Math.floor(centerPt.x - R - pad))
+    const x1 = Math.min(w, Math.ceil(centerPt.x + R + pad))
+
+    for (let y = y0; y < y1; y += step) {
+      for (let x = x0; x < x1; x += step) {
+        const dx = x - centerPt.x
+        const dy = y - centerPt.y
+        if (dx * dx + dy * dy > R2) continue
+        let ll: { lng: number; lat: number }
+        try {
+          ll = map.unproject([x, y])
+        } catch {
+          continue
+        }
+        if (!Number.isFinite(ll.lng) || !Number.isFinite(ll.lat)) continue
+        // Drop sky / back-side unprojects
+        if (!isFrontOfGlobe(ll.lng, ll.lat, cLng, cLat, 0.04)) continue
+        if (!isNight(ll.lng, ll.lat, date)) continue
+        ctx.fillRect(x - step * 0.5, y - step * 0.5, step + 0.6, step + 0.6)
+      }
+    }
+
+    // Gold terminator
+    const term = terminatorLine(date, 180)
+    ctx.strokeStyle = 'rgba(253, 230, 138, 0.95)'
+    ctx.lineWidth = 2.25
+    ctx.lineJoin = 'round'
+    ctx.lineCap = 'round'
+    ctx.beginPath()
+    let pen = false
+    let prevX = 0
+    let prevY = 0
+    for (const [lon, lat] of term) {
+      if (!isFrontOfGlobe(lon, lat, cLng, cLat, 0.06)) {
+        pen = false
+        continue
+      }
+      const p = map.project([lon, lat])
+      if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) {
+        pen = false
+        continue
+      }
+      if (pen) {
+        const jump = Math.hypot(p.x - prevX, p.y - prevY)
+        if (jump > R * 0.55) pen = false
+      }
+      if (!pen) ctx.moveTo(p.x, p.y)
+      else ctx.lineTo(p.x, p.y)
+      pen = true
+      prevX = p.x
+      prevY = p.y
+    }
+    ctx.stroke()
+
+    // Small sun marker when on the front
+    const sun = subsolarPoint(date)
+    if (isFrontOfGlobe(sun.lon, sun.lat, cLng, cLat, 0.15)) {
+      const sp = map.project([sun.lon, sun.lat])
+      if (Number.isFinite(sp.x) && Number.isFinite(sp.y)) {
+        const g = ctx.createRadialGradient(sp.x, sp.y, 0, sp.x, sp.y, 14)
+        g.addColorStop(0, 'rgba(254, 243, 199, 0.95)')
+        g.addColorStop(0.45, 'rgba(251, 191, 36, 0.55)')
+        g.addColorStop(1, 'rgba(251, 191, 36, 0)')
+        ctx.fillStyle = g
+        ctx.beginPath()
+        ctx.arc(sp.x, sp.y, 14, 0, Math.PI * 2)
+        ctx.fill()
+      }
+    }
+  }, [])
+
+  /**
+   * Project storm geometry onto the SVG layer + repaint day/night canvas.
    * - Coalesced to one paint per animation frame (keeps spin/drag smooth)
    * - Culls points on the back of the globe (stops path “teleport” glitches)
-   * - Breaks polylines at limb / back-side gaps instead of drawing chords
-   * - Hides HTML markers when their storm center is behind the planet
-   * Day/night is a MapLibre layer (not SVG) so it works with or without storms.
+   * - Day/night always paints (independent of storms)
    */
   const scheduleOverlay = useCallback(() => {
     if (overlayRafRef.current != null) return
@@ -347,7 +474,14 @@ export function GlobalRadarGlobe() {
       const map = mapRef.current
       const svg = trackSvgRef.current
       const data = tropicalDataRef.current
-      if (!svg) return
+      if (!map) return
+
+      // Day/night every frame (works without storms)
+      try {
+        paintDayNight(map)
+      } catch {
+        /* ignore */
+      }
 
       const hideMarkers = () => {
         for (const m of markersRef.current) {
@@ -359,16 +493,18 @@ export function GlobalRadarGlobe() {
         }
       }
 
-      if (!map || !data || !showTropicalRef.current || !data.storms.length) {
+      if (!svg) return
+
+      if (!data || !showTropicalRef.current || !data.storms.length) {
         svg.innerHTML = ''
         svg.style.display = 'none'
         hideMarkers()
         return
       }
 
-      const canvas = map.getCanvas()
-      const w = canvas.clientWidth || canvas.width
-      const h = canvas.clientHeight || canvas.height
+      const mapCanvas = map.getCanvas()
+      const w = mapCanvas.clientWidth || mapCanvas.width
+      const h = mapCanvas.clientHeight || mapCanvas.height
       if (w < 2 || h < 2) return
 
       const center = map.getCenter()
@@ -506,8 +642,6 @@ export function GlobalRadarGlobe() {
         }
       }
 
-      // Day/night is drawn as MapLibre layers (updateDayNightLayers) — not SVG.
-
       svg.innerHTML = nodes.join('')
 
       // Storm name markers: fade when center is on the far side
@@ -526,7 +660,7 @@ export function GlobalRadarGlobe() {
         el.style.transition = 'opacity 0.12s linear'
       }
     })
-  }, [])
+  }, [paintDayNight])
 
   const placeMarkers = useCallback(
     (map: MapLibreMap, data: TropicalGlobeData, visible: boolean) => {
@@ -669,9 +803,8 @@ export function GlobalRadarGlobe() {
   }, [])
 
   /**
-   * Equatorial spin: advance center longitude, keep latitude, bearing 0 (north-up).
-   * This is Earth rotating about its polar axis — not a camera roll via setBearing.
-   * Overlay follows via map `move` → scheduleOverlay (rAF-coalesced).
+   * Equatorial spin: advance longitude while keeping the user's latitude.
+   * Pauses while the user is dragging / zooming so you can still move around.
    */
   const startSpin = useCallback(() => {
     stopSpin()
@@ -681,19 +814,17 @@ export function GlobalRadarGlobe() {
         return
       }
       const map = mapRef.current
-      if (map && !swappingBasemapRef.current) {
+      // Skip frames while the user is dragging/zooming so spin doesn't fight the camera
+      if (map && !swappingBasemapRef.current && !userInteractingRef.current) {
         try {
           const c = map.getCenter()
-          // Softly pull view toward low latitudes so spin feels equatorial
-          const targetLat = Math.max(-20, Math.min(20, c.lat * 0.97))
+          // Keep the user's latitude — only rotate under them
           const lon = normalizeLon(c.lng - SPIN_DEG_PER_FRAME)
-          // jumpTo avoids ease animation pile-up (major glitch when spinning)
           map.jumpTo({
-            center: [lon, targetLat],
+            center: [lon, c.lat],
             bearing: 0,
             pitch: 0,
           })
-          // jumpTo fires `move` → scheduleOverlay keeps tracks glued to the surface
         } catch {
           /* ignore */
         }
@@ -792,6 +923,40 @@ export function GlobalRadarGlobe() {
     map.on('pitch', onMove)
     map.on('rotate', onMove)
 
+    // While spinning, still allow pan/zoom: pause auto-longitude until interaction ends
+    const markInteractStart = () => {
+      userInteractingRef.current = true
+      if (interactEndTimerRef.current != null) {
+        window.clearTimeout(interactEndTimerRef.current)
+        interactEndTimerRef.current = null
+      }
+    }
+    const markInteractEnd = () => {
+      if (interactEndTimerRef.current != null) window.clearTimeout(interactEndTimerRef.current)
+      // Brief delay so inertia / wheel settle before spin resumes
+      interactEndTimerRef.current = window.setTimeout(() => {
+        userInteractingRef.current = false
+        interactEndTimerRef.current = null
+      }, 180)
+    }
+    map.on('dragstart', markInteractStart)
+    map.on('dragend', markInteractEnd)
+    map.on('zoomstart', markInteractStart)
+    map.on('zoomend', markInteractEnd)
+    map.on('rotatestart', markInteractStart)
+    map.on('rotateend', markInteractEnd)
+    map.on('pitchstart', markInteractStart)
+    map.on('pitchend', markInteractEnd)
+    map.on('mousedown', markInteractStart)
+    map.on('mouseup', markInteractEnd)
+    map.on('touchstart', markInteractStart)
+    map.on('touchend', markInteractEnd)
+    const onWheel = () => {
+      markInteractStart()
+      markInteractEnd()
+    }
+    map.on('wheel', onWheel)
+
     const ro = new ResizeObserver(() => {
       try {
         map.resize()
@@ -839,7 +1004,7 @@ export function GlobalRadarGlobe() {
         setNowIndex(ni)
         setFrameIdx(ni)
         readyRef.current = true
-        updateDayNightLayers(true)
+        scheduleOverlay()
 
         // Paint radar at world view, then briefly re-warm radar tiles at high zoom
         applyFrame(ni, true)
@@ -930,11 +1095,28 @@ export function GlobalRadarGlobe() {
         overlayRafRef.current = null
       }
       ro.disconnect()
+      if (interactEndTimerRef.current != null) {
+        window.clearTimeout(interactEndTimerRef.current)
+        interactEndTimerRef.current = null
+      }
       try {
         map.off('move', onMove)
         map.off('zoom', onMove)
         map.off('pitch', onMove)
         map.off('rotate', onMove)
+        map.off('dragstart', markInteractStart)
+        map.off('dragend', markInteractEnd)
+        map.off('zoomstart', markInteractStart)
+        map.off('zoomend', markInteractEnd)
+        map.off('rotatestart', markInteractStart)
+        map.off('rotateend', markInteractEnd)
+        map.off('pitchstart', markInteractStart)
+        map.off('pitchend', markInteractEnd)
+        map.off('mousedown', markInteractStart)
+        map.off('mouseup', markInteractEnd)
+        map.off('touchstart', markInteractStart)
+        map.off('touchend', markInteractEnd)
+        map.off('wheel', onWheel)
       } catch {
         /* ignore */
       }
@@ -1030,101 +1212,10 @@ export function GlobalRadarGlobe() {
     }
   }, [showIR])
 
-  /**
-   * Day/night: fill night hemisphere + terminator line as MapLibre layers.
-   * (SVG shade was wrong on the globe and only ran when storms were visible.)
-   */
-  const updateDayNightLayers = useCallback((forceVisible?: boolean) => {
-    const map = mapRef.current
-    if (!map || !readyRef.current || swappingBasemapRef.current) return
-    if (!map.isStyleLoaded()) return
-
-    const visible = forceVisible ?? showDayNightRef.current
-    try {
-      const geo = dayNightGeoJSON(new Date())
-      const nightFc = {
-        type: 'FeatureCollection' as const,
-        features: [geo.night],
-      }
-      const termFc = {
-        type: 'FeatureCollection' as const,
-        features: [geo.terminator],
-      }
-
-      if (!map.getSource(NIGHT_SOURCE)) {
-        map.addSource(NIGHT_SOURCE, { type: 'geojson', data: nightFc })
-      } else {
-        ;(map.getSource(NIGHT_SOURCE) as maplibregl.GeoJSONSource).setData(nightFc)
-      }
-
-      if (!map.getSource(TERM_SOURCE)) {
-        map.addSource(TERM_SOURCE, { type: 'geojson', data: termFc })
-      } else {
-        ;(map.getSource(TERM_SOURCE) as maplibregl.GeoJSONSource).setData(termFc)
-      }
-
-      // Night fill above basemap, below radar / IR / labels
-      if (!map.getLayer(NIGHT_LAYER)) {
-        const before =
-          (map.getLayer(IR_LAYER) && IR_LAYER) ||
-          (map.getLayer(RADAR_ID) && RADAR_ID) ||
-          (map.getLayer('labels') && 'labels') ||
-          undefined
-        map.addLayer(
-          {
-            id: NIGHT_LAYER,
-            type: 'fill',
-            source: NIGHT_SOURCE,
-            paint: {
-              'fill-color': '#020617',
-              'fill-opacity': 0.42,
-              'fill-antialias': true,
-            },
-            layout: { visibility: visible ? 'visible' : 'none' },
-          },
-          before || undefined,
-        )
-      } else {
-        map.setLayoutProperty(NIGHT_LAYER, 'visibility', visible ? 'visible' : 'none')
-      }
-
-      // Terminator line on top so it stays readable over radar
-      if (!map.getLayer(TERM_LAYER)) {
-        map.addLayer({
-          id: TERM_LAYER,
-          type: 'line',
-          source: TERM_SOURCE,
-          paint: {
-            'line-color': '#fde68a',
-            'line-width': 1.75,
-            'line-opacity': 0.9,
-            'line-blur': 0.25,
-          },
-          layout: {
-            visibility: visible ? 'visible' : 'none',
-            'line-cap': 'round',
-            'line-join': 'round',
-          },
-        })
-      } else {
-        map.setLayoutProperty(TERM_LAYER, 'visibility', visible ? 'visible' : 'none')
-      }
-    } catch (e) {
-      console.warn('[globe] day/night layer', e)
-    }
-  }, [])
-
   useEffect(() => {
     showDayNightRef.current = showDayNight
-    updateDayNightLayers(showDayNight)
-  }, [showDayNight, updateDayNightLayers])
-
-  // Refresh terminator as Earth rotates under the sun (~every 2 minutes)
-  useEffect(() => {
-    if (!showDayNight) return
-    const id = window.setInterval(() => updateDayNightLayers(true), 120_000)
-    return () => window.clearInterval(id)
-  }, [showDayNight, updateDayNightLayers])
+    scheduleOverlay()
+  }, [showDayNight, scheduleOverlay])
 
   // Play / pause — single timer, no double-start
   useEffect(() => {
@@ -1160,10 +1251,6 @@ export function GlobalRadarGlobe() {
     radarKeyRef.current = null
 
     try {
-      if (map.getLayer(TERM_LAYER)) map.removeLayer(TERM_LAYER)
-      if (map.getSource(TERM_SOURCE)) map.removeSource(TERM_SOURCE)
-      if (map.getLayer(NIGHT_LAYER)) map.removeLayer(NIGHT_LAYER)
-      if (map.getSource(NIGHT_SOURCE)) map.removeSource(NIGHT_SOURCE)
       if (map.getLayer(IR_LAYER)) map.removeLayer(IR_LAYER)
       if (map.getSource(IR_SOURCE)) map.removeSource(IR_SOURCE)
       if (map.getLayer(RADAR_ID)) map.removeLayer(RADAR_ID)
@@ -1212,10 +1299,7 @@ export function GlobalRadarGlobe() {
 
     swappingBasemapRef.current = false
     applyFrame(frameIdxRef.current, true)
-    // Re-add day/night + IR after basemap stack rebuild
-    updateDayNightLayers()
     if (showIR) {
-      // trigger IR effect by toggling layout after sources exist
       try {
         if (!map.getSource(IR_SOURCE)) {
           map.addSource(IR_SOURCE, {
@@ -1245,7 +1329,7 @@ export function GlobalRadarGlobe() {
     scheduleOverlay()
     if (wasSpinning) setSpinning(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- showLabels/showIR at swap time
-  }, [basemapId, applyFrame, scheduleOverlay, showLabels, showIR, updateDayNightLayers])
+  }, [basemapId, applyFrame, scheduleOverlay, showLabels, showIR])
 
   const goNow = () => {
     setPlaying(false)
@@ -1282,6 +1366,11 @@ export function GlobalRadarGlobe() {
         className="globe-canvas"
         role="img"
         aria-label="3D Earth with global radar"
+      />
+      <canvas
+        ref={dayNightCanvasRef}
+        className="globe-daynight-canvas"
+        aria-hidden="true"
       />
       <svg
         ref={trackSvgRef}

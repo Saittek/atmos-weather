@@ -61,7 +61,7 @@ export function isNight(lon: number, lat: number, date: Date = new Date()): bool
 /**
  * Great-circle destination: from (lon,lat), travel `distDeg` along `bearingDeg`.
  */
-function destination(
+export function destinationPoint(
   lon: number,
   lat: number,
   distDeg: number,
@@ -95,7 +95,7 @@ export function terminatorLine(
   const line: [number, number][] = []
   for (let i = 0; i <= samples; i++) {
     const bearing = (360 * i) / samples
-    line.push(destination(lon, lat, 90, bearing))
+    line.push(destinationPoint(lon, lat, 90, bearing))
   }
   return line
 }

@@ -8631,13 +8631,23 @@ html.mobile-perf .earth-nav-glow {
   border-top-color: rgba(148, 163, 184, 0.2) !important;
 }
 
+/* Day/night shade (canvas unproject samples) — multiply darkens basemap at night */
+.globe-daynight-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+}
 /* Past / forecast hurricane paths projected over the globe (HTML layer) */
 .globe-track-svg {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  z-index: 2;
+  z-index: 3;
   pointer-events: none;
   overflow: visible;
 }
