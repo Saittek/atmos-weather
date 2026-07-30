@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from 'react'
+import { lazy, Suspense, useEffect, useLayoutEffect } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import './App.css'
 import './theme-light.css'
@@ -54,10 +54,22 @@ function AnalyticsRoute() {
   return null
 }
 
+/** Reset scroll on path change (SPA navigations feel snappier / less janky). */
+function ScrollToTop() {
+  const { pathname } = useLocation()
+  useLayoutEffect(() => {
+    // Full-screen map routes own their own scroll lock — don't fight them
+    if (pathname === '/radar' || pathname === '/globe' || pathname === '/earth') return
+    window.scrollTo(0, 0)
+  }, [pathname])
+  return null
+}
+
 export default function App() {
   return (
     <>
       <ThemeSync />
+      <ScrollToTop />
       <AnalyticsRoute />
       <Suspense fallback={<RouteFallback />}>
         <Routes>

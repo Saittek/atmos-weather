@@ -354,6 +354,8 @@ export function GlobalRadarGlobe() {
   const [spinning, setSpinning] = useState(false)
   const [basemapId, setBasemapId] = useState<BasemapId>('satellite')
   const [activeRegion, setActiveRegion] = useState('world')
+  const [optionsOpen, setOptionsOpen] = useState(false)
+  const optionsMenuRef = useRef<HTMLDivElement>(null)
 
   opacityRef.current = opacity
   showRadarRef.current = showRadar
@@ -1311,19 +1313,31 @@ export function GlobalRadarGlobe() {
     scheduleOverlay()
   }, [showTropical, scheduleOverlay])
 
-  // Spin on/off — honor prefers-reduced-motion
+  // Spin on/off — honor prefers-reduced-motion; pause when tab hidden
   useEffect(() => {
     spinningRef.current = spinning
     if (spinning && prefersReducedMotion()) {
       setSpinning(false)
       return
     }
-    if (spinning) startSpin()
-    else {
-      stopSpin()
-      scheduleOverlay()
+    const sync = () => {
+      if (!spinningRef.current) {
+        stopSpin()
+        scheduleOverlay()
+        return
+      }
+      if (typeof document !== 'undefined' && document.hidden) {
+        stopSpin()
+        return
+      }
+      startSpin()
     }
-    return () => stopSpin()
+    sync()
+    document.addEventListener('visibilitychange', sync)
+    return () => {
+      document.removeEventListener('visibilitychange', sync)
+      stopSpin()
+    }
   }, [spinning, startSpin, stopSpin, scheduleOverlay])
 
   // Cloud IR layer (GIBS)
@@ -1371,15 +1385,28 @@ export function GlobalRadarGlobe() {
     scheduleDayNight(true)
   }, [showDayNight, scheduleDayNight])
 
-  // Play / pause — single timer, no double-start
+  // Play / pause — single timer, no double-start; pause when tab hidden (saves GPU)
   useEffect(() => {
-    if (playing) {
-      startPlayTimer()
-    } else {
+    if (!playing) {
+      stopPlayTimer()
+      return () => stopPlayTimer()
+    }
+    const sync = () => {
+      if (typeof document !== 'undefined' && document.hidden) {
+        stopPlayTimer()
+        stopSpin()
+      } else {
+        startPlayTimer()
+        if (spinningRef.current) startSpin()
+      }
+    }
+    sync()
+    document.addEventListener('visibilitychange', sync)
+    return () => {
+      document.removeEventListener('visibilitychange', sync)
       stopPlayTimer()
     }
-    return () => stopPlayTimer()
-  }, [playing, startPlayTimer, stopPlayTimer])
+  }, [playing, startPlayTimer, stopPlayTimer, stopSpin, startSpin])
 
   // Speed change restarts timer only while playing
   useEffect(() => {
@@ -1485,6 +1512,23 @@ export function GlobalRadarGlobe() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- showLabels/showIR at swap time
   }, [basemapId, applyFrame, scheduleOverlay, showLabels, showIR])
 
+  useEffect(() => {
+    if (!optionsOpen) return
+    const onDoc = (e: MouseEvent) => {
+      const el = optionsMenuRef.current
+      if (el && !el.contains(e.target as Node)) setOptionsOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOptionsOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [optionsOpen])
+
   const goNow = () => {
     setPlaying(false)
     frameIdxRef.current = nowIndex
@@ -1548,190 +1592,182 @@ export function GlobalRadarGlobe() {
         </div>
       )}
 
-      <div className="globe-side-tools" aria-label="Globe tools">
-        <div className="globe-basemap-row" role="group" aria-label="Map style">
-          {(Object.keys(BASEMAPS) as BasemapId[]).map((id) => (
-            <button
-              key={id}
-              type="button"
-              className={`chip-btn globe-basemap-btn ${basemapId === id ? 'active' : ''}`}
-              onClick={() => setBasemapId(id)}
-              disabled={loading}
-            >
-              {BASEMAPS[id].label}
-            </button>
-          ))}
-        </div>
-        <div className="globe-layer-row" role="group" aria-label="Layers">
-          <button
-            type="button"
-            className={`chip-btn ${showRadar ? 'active' : ''}`}
-            onClick={() => setShowRadar((v) => !v)}
-            aria-pressed={showRadar}
-            disabled={loading}
+      <div className="globe-options" ref={optionsMenuRef}>
+        <button
+          type="button"
+          className={`chip-btn globe-options-trigger ${optionsOpen ? 'active' : ''}`}
+          onClick={() => setOptionsOpen((v) => !v)}
+          aria-expanded={optionsOpen}
+          aria-haspopup="menu"
+          aria-controls="globe-options-menu"
+          disabled={loading}
+        >
+          Options
+          <span className="globe-options-caret" aria-hidden="true">
+            {optionsOpen ? '▴' : '▾'}
+          </span>
+        </button>
+        {optionsOpen && (
+          <div
+            id="globe-options-menu"
+            className="globe-options-menu"
+            role="menu"
+            aria-label="Earth map options"
           >
-            Radar
-          </button>
-          <button
-            type="button"
-            className={`chip-btn ${showIR ? 'active' : ''}`}
-            onClick={() => setShowIR((v) => !v)}
-            aria-pressed={showIR}
-            disabled={loading}
-            title="Cloud tops / clean IR (NASA GIBS)"
-          >
-            IR
-          </button>
-          <button
-            type="button"
-            className={`chip-btn ${showDayNight ? 'active' : ''}`}
-            onClick={() => setShowDayNight((v) => !v)}
-            aria-pressed={showDayNight}
-            disabled={loading}
-            title="Day / night terminator"
-          >
-            Day/Night
-          </button>
-          <button
-            type="button"
-            className={`chip-btn ${showTropical ? 'active' : ''}`}
-            onClick={() => setShowTropical((v) => !v)}
-            aria-pressed={showTropical}
-            disabled={loading || !storms.length}
-          >
-            Storms
-          </button>
-          <button
-            type="button"
-            className={`chip-btn ${showLabels ? 'active' : ''}`}
-            onClick={() => setShowLabels((v) => !v)}
-            aria-pressed={showLabels}
-            disabled={loading}
-          >
-            Labels
-          </button>
-          <button
-            type="button"
-            className={`chip-btn ${spinning ? 'active' : ''}`}
-            onClick={() => setSpinning((v) => !v)}
-            aria-pressed={spinning}
-            disabled={loading || prefersReducedMotion()}
-            title={
-              prefersReducedMotion()
-                ? 'Spin disabled (reduced motion preference)'
-                : 'Rotate Earth around the poles (equator spins past)'
-            }
-          >
-            Spin
-          </button>
-        </div>
-        <div className="globe-region-row" role="group" aria-label="Jump to region">
-          {REGIONS.map((r) => (
-            <button
-              key={r.id}
-              type="button"
-              className={`chip-btn globe-region-btn ${activeRegion === r.id ? 'active' : ''}`}
-              onClick={() => flyRegion(r.id)}
-              disabled={loading}
-            >
-              {r.label}
-            </button>
-          ))}
-          {storms.length > 0 && (
-            <button
-              type="button"
-              className={`chip-btn globe-region-btn ${activeRegion === 'storms' ? 'active' : ''}`}
-              onClick={focusStorms}
-              disabled={loading}
-            >
-              Active storms
-            </button>
-          )}
-        </div>
-      </div>
+            <div className="globe-options-section" role="group" aria-label="Map style">
+              <div className="globe-options-heading">Map style</div>
+              <div className="globe-options-chips">
+                {(Object.keys(BASEMAPS) as BasemapId[]).map((id) => (
+                  <button
+                    key={id}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={basemapId === id}
+                    className={`chip-btn globe-options-chip ${basemapId === id ? 'active' : ''}`}
+                    onClick={() => setBasemapId(id)}
+                  >
+                    {BASEMAPS[id].label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-      <div className="globe-legend" aria-hidden={loading}>
-        <div className="globe-legend-title">Legend</div>
-        <div className="globe-legend-item">
-          <span className="globe-legend-swatch globe-legend-radar" />
-          Global precip radar
-        </div>
-        {showIR && (
-          <div className="globe-legend-item">
-            <span className="globe-legend-swatch globe-legend-ir" />
-            Cloud IR
-          </div>
-        )}
-        {showDayNight && (
-          <div className="globe-legend-item">
-            <span className="globe-legend-swatch globe-legend-night" />
-            Night side
-          </div>
-        )}
-        <div className="globe-legend-item">
-          <span className="globe-legend-swatch globe-legend-past" />
-          Past track
-        </div>
-        <div className="globe-legend-item">
-          <span className="globe-legend-swatch globe-legend-fcst" />
-          Forecast track
-        </div>
-        <div className="globe-legend-item">
-          <span className="globe-legend-swatch globe-legend-cone" />
-          Forecast cone
-        </div>
-      </div>
-
-      {storms.length > 0 && (
-        <div className="globe-storm-panel" role="region" aria-label="Active tropical cyclones">
-          <div className="globe-storm-panel-head">
-            <strong>🌀 Active storms · {storms.length}</strong>
-            <button
-              type="button"
-              className={`chip-btn ${showTropical ? 'active' : ''}`}
-              onClick={() => setShowTropical((v) => !v)}
-              aria-pressed={showTropical}
-            >
-              {showTropical ? 'Hide' : 'Show'}
-            </button>
-          </div>
-          <ul className="globe-storm-list">
-            {storms.map((s) => (
-              <li key={s.id}>
+            <div className="globe-options-section" role="group" aria-label="Layers">
+              <div className="globe-options-heading">Layers</div>
+              <div className="globe-options-chips">
                 <button
                   type="button"
-                  className="globe-storm-card"
-                  onClick={() => {
-                    setSpinning(false)
-                    setActiveRegion('storms')
-                    mapRef.current?.easeTo({
-                      center: [s.lon, s.lat],
-                      zoom: 3.4,
-                      bearing: 0,
-                      pitch: 0,
-                      essential: true,
-                    })
-                  }}
+                  role="menuitemcheckbox"
+                  className={`chip-btn globe-options-chip ${showRadar ? 'active' : ''}`}
+                  onClick={() => setShowRadar((v) => !v)}
+                  aria-checked={showRadar}
                 >
-                  <span className="globe-storm-card-name">
-                    {s.name}
-                    <em>{s.classification}</em>
-                  </span>
-                  <span className="globe-storm-card-meta">
-                    {[s.intensity, s.movement, s.pressure ? `${s.pressure} mb` : '']
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </span>
+                  Radar
                 </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+                <button
+                  type="button"
+                  role="menuitemcheckbox"
+                  className={`chip-btn globe-options-chip ${showIR ? 'active' : ''}`}
+                  onClick={() => setShowIR((v) => !v)}
+                  aria-checked={showIR}
+                  title="Cloud tops / clean IR (NASA GIBS)"
+                >
+                  IR
+                </button>
+                <button
+                  type="button"
+                  role="menuitemcheckbox"
+                  className={`chip-btn globe-options-chip ${showDayNight ? 'active' : ''}`}
+                  onClick={() => setShowDayNight((v) => !v)}
+                  aria-checked={showDayNight}
+                  title="Day / night terminator"
+                >
+                  Day/Night
+                </button>
+                <button
+                  type="button"
+                  role="menuitemcheckbox"
+                  className={`chip-btn globe-options-chip ${showTropical ? 'active' : ''}`}
+                  onClick={() => setShowTropical((v) => !v)}
+                  aria-checked={showTropical}
+                  disabled={!storms.length}
+                >
+                  Storms
+                </button>
+                <button
+                  type="button"
+                  role="menuitemcheckbox"
+                  className={`chip-btn globe-options-chip ${showLabels ? 'active' : ''}`}
+                  onClick={() => setShowLabels((v) => !v)}
+                  aria-checked={showLabels}
+                >
+                  Labels
+                </button>
+                <button
+                  type="button"
+                  role="menuitemcheckbox"
+                  className={`chip-btn globe-options-chip ${spinning ? 'active' : ''}`}
+                  onClick={() => setSpinning((v) => !v)}
+                  aria-checked={spinning}
+                  disabled={prefersReducedMotion()}
+                  title={
+                    prefersReducedMotion()
+                      ? 'Spin disabled (reduced motion preference)'
+                      : 'Rotate Earth around the poles (equator spins past)'
+                  }
+                >
+                  Spin
+                </button>
+              </div>
+            </div>
 
-      {!loading && storms.length === 0 && (
-        <div className="globe-quiet-badge">No active NHC tropical cyclones</div>
-      )}
+            <div className="globe-options-section" role="group" aria-label="Jump to region">
+              <div className="globe-options-heading">Jump to</div>
+              <div className="globe-options-chips">
+                {REGIONS.map((r) => (
+                  <button
+                    key={r.id}
+                    type="button"
+                    role="menuitem"
+                    className={`chip-btn globe-options-chip ${activeRegion === r.id ? 'active' : ''}`}
+                    onClick={() => {
+                      flyRegion(r.id)
+                      setOptionsOpen(false)
+                    }}
+                  >
+                    {r.label}
+                  </button>
+                ))}
+                {storms.length > 0 && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={`chip-btn globe-options-chip ${activeRegion === 'storms' ? 'active' : ''}`}
+                    onClick={() => {
+                      focusStorms()
+                      setOptionsOpen(false)
+                    }}
+                  >
+                    Active storms
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="globe-options-section globe-options-legend" aria-hidden={loading}>
+              <div className="globe-options-heading">Legend</div>
+              <div className="globe-legend-item">
+                <span className="globe-legend-swatch globe-legend-radar" />
+                Global precip radar
+              </div>
+              {showIR && (
+                <div className="globe-legend-item">
+                  <span className="globe-legend-swatch globe-legend-ir" />
+                  Cloud IR
+                </div>
+              )}
+              {showDayNight && (
+                <div className="globe-legend-item">
+                  <span className="globe-legend-swatch globe-legend-night" />
+                  Night side
+                </div>
+              )}
+              <div className="globe-legend-item">
+                <span className="globe-legend-swatch globe-legend-past" />
+                Past track
+              </div>
+              <div className="globe-legend-item">
+                <span className="globe-legend-swatch globe-legend-fcst" />
+                Forecast track
+              </div>
+              <div className="globe-legend-item">
+                <span className="globe-legend-swatch globe-legend-cone" />
+                Forecast cone
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       <div className="globe-controls" role="toolbar" aria-label="Radar playback">
         <div className="globe-timeline-wrap">

@@ -15,7 +15,8 @@ It is **not** the web `/widget` page or “Add to Home Screen” PWA icon.
 | Capacitor bridge | `ios/App/App/SolaraWidgetPlugin.swift` → JS name `SolaraWidget` |
 | JS publisher | `src/lib/nativeWidget.ts` (called from `useWeather` after forecast load) |
 | Widget kind | `SolaraHomeWidget` |
-| Sizes | Small + Medium |
+| Sizes | Small + Medium + Large |
+| Medium/Large | Today: H/L, rain %, UV, wind, humidity, sun times, day tip |
 | Deep link | `solara://home` |
 
 ### Data flow

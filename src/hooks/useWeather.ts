@@ -344,10 +344,16 @@ export function useWeather() {
     async (loc: LocationResult, opts?: { soft?: boolean }) => {
       const gen = ++fetchGen.current
       const soft = Boolean(opts?.soft && weatherRef.current)
-      if (soft) setRefreshing(true)
+      const keepPainted = Boolean(weatherRef.current)
+      // Soft / place-switch while we already have a forecast: keep UI painted (no skeleton flash)
+      if (soft || keepPainted) setRefreshing(true)
       else setLoading(true)
       setError(null)
-      setLocation(loc)
+      // Soft refresh of same pin — update location immediately. Place switches wait for weather
+      // so place name never mismatches old temps.
+      if (soft || !keepPainted) {
+        setLocation(loc)
+      }
 
       // Only persist location change when not a background soft refresh of same place
       const prev = prefsRef.current.lastLocation
@@ -378,7 +384,17 @@ export function useWeather() {
         // Phase 1 — forecast only (fastest paint; biggest mobile win)
         const w = await fetchWeather(loc.latitude, loc.longitude, { lite: mobile })
         if (gen !== fetchGen.current) return
+        setLocation(loc)
         setWeather(w)
+        // Drop previous place's air/alerts so we don't flash stale AQI/warnings
+        if (!soft) {
+          setAir(null)
+          setAlerts([])
+          setSevereActive(false)
+          setModels([])
+          setProfile(null)
+          setStorms([])
+        }
         setUpdatedAt(Date.now())
         setOffline(false)
         setLoading(false)
@@ -825,6 +841,27 @@ export function useWeather() {
       void loadForLocationRef.current?.(location, { soft: true })
     }, ms)
     return () => clearInterval(id)
+  }, [location])
+
+  // When the user returns to the tab after a while, soft-refresh once (keeps “now” current)
+  useEffect(() => {
+    if (!location) return
+    let hiddenAt = 0
+    const onVis = () => {
+      if (document.hidden) {
+        hiddenAt = Date.now()
+        return
+      }
+      const away = hiddenAt ? Date.now() - hiddenAt : 0
+      // Away ≥ 3 minutes → refresh; ignore quick tab switches
+      if (away >= 3 * 60 * 1000) {
+        const loc = locationRef.current
+        if (loc) void loadForLocationRef.current?.(loc, { soft: true })
+      }
+      hiddenAt = 0
+    }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
   }, [location])
 
   // Re-publish Home Screen widget when returning to the native app

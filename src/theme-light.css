@@ -460,7 +460,10 @@ html.mobile-perf[data-theme='light'] .topbar {
 [data-theme='light'] .globe-storm-panel,
 [data-theme='light'] .globe-legend,
 [data-theme='light'] .globe-quiet-badge,
-[data-theme='light'] .globe-side-tools .chip-btn {
+[data-theme='light'] .globe-side-tools .chip-btn,
+[data-theme='light'] .globe-options-trigger,
+[data-theme='light'] .globe-options-menu,
+[data-theme='light'] .globe-options-chip {
   background: rgba(255, 255, 255, 0.92) !important;
   color: #0f172a !important;
   border-color: rgba(15, 23, 42, 0.14) !important;
@@ -469,9 +472,21 @@ html.mobile-perf[data-theme='light'] .topbar {
 
 [data-theme='light'] .globe-hint,
 [data-theme='light'] .globe-legend-title,
+[data-theme='light'] .globe-options-heading,
 [data-theme='light'] .globe-timeline-marks,
 [data-theme='light'] .globe-frame-count {
   color: rgba(15, 23, 42, 0.62) !important;
+}
+
+[data-theme='light'] .globe-options-chip.active,
+[data-theme='light'] .globe-options-trigger.active {
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.28), rgba(56, 189, 248, 0.18)) !important;
+  border-color: rgba(3, 105, 161, 0.45) !important;
+  color: #0c4a6e !important;
+}
+
+[data-theme='light'] .globe-options-section + .globe-options-section {
+  border-top-color: rgba(15, 23, 42, 0.1);
 }
 
 [data-theme='light'] .globe-time,

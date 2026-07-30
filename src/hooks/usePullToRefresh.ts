@@ -36,7 +36,7 @@ export function usePullToRefresh(onRefresh: () => void | Promise<void>, enabled 
       if (!(t instanceof Element)) return false
       return Boolean(
         t.closest(
-          'input, textarea, select, button, a, .leaflet-container, .radar-panel, .map-chunk-fallback, .hourly-scroll, .week-strip-row',
+          'input, textarea, select, button, a, .leaflet-container, .radar-panel, .map-chunk-fallback, .hourly-scroll, .week-strip-row, .globe-stage, .globe-page, .maplibregl-map, .maplibregl-canvas-container, .globe-options, [data-no-ptr]',
         ),
       )
     }

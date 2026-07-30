@@ -23,6 +23,41 @@ export interface WidgetSnapshotPayload {
   updatedAt: number
   units: 'metric' | 'imperial'
   deepLink?: string
+  /** Day-relevant extras for medium/large Home Screen widget */
+  humidity?: number
+  windKmh?: number
+  windDeg?: number
+  windGustKmh?: number
+  uvMax?: number
+  sunrise?: string
+  sunset?: string
+  precipMm?: number
+  dayHint?: string
+}
+
+function buildDayHint(opts: {
+  code: number
+  pop?: number
+  uvMax?: number
+  windKmh?: number
+  precipMm?: number
+  highC?: number
+}): string | undefined {
+  const { code, pop, uvMax, windKmh, precipMm, highC } = opts
+  if (code >= 95) return 'Thunderstorm risk today'
+  if (code >= 71 && code <= 77) return 'Snow in the forecast'
+  if (pop != null && pop >= 60) return `Rain likely · ${pop}% chance`
+  if (pop != null && pop >= 40) return 'Showers possible today'
+  if (precipMm != null && precipMm >= 5) return `Wet day · ~${Math.round(precipMm)} mm`
+  if (uvMax != null && uvMax >= 8) return 'Very high UV — cover up'
+  if (uvMax != null && uvMax >= 6) return 'High UV this afternoon'
+  if (windKmh != null && windKmh >= 45) return 'Windy — gusty conditions'
+  if (windKmh != null && windKmh >= 30) return 'Breezy day'
+  if (highC != null && highC >= 30) return 'Hot day — stay hydrated'
+  if (highC != null && highC <= -15) return 'Bitter cold — dress in layers'
+  if (code === 0 || code === 1) return 'Nice day overall'
+  if (code === 45 || code === 48) return 'Foggy — watch visibility'
+  return undefined
 }
 
 /** Build snapshot from forecast + place (temps stored as °C; widget converts for imperial). */
@@ -41,6 +76,20 @@ export function buildWidgetSnapshot(
 
   const high = weather.daily?.temperature_2m_max?.[ti]
   const low = weather.daily?.temperature_2m_min?.[ti]
+  const humidity = weather.current?.relative_humidity_2m
+  const windKmh = weather.current?.wind_speed_10m
+  const windDeg = weather.current?.wind_direction_10m
+  const windGustKmh = weather.current?.wind_gusts_10m
+  const uvMax = weather.daily?.uv_index_max?.[ti]
+  const sunrise = weather.daily?.sunrise?.[ti]
+  const sunset = weather.daily?.sunset?.[ti]
+  const precipMm = weather.daily?.precipitation_sum?.[ti]
+
+  const highN = high != null && Number.isFinite(high) ? Number(high) : undefined
+  const popN = pop != null && Number.isFinite(pop) ? Math.round(Number(pop)) : undefined
+  const uvN = uvMax != null && Number.isFinite(uvMax) ? Number(uvMax) : undefined
+  const windN = windKmh != null && Number.isFinite(windKmh) ? Number(windKmh) : undefined
+  const precipN = precipMm != null && Number.isFinite(precipMm) ? Number(precipMm) : undefined
 
   return {
     placeName: (location.name || 'Home').replace(/\s*\(Home\)\s*$/i, '').trim() || 'Home',
@@ -51,14 +100,32 @@ export function buildWidgetSnapshot(
       weather.current?.apparent_temperature != null
         ? Number(weather.current.apparent_temperature)
         : undefined,
-    highC: high != null && Number.isFinite(high) ? Number(high) : undefined,
+    highC: highN,
     lowC: low != null && Number.isFinite(low) ? Number(low) : undefined,
     code: Number(code),
     condition: info.label || info.description || 'Weather',
-    pop: pop != null && Number.isFinite(pop) ? Math.round(Number(pop)) : undefined,
+    pop: popN,
     updatedAt: Date.now() / 1000,
     units: units === 'imperial' ? 'imperial' : 'metric',
     deepLink: 'solara://home',
+    humidity:
+      humidity != null && Number.isFinite(humidity) ? Math.round(Number(humidity)) : undefined,
+    windKmh: windN,
+    windDeg: windDeg != null && Number.isFinite(windDeg) ? Math.round(Number(windDeg)) : undefined,
+    windGustKmh:
+      windGustKmh != null && Number.isFinite(windGustKmh) ? Number(windGustKmh) : undefined,
+    uvMax: uvN,
+    sunrise: typeof sunrise === 'string' && sunrise ? sunrise : undefined,
+    sunset: typeof sunset === 'string' && sunset ? sunset : undefined,
+    precipMm: precipN,
+    dayHint: buildDayHint({
+      code: Number(code),
+      pop: popN,
+      uvMax: uvN,
+      windKmh: windN,
+      precipMm: precipN,
+      highC: highN,
+    }),
   }
 }
 
@@ -91,7 +158,9 @@ export async function publishNativeWidgetSnapshot(opts: {
       if (sameHome) {
         place = {
           ...opts.location,
-          name: (home.name || opts.location.name || 'Home').replace(/\s*\(Home\)\s*$/i, '').trim() || 'Home',
+          name:
+            (home.name || opts.location.name || 'Home').replace(/\s*\(Home\)\s*$/i, '').trim() ||
+            'Home',
           latitude: home.latitude,
           longitude: home.longitude,
         }

@@ -409,6 +409,7 @@ export default function DashboardPage() {
       style={bg ? { background: bg } : undefined}
       data-theme-active={theme}
       data-density={density}
+      aria-busy={loading || refreshing || pull.refreshing || geoLoading ? true : undefined}
     >
       <a className="skip-link" href="#main-content">
         Skip to forecast

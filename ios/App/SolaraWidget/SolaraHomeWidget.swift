@@ -144,8 +144,8 @@ struct SolaraHomeWidget: Widget {
                 .modifier(SolaraWidgetBackground())
         }
         .configurationDisplayName("Solara Weather")
-        .description("Current conditions — temp, high/low, and rain chance.")
-        .supportedFamilies([.systemSmall, .systemMedium])
+        .description("Today at a glance — temp, high/low, UV, wind, sun times, and rain.")
+        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
     }
 }
 
@@ -185,6 +185,8 @@ struct SolaraWidgetView: View {
     private var content: some View {
         if let snap = entry.snapshot {
             switch family {
+            case .systemLarge:
+                largeView(snap)
             case .systemMedium:
                 mediumView(snap)
             default:
@@ -194,6 +196,9 @@ struct SolaraWidgetView: View {
             emptyView
         }
     }
+
+    private var accent: Color { Color(red: 0.49, green: 0.83, blue: 0.99) }
+    private var brand: Color { Color(red: 0.34, green: 0.78, blue: 0.96) }
 
     private func smallView(_ snap: WidgetSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -215,61 +220,230 @@ struct SolaraWidgetView: View {
                 .foregroundColor(Color.white.opacity(0.7))
                 .lineLimit(1)
             Spacer(minLength: 0)
-            if let pop = snap.pop, pop > 0 {
-                Text("Rain \(pop)%")
-                    .font(.caption2)
-                    .fontWeight(.medium)
-                    .foregroundColor(Color(red: 0.49, green: 0.83, blue: 0.99))
+            HStack(spacing: 6) {
+                if let hi = snap.highLabel, let lo = snap.lowLabel {
+                    Text("H\(hi) L\(lo)")
+                        .font(.caption2)
+                        .fontWeight(.medium)
+                        .foregroundColor(Color.white.opacity(0.8))
+                }
+                if let pop = snap.pop, pop > 0 {
+                    Text("💧\(pop)%")
+                        .font(.caption2)
+                        .fontWeight(.medium)
+                        .foregroundColor(accent)
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
+    /// Medium = the “big” Home Screen tile: today-relevant detail.
     private func mediumView(_ snap: WidgetSnapshot) -> some View {
-        HStack(spacing: 14) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("SOLARA")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(Color(red: 0.34, green: 0.78, blue: 0.96))
-                Text(snap.placeName)
-                    .font(.headline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-                Text(snap.condition)
-                    .font(.subheadline)
-                    .foregroundColor(Color.white.opacity(0.75))
-                Spacer(minLength: 0)
-                HStack(spacing: 10) {
-                    if let hi = snap.highLabel, let lo = snap.lowLabel {
-                        Text("H \(hi)  L \(lo)")
-                            .font(.caption)
-                            .fontWeight(.medium)
-                            .foregroundColor(Color.white.opacity(0.8))
-                    }
-                    if let pop = snap.pop, pop > 0 {
-                        Text("💧 \(pop)%")
-                            .font(.caption)
-                            .fontWeight(.medium)
-                            .foregroundColor(Color(red: 0.49, green: 0.83, blue: 0.99))
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(alignment: .center, spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("SOLARA · TODAY")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(brand)
+                        .tracking(0.4)
+                    Text(snap.placeName)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    Text(snap.condition)
+                        .font(.caption2)
+                        .foregroundColor(Color.white.opacity(0.72))
+                        .lineLimit(1)
+                    HStack(spacing: 6) {
+                        if let hi = snap.highLabel, let lo = snap.lowLabel {
+                            Text("H \(hi)  L \(lo)")
+                                .font(.caption2)
+                                .fontWeight(.semibold)
+                                .foregroundColor(Color.white.opacity(0.85))
+                        }
+                        if let feels = snap.feelsLabel {
+                            Text("Feels \(feels)")
+                                .font(.caption2)
+                                .foregroundColor(Color.white.opacity(0.6))
+                        }
                     }
                 }
+                Spacer(minLength: 4)
+                VStack(alignment: .trailing, spacing: 0) {
+                    Text(snap.iconDisplay)
+                        .font(.system(size: 26))
+                    Text(snap.tempLabel)
+                        .font(.system(size: 34, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                        .minimumScaleFactor(0.7)
+                }
             }
-            Spacer(minLength: 0)
-            VStack(spacing: 2) {
-                Text(snap.iconDisplay)
-                    .font(.system(size: 40))
-                Text(snap.tempLabel)
-                    .font(.system(size: 40, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
-                if let feels = snap.feelsLabel {
-                    Text("Feels \(feels)")
+
+            // Day-relevant strip: rain, UV, wind, humidity, precip total
+            HStack(spacing: 5) {
+                if let pop = snap.pop, pop > 0 {
+                    metricPill("💧 \(pop)%", color: accent)
+                }
+                if let uv = snap.uvLabel {
+                    metricPill(uv, color: uvColor(snap.uvMax))
+                }
+                if let w = snap.windFullLabel {
+                    metricPill("💨 \(w)")
+                }
+                if let rh = snap.humidity {
+                    metricPill("\(rh)%")
+                }
+                if let p = snap.precipDayLabel {
+                    metricPill(p, color: accent)
+                }
+            }
+
+            HStack(spacing: 8) {
+                if let rise = snap.sunriseLabel {
+                    Text("↑ \(rise)")
                         .font(.caption2)
-                        .foregroundColor(Color.white.opacity(0.65))
+                        .fontWeight(.medium)
+                        .foregroundColor(Color.white.opacity(0.78))
+                }
+                if let set = snap.sunsetLabel {
+                    Text("↓ \(set)")
+                        .font(.caption2)
+                        .fontWeight(.medium)
+                        .foregroundColor(Color.white.opacity(0.78))
+                }
+                if let hint = snap.dayHint, !hint.isEmpty {
+                    Text(hint)
+                        .font(.caption2)
+                        .foregroundColor(accent.opacity(0.95))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                 }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func largeView(_ snap: WidgetSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("SOLARA · TODAY")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(brand)
+                        .tracking(0.5)
+                    Text(snap.placeName)
+                        .font(.title3)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    Text(snap.condition)
+                        .font(.subheadline)
+                        .foregroundColor(Color.white.opacity(0.78))
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(snap.iconDisplay)
+                        .font(.system(size: 44))
+                    Text(snap.tempLabel)
+                        .font(.system(size: 48, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                    if let feels = snap.feelsLabel {
+                        Text("Feels like \(feels)")
+                            .font(.caption)
+                            .foregroundColor(Color.white.opacity(0.65))
+                    }
+                }
+            }
+
+            if let hi = snap.highLabel, let lo = snap.lowLabel {
+                Text("High \(hi)  ·  Low \(lo)")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(Color.white.opacity(0.88))
+            }
+
+            if let hint = snap.dayHint, !hint.isEmpty {
+                Text(hint)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(accent)
+                    .lineLimit(2)
+            }
+
+            Divider().background(Color.white.opacity(0.15))
+
+            LazyVGrid(
+                columns: [GridItem(.flexible()), GridItem(.flexible())],
+                alignment: .leading,
+                spacing: 8
+            ) {
+                if let pop = snap.pop {
+                    largeMetric(title: "Rain chance", value: "\(pop)%")
+                }
+                if let uv = snap.uvLabel {
+                    largeMetric(title: "UV index", value: uv.replacingOccurrences(of: "UV ", with: ""))
+                }
+                if let w = snap.windFullLabel {
+                    largeMetric(title: "Wind", value: w)
+                }
+                if let rh = snap.humidity {
+                    largeMetric(title: "Humidity", value: "\(rh)%")
+                }
+                if let p = snap.precipDayLabel {
+                    largeMetric(title: "Precip today", value: p)
+                }
+                if let rise = snap.sunriseLabel, let set = snap.sunsetLabel {
+                    largeMetric(title: "Sun", value: "↑\(rise)  ↓\(set)")
+                } else if let rise = snap.sunriseLabel {
+                    largeMetric(title: "Sunrise", value: rise)
+                } else if let set = snap.sunsetLabel {
+                    largeMetric(title: "Sunset", value: set)
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func metricPill(_ text: String, color: Color = Color.white.opacity(0.82)) -> some View {
+        Text(text)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundColor(color)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(Color.white.opacity(0.08))
+            .clipShape(Capsule())
+            .lineLimit(1)
+    }
+
+    private func largeMetric(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title.uppercased())
+                .font(.system(size: 9, weight: .bold))
+                .foregroundColor(Color.white.opacity(0.5))
+                .tracking(0.4)
+            Text(value)
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundColor(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(8)
+        .background(Color.white.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func uvColor(_ uv: Double?) -> Color {
+        guard let u = uv else { return Color.white.opacity(0.82) }
+        if u >= 8 { return Color(red: 1.0, green: 0.45, blue: 0.45) }
+        if u >= 6 { return Color(red: 1.0, green: 0.72, blue: 0.35) }
+        if u >= 3 { return Color(red: 0.95, green: 0.88, blue: 0.4) }
+        return Color.white.opacity(0.82)
     }
 
     private var emptyView: some View {

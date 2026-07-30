@@ -110,6 +110,13 @@ body.native-ios .radar-page {
   padding-bottom: var(--sab);
 }
 
+.error-boundary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  justify-content: center;
+  margin-top: 0.5rem;
+}
 .error-boundary {
   min-height: 100vh;
   display: flex;

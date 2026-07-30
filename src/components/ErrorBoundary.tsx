@@ -20,22 +20,44 @@ export class ErrorBoundary extends Component<Props, State> {
     console.error('Solara UI error:', error, info.componentStack)
   }
 
+  private retry = () => {
+    this.setState({ error: null })
+  }
+
+  private hardReload = () => {
+    this.setState({ error: null })
+    try {
+      // Drop possible bad SW caches, then hard reload home
+      if ('serviceWorker' in navigator) {
+        void navigator.serviceWorker.getRegistrations().then((regs) => {
+          for (const r of regs) void r.unregister()
+        })
+      }
+      if ('caches' in window) {
+        void caches.keys().then((keys) => {
+          for (const k of keys) void caches.delete(k)
+        })
+      }
+    } catch {
+      /* ignore */
+    }
+    window.location.assign('/')
+  }
+
   render() {
     if (this.state.error) {
       return (
         <div className="error-boundary">
           <h1>Something went wrong</h1>
-          <p>{this.state.error.message}</p>
-          <button
-            type="button"
-            className="primary-btn"
-            onClick={() => {
-              this.setState({ error: null })
-              window.location.href = '/'
-            }}
-          >
-            Reload Solara
-          </button>
+          <p>{this.state.error.message || 'Unexpected UI error'}</p>
+          <div className="error-boundary-actions">
+            <button type="button" className="primary-btn" onClick={this.retry}>
+              Try again
+            </button>
+            <button type="button" className="chip-btn" onClick={this.hardReload}>
+              Reload Solara
+            </button>
+          </div>
         </div>
       )
     }
