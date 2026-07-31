@@ -12,6 +12,7 @@ import type { TropicalGlobeData, TropicalStorm } from '../api/types'
 import { formatRadarTime } from '../utils/format'
 import {
   destinationPoint,
+  projectSpaceBody,
   screenToLatLonOrtho,
   solarElevationSin,
   sublunarPoint,
@@ -163,6 +164,14 @@ function buildStyle(basemap: BasemapDef) {
   }
   const layers: maplibregl.LayerSpecification[] = [
     {
+      id: 'space-bg',
+      type: 'background',
+      paint: {
+        'background-color': '#010208',
+        'background-opacity': 0, // starfield canvas shows through
+      },
+    },
+    {
       id: 'basemap',
       type: 'raster',
       source: 'basemap',
@@ -240,15 +249,29 @@ function smoothstep01(t: number): number {
   return x * x * (3 - 2 * x)
 }
 
-function applySky(map: MapLibreMap, basemap: BasemapDef) {
+/** Deep space around the globe (not atmospheric sky). */
+function applySpaceSky(map: MapLibreMap) {
   try {
     map.setSky({
-      'sky-color': basemap.sky.sky,
-      'sky-horizon-blend': 0.55,
-      'horizon-color': basemap.sky.horizon,
-      'horizon-fog-blend': 0.4,
-      'fog-color': basemap.sky.fog,
-      'fog-ground-blend': 0.12,
+      'sky-color': '#02040c',
+      'sky-horizon-blend': 0.08,
+      'horizon-color': '#050814',
+      'horizon-fog-blend': 0.05,
+      'fog-color': '#010208',
+      'fog-ground-blend': 0.02,
+    })
+  } catch {
+    /* optional */
+  }
+  try {
+    const m = map as MapLibreMap & { setFog?: (f: Record<string, unknown>) => void }
+    m.setFog?.({
+      range: [0.8, 12],
+      color: 'rgb(2, 4, 12)',
+      'high-color': 'rgb(4, 8, 22)',
+      'space-color': 'rgb(1, 2, 8)',
+      'horizon-blend': 0.04,
+      'star-intensity': 0.45,
     })
   } catch {
     /* optional */
@@ -317,9 +340,11 @@ export function GlobalRadarGlobe() {
   const showTropicalRef = useRef(true)
   const showDayNightRef = useRef(true)
   const markersRef = useRef<maplibregl.Marker[]>([])
-  const sunMarkerRef = useRef<maplibregl.Marker | null>(null)
-  const moonMarkerRef = useRef<maplibregl.Marker | null>(null)
+  const spaceCanvasRef = useRef<HTMLCanvasElement>(null)
+  const sunBodyRef = useRef<HTMLDivElement>(null)
+  const moonBodyRef = useRef<HTMLDivElement>(null)
   const showBodiesRef = useRef(true)
+  const starsRef = useRef<{ x: number; y: number; r: number; a: number }[] | null>(null)
 
   /** Prevent overlapping radar swaps (main flicker source). */
   const radarBusyRef = useRef(false)
@@ -377,27 +402,77 @@ export function GlobalRadarGlobe() {
     markersRef.current = []
   }, [])
 
-  const clearCelestialMarkers = useCallback(() => {
-    sunMarkerRef.current?.remove()
-    sunMarkerRef.current = null
-    moonMarkerRef.current?.remove()
-    moonMarkerRef.current = null
+  /** Paint a deep-space starfield behind the globe. */
+  const paintStarfield = useCallback(() => {
+    const canvas = spaceCanvasRef.current
+    const map = mapRef.current
+    if (!canvas) return
+    const mapCanvas = map?.getCanvas()
+    const w = mapCanvas?.clientWidth || canvas.clientWidth || 1
+    const h = mapCanvas?.clientHeight || canvas.clientHeight || 1
+    const dpr = Math.min(window.devicePixelRatio || 1, 2)
+    if (canvas.width !== Math.floor(w * dpr) || canvas.height !== Math.floor(h * dpr)) {
+      canvas.width = Math.floor(w * dpr)
+      canvas.height = Math.floor(h * dpr)
+      canvas.style.width = `${w}px`
+      canvas.style.height = `${h}px`
+      starsRef.current = null
+    }
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    // Nebula-ish deep space
+    const g = ctx.createRadialGradient(w * 0.35, h * 0.3, 0, w * 0.5, h * 0.5, Math.max(w, h) * 0.75)
+    g.addColorStop(0, '#0a1028')
+    g.addColorStop(0.45, '#050814')
+    g.addColorStop(1, '#010208')
+    ctx.fillStyle = g
+    ctx.fillRect(0, 0, w, h)
+    // Soft milky band
+    ctx.save()
+    ctx.translate(w * 0.5, h * 0.55)
+    ctx.rotate(-0.4)
+    const band = ctx.createLinearGradient(0, -h * 0.08, 0, h * 0.08)
+    band.addColorStop(0, 'rgba(80, 100, 160, 0)')
+    band.addColorStop(0.5, 'rgba(90, 110, 180, 0.07)')
+    band.addColorStop(1, 'rgba(80, 100, 160, 0)')
+    ctx.fillStyle = band
+    ctx.fillRect(-w, -h * 0.1, w * 2, h * 0.2)
+    ctx.restore()
+
+    if (!starsRef.current) {
+      const n = Math.floor((w * h) / 1800)
+      const stars: { x: number; y: number; r: number; a: number }[] = []
+      for (let i = 0; i < n; i++) {
+        stars.push({
+          x: Math.random() * w,
+          y: Math.random() * h,
+          r: Math.random() < 0.08 ? 1.4 + Math.random() * 1.2 : 0.4 + Math.random() * 0.9,
+          a: 0.35 + Math.random() * 0.65,
+        })
+      }
+      starsRef.current = stars
+    }
+    for (const s of starsRef.current) {
+      ctx.beginPath()
+      ctx.fillStyle = `rgba(230, 240, 255, ${s.a})`
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2)
+      ctx.fill()
+    }
   }, [])
 
   /**
-   * Place / update Sun & Moon at real subsolar & sublunar lon/lat.
-   * Hide each when on the far side of the globe from the camera.
+   * Place Sun & Moon in space (outside Earth radius) along real subsolar/sublunar directions.
+   * CSS 3D spheres — not surface markers.
    */
   const updateCelestialBodies = useCallback((map: MapLibreMap, date = new Date()) => {
+    const sunEl = sunBodyRef.current
+    const moonEl = moonBodyRef.current
+    if (!sunEl || !moonEl) return
+
     if (!showBodiesRef.current) {
-      if (sunMarkerRef.current) {
-        const el = sunMarkerRef.current.getElement()
-        if (el) el.style.opacity = '0'
-      }
-      if (moonMarkerRef.current) {
-        const el = moonMarkerRef.current.getElement()
-        if (el) el.style.opacity = '0'
-      }
+      sunEl.style.opacity = '0'
+      moonEl.style.opacity = '0'
       return
     }
 
@@ -405,64 +480,54 @@ export function GlobalRadarGlobe() {
     const moon = sublunarPoint(date)
     const phase = moonPhase(date)
     const center = map.getCenter()
-    const cLng = center.lng
-    const cLat = center.lat
+    const project = (ll: [number, number]) => map.project(ll)
 
-    const ensureMarker = (
-      ref: { current: maplibregl.Marker | null },
-      kind: 'sun' | 'moon',
+    const place = (
+      el: HTMLDivElement,
       lon: number,
       lat: number,
-      label: string,
+      spaceR: number,
       title: string,
+      kind: 'sun' | 'moon',
     ) => {
-      if (!ref.current) {
-        const el = document.createElement('div')
-        el.className = `globe-body-marker globe-body-${kind}`
-        el.setAttribute('role', 'img')
-        el.setAttribute('aria-label', title)
-        el.innerHTML =
-          kind === 'sun'
-            ? `<span class="globe-body-glow" aria-hidden="true"></span><span class="globe-body-core" aria-hidden="true">☀</span><span class="globe-body-label">Sun</span>`
-            : `<span class="globe-body-glow" aria-hidden="true"></span><span class="globe-body-core" aria-hidden="true">${phase.emoji}</span><span class="globe-body-label">Moon</span>`
-        el.title = title
-        ref.current = new maplibregl.Marker({
-          element: el,
-          anchor: 'center',
-          // Keep icons upright while lon/lat tracks the real subsolar/sublunar point
-          pitchAlignment: 'viewport',
-          rotationAlignment: 'viewport',
-        })
-          .setLngLat([lon, lat])
-          .addTo(map)
-      } else {
-        ref.current.setLngLat([lon, lat])
-        const el = ref.current.getElement()
-        if (el) {
-          el.title = title
-          if (kind === 'moon') {
-            const core = el.querySelector('.globe-body-core')
-            if (core) core.textContent = phase.emoji
-          }
-        }
+      const p = projectSpaceBody(project, center.lng, center.lat, lon, lat, spaceR)
+      if (!p) {
+        el.style.opacity = '0'
+        return
       }
-
-      const el = ref.current.getElement()
-      if (!el) return
-      // Slightly stricter than storms — keep icons off the noisy limb
-      const front = isFrontOfGlobe(lon, lat, cLng, cLat, 0.06)
-      el.style.opacity = front ? '1' : '0'
-      el.style.pointerEvents = 'none'
-      el.style.transition = 'opacity 0.15s linear'
-      // Store label for a11y
-      el.setAttribute('data-label', label)
+      const base = kind === 'sun' ? 58 : 40
+      const size = Math.round(base * p.scale)
+      el.style.width = `${size}px`
+      el.style.height = `${size}px`
+      el.style.opacity = p.inFront || p.depth > -0.05 ? '1' : '0'
+      el.style.transform = `translate3d(${Math.round(p.x - size / 2)}px, ${Math.round(p.y - size / 2)}px, 0)`
+      // In front of Earth → above map; near limb still visible beside the disk
+      el.style.zIndex = p.inFront ? '5' : p.depth > 0 ? '3' : '1'
+      el.title = title
+      el.setAttribute('aria-label', title)
+      if (kind === 'moon') {
+        const illum = phase.illumination / 100
+        el.style.setProperty('--moon-illum', String(illum))
+        el.dataset.waxing = phase.phase < 0.5 ? '1' : '0'
+      }
     }
 
-    const sunTitle = `Sun overhead near ${sun.lat.toFixed(1)}°, ${sun.lon.toFixed(1)}°`
-    const moonTitle = `Moon (${phase.name}, ${phase.illumination}% lit) overhead near ${moon.lat.toFixed(1)}°, ${moon.lon.toFixed(1)}°`
-
-    ensureMarker(sunMarkerRef, 'sun', sun.lon, sun.lat, 'Sun', sunTitle)
-    ensureMarker(moonMarkerRef, 'moon', moon.lon, moon.lat, 'Moon', moonTitle)
+    place(
+      sunEl,
+      sun.lon,
+      sun.lat,
+      2.15,
+      `Sun in space · subsolar ${sun.lat.toFixed(1)}°, ${sun.lon.toFixed(1)}°`,
+      'sun',
+    )
+    place(
+      moonEl,
+      moon.lon,
+      moon.lat,
+      1.72,
+      `Moon in space · ${phase.name} (${phase.illumination}% lit) · ${moon.lat.toFixed(1)}°, ${moon.lon.toFixed(1)}°`,
+      'moon',
+    )
   }, [])
 
   /**
@@ -656,21 +721,7 @@ export function GlobalRadarGlobe() {
     ctx.stroke()
     ctx.shadowBlur = 0
 
-    if (!spinning && frontCosC(sun.lon, sun.lat, cLng, cLat) > 0.15) {
-      const sp = map.project([sun.lon, sun.lat])
-      if (Number.isFinite(sp.x) && Number.isFinite(sp.y)) {
-        if (!useOrtho || Math.hypot(sp.x - centerPt.x, sp.y - centerPt.y) <= Rcss) {
-          const g = ctx.createRadialGradient(sp.x, sp.y, 0, sp.x, sp.y, 14)
-          g.addColorStop(0, 'rgba(254, 243, 199, 0.9)')
-          g.addColorStop(0.45, 'rgba(251, 191, 36, 0.45)')
-          g.addColorStop(1, 'rgba(251, 191, 36, 0)')
-          ctx.fillStyle = g
-          ctx.beginPath()
-          ctx.arc(sp.x, sp.y, 14, 0, Math.PI * 2)
-          ctx.fill()
-        }
-      }
-    }
+    // Sun is drawn as a 3D space body outside Earth — not on the surface.
 
     dayNightLastPaintRef.current = performance.now()
   }, [])
@@ -724,6 +775,7 @@ export function GlobalRadarGlobe() {
       if (!map) return
 
       try {
+        paintStarfield()
         updateCelestialBodies(map)
       } catch {
         /* ignore */
@@ -906,7 +958,7 @@ export function GlobalRadarGlobe() {
         el.style.transition = 'opacity 0.12s linear'
       }
     })
-  }, [scheduleDayNight, updateCelestialBodies])
+  }, [scheduleDayNight, updateCelestialBodies, paintStarfield])
 
   const placeMarkers = useCallback(
     (map: MapLibreMap, data: TropicalGlobeData, visible: boolean) => {
@@ -1235,7 +1287,8 @@ export function GlobalRadarGlobe() {
         } catch {
           /* flat ok */
         }
-        applySky(map, initial)
+        applySpaceSky(map)
+        paintStarfield()
 
         // Load Earth at max zoom around the sphere so detail stays in the tile cache
         await warmGlobeTiles(map, () => cancelled, setLoadHint)
@@ -1362,7 +1415,6 @@ export function GlobalRadarGlobe() {
       stopPlayTimer()
       stopSpin()
       clearStormMarkers()
-      clearCelestialMarkers()
       if (overlayRafRef.current != null) {
         window.cancelAnimationFrame(overlayRafRef.current)
         overlayRafRef.current = null
@@ -1510,16 +1562,12 @@ export function GlobalRadarGlobe() {
     showBodiesRef.current = showBodies
     const map = mapRef.current
     if (!map || !readyRef.current) return
-    if (!showBodies) {
-      clearCelestialMarkers()
-      return
-    }
     try {
       updateCelestialBodies(map)
     } catch {
       /* ignore */
     }
-  }, [showBodies, updateCelestialBodies, clearCelestialMarkers])
+  }, [showBodies, updateCelestialBodies])
 
   // Play / pause — single timer, no double-start; pause when tab hidden (saves GPU)
   useEffect(() => {
@@ -1608,7 +1656,7 @@ export function GlobalRadarGlobe() {
         })
       }
 
-      applySky(map, def)
+      applySpaceSky(map)
       lastBasemapApplied.current = basemapId
     } catch (e) {
       console.warn('[globe] basemap swap failed', e)
@@ -1694,7 +1742,9 @@ export function GlobalRadarGlobe() {
   const progress = frames.length > 1 ? frameIdx / (frames.length - 1) : 0
 
   return (
-    <div className={`globe-stage globe-theme-${basemapId}`}>
+    <div className={`globe-stage globe-theme-${basemapId} globe-stage-space`}>
+      {/* Deep space starfield behind the planet */}
+      <canvas ref={spaceCanvasRef} className="globe-space-canvas" aria-hidden="true" />
       <div
         ref={containerRef}
         className="globe-canvas"
@@ -1706,6 +1756,31 @@ export function GlobalRadarGlobe() {
         className="globe-daynight-canvas"
         aria-hidden="true"
       />
+      {/* Sun & Moon as 3D-style spheres out in space (not on the surface) */}
+      <div
+        ref={sunBodyRef}
+        className="globe-space-body globe-space-sun"
+        role="img"
+        aria-label="Sun"
+        aria-hidden={!showBodies}
+      >
+        <div className="globe-space-sun-core" />
+        <div className="globe-space-sun-corona" />
+        <span className="globe-space-body-label">Sun</span>
+      </div>
+      <div
+        ref={moonBodyRef}
+        className="globe-space-body globe-space-moon"
+        role="img"
+        aria-label="Moon"
+        aria-hidden={!showBodies}
+      >
+        <div className="globe-space-moon-sphere">
+          <div className="globe-space-moon-lit" />
+          <div className="globe-space-moon-shade" />
+        </div>
+        <span className="globe-space-body-label">Moon</span>
+      </div>
       <svg
         ref={trackSvgRef}
         className="globe-track-svg"
@@ -1806,7 +1881,7 @@ export function GlobalRadarGlobe() {
                   className={`chip-btn globe-options-chip ${showBodies ? 'active' : ''}`}
                   onClick={() => setShowBodies((v) => !v)}
                   aria-checked={showBodies}
-                  title="Sun and Moon at real overhead positions on Earth"
+                  title="3D Sun and Moon in space at real directions from Earth"
                 >
                   Sun/Moon
                 </button>
@@ -1902,11 +1977,11 @@ export function GlobalRadarGlobe() {
                 <>
                   <div className="globe-legend-item">
                     <span className="globe-legend-swatch globe-legend-sun" />
-                    Sun (overhead)
+                    Sun (in space)
                   </div>
                   <div className="globe-legend-item">
                     <span className="globe-legend-swatch globe-legend-moon" />
-                    Moon (overhead)
+                    Moon (in space)
                   </div>
                 </>
               )}

@@ -56,6 +56,78 @@ function julianDay(date: Date): number {
  * Sublunar point: lat/lon on Earth where the Moon is overhead right now.
  * Low-order lunar theory (Meeus-style) — good enough for a globe marker (~1°).
  */
+/**
+ * Project a lon/lat direction out into "space" for screen placement around a globe.
+ * `spaceRadius` is multiples of Earth radius (1 = surface, ~1.7–2.4 = near-Earth space).
+ * Returns CSS pixel coords relative to the map canvas and a depth cue for scale/z-order.
+ */
+export function projectSpaceBody(
+  project: (lngLat: [number, number]) => { x: number; y: number },
+  lookLng: number,
+  lookLat: number,
+  bodyLon: number,
+  bodyLat: number,
+  spaceRadius = 1.85,
+): { x: number; y: number; depth: number; inFront: boolean; scale: number } | null {
+  // cosγ: body direction · camera look-at (same as front-of-globe test)
+  const toRad = Math.PI / 180
+  const φ1 = lookLat * toRad
+  const λ1 = lookLng * toRad
+  const φ2 = bodyLat * toRad
+  const λ2 = bodyLon * toRad
+  const cosC =
+    Math.sin(φ1) * Math.sin(φ2) + Math.cos(φ1) * Math.cos(φ2) * Math.cos(λ2 - λ1)
+
+  // Behind Earth (from camera) — occluded by the planet
+  if (cosC < -0.08) return null
+
+  const origin = project([lookLng, lookLat])
+  const surface = project([bodyLon, bodyLat])
+  let dx = surface.x - origin.x
+  let dy = surface.y - origin.y
+  let len = Math.hypot(dx, dy)
+
+  // When body is nearly toward camera, surface projects near center — estimate
+  // limb radius from a 90° offset sample so we still push the body into space.
+  if (len < 6) {
+    // Sample a point ~25° from look-at toward the body for a direction
+    const midLon = lookLng + (bodyLon - lookLng) * 0.35
+    const midLat = lookLat + (bodyLat - lookLat) * 0.35
+    const mid = project([midLon, midLat])
+    dx = mid.x - origin.x
+    dy = mid.y - origin.y
+    len = Math.hypot(dx, dy)
+  }
+  if (len < 2) {
+    // Fall back: place slightly above center
+    return {
+      x: origin.x,
+      y: origin.y - 40 * spaceRadius,
+      depth: cosC,
+      inFront: cosC > 0.15,
+      scale: 0.85 + 0.45 * Math.max(0, cosC),
+    }
+  }
+
+  // Screen radius of Earth disk ≈ len / sin(γ); push body to spaceRadius × R
+  const sinG = Math.sqrt(Math.max(1e-6, 1 - cosC * cosC))
+  const earthRpx = len / sinG
+  const target = earthRpx * spaceRadius * sinG
+  const ux = dx / len
+  const uy = dy / len
+  const x = origin.x + ux * target
+  const y = origin.y + uy * target
+  // Closer to camera → larger; also when near limb slightly smaller
+  const scale = 0.55 + 0.7 * Math.max(0, cosC) + 0.15 * (1 - Math.abs(cosC))
+  return {
+    x,
+    y,
+    depth: cosC,
+    inFront: cosC > 0.12,
+    scale: Math.max(0.45, Math.min(1.35, scale)),
+  }
+}
+
 export function sublunarPoint(date: Date = new Date()): { lon: number; lat: number } {
   const JD = julianDay(date)
   const T = (JD - 2_451_545.0) / 36_525
