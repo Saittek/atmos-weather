@@ -36,6 +36,7 @@ interface Props {
   alertCount?: number
   offline?: boolean
   air?: AirQualityData | null
+  onShare?: () => void
 }
 
 export function CurrentWeather({
@@ -51,6 +52,7 @@ export function CurrentWeather({
   alertCount = 0,
   offline = false,
   air = null,
+  onShare,
 }: Props) {
   const c = weather.current
   const condOpts = displayOptsFromWeather(weather, air)
@@ -176,6 +178,17 @@ export function CurrentWeather({
                 {isFavorite ? '★' : '☆'}
               </button>
             )}
+            {onShare && (
+              <button
+                type="button"
+                className="fav-inline share-inline"
+                onClick={onShare}
+                title="Copy share link"
+                aria-label="Share this place"
+              >
+                ↗
+              </button>
+            )}
           </div>
           <p className="place-meta">
             {[location.admin1, location.country].filter(Boolean).join(' · ') ||
@@ -192,6 +205,12 @@ export function CurrentWeather({
                 {offline ? ' · offline' : ''}
               </span>
             )}
+          </p>
+          <p className="current-source-line">
+            {weather.solara_source?.strategy
+              ? `Sources · Solara blend · Open-Meteo`
+              : 'Sources · Open-Meteo'}
+            {updatedLabel ? ` · ${refreshing ? 'refreshing' : updatedLabel}` : ''}
           </p>
         </div>
 

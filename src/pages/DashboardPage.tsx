@@ -19,14 +19,11 @@ import { Favorites } from '../components/Favorites'
 import { SettingsBar } from '../components/SettingsBar'
 import { AllergySection } from '../components/AllergySection'
 import { Onboarding } from '../components/Onboarding'
-import { ForecastSummary } from '../components/ForecastSummary'
-import { GlanceModules } from '../components/GlanceModules'
 import { AlertTopBar, AlertTopBarCircle, setAlertsMinimizedStored } from '../components/AlertTopBar'
 import { AmbientOrbs } from '../components/AmbientOrbs'
 import { AdvancedSection } from '../components/AdvancedSection'
 import { isMobileViewport } from '../utils/device'
 import { DashboardSkeleton } from '../components/Skeleton'
-import { WeekStrip } from '../components/WeekStrip'
 import { Deferred } from '../components/Deferred'
 import { useWeather } from '../hooks/useWeather'
 import { useThreatProximity } from '../hooks/useThreatProximity'
@@ -34,8 +31,10 @@ import { useHomeAlerts } from '../hooks/useHomeAlerts'
 import { sameExactPlace } from '../hooks/useWeather'
 import { ThreatBanner } from '../components/ThreatBanner'
 import { WhatMattersNow } from '../components/WhatMattersNow'
-import { NextHourHero } from '../components/NextHourHero'
 import { ModelConfidence } from '../components/ModelConfidence'
+import { TodayHero } from '../components/TodayHero'
+import { OutdoorGlance } from '../components/OutdoorGlance'
+import { ModulePrefsPanel } from '../components/ModulePrefsPanel'
 import { useAuth } from '../hooks/useAuth'
 import { useRainWatch } from '../hooks/useRainWatch'
 import { isDaytimeNow } from '../utils/daylight'
@@ -45,6 +44,12 @@ import type { LocationResult } from '../api/types'
 import { filterActiveAlerts } from '../utils/activeAlerts'
 import { willIGetWet } from '../utils/wetSummary'
 import { usePullToRefresh } from '../hooks/usePullToRefresh'
+import {
+  loadModulePrefs,
+  saveModulePrefs,
+  type ModulePrefs,
+} from '../lib/modulePrefs'
+import { fireSmokeRisk } from '../utils/fireRisk'
 
 /** Heavy / below-fold — code-split off the critical path */
 const RadarMap = lazy(() =>
@@ -55,18 +60,6 @@ const FireMapPanel = lazy(() =>
 )
 const WeatherVideos = lazy(() =>
   import('../components/WeatherVideos').then((m) => ({ default: m.WeatherVideos })),
-)
-const HazardBadges = lazy(() =>
-  import('../components/HazardBadges').then((m) => ({ default: m.HazardBadges })),
-)
-const UvWindPanel = lazy(() =>
-  import('../components/UvWindPanel').then((m) => ({ default: m.UvWindPanel })),
-)
-const OutdoorAirStrip = lazy(() =>
-  import('../components/OutdoorAirStrip').then((m) => ({ default: m.OutdoorAirStrip })),
-)
-const ActivityModes = lazy(() =>
-  import('../components/ActivityModes').then((m) => ({ default: m.ActivityModes })),
 )
 const PrecipTotals = lazy(() =>
   import('../components/PrecipTotals').then((m) => ({ default: m.PrecipTotals })),
@@ -153,6 +146,11 @@ export default function DashboardPage() {
   /** User manually hid radar — don't auto-reopen until conditions/place change */
   const [userClosedRadar, setUserClosedRadar] = useState(false)
   const [autoOpenedFor, setAutoOpenedFor] = useState<string | null>(null)
+  const [modPrefs, setModPrefs] = useState<ModulePrefs>(() => loadModulePrefs())
+  const setModulePrefs = useCallback((next: ModulePrefs) => {
+    setModPrefs(next)
+    saveModulePrefs(next)
+  }, [])
   const {
     location,
     weather,
@@ -475,7 +473,7 @@ export default function DashboardPage() {
               {stormMode && <span className="brand-tag">Storm mode</span>}
             </div>
           </div>
-          {/* 3D Earth + global radar */}
+          {/* Primary modes: Earth + Radar. Chaser lives under Modes. */}
           <Link
             to="/globe"
             className="chip-btn nav-chip earth-nav-btn"
@@ -486,20 +484,6 @@ export default function DashboardPage() {
               <span className="earth-nav-glow" />
             </span>
             <span className="earth-nav-label hide-sm">Earth</span>
-          </Link>
-          {/* Storm chasers — sits with brand so it never stacks under account/settings */}
-          <Link
-            to={
-              location
-                ? `/chase?lat=${location.latitude.toFixed(4)}&lon=${location.longitude.toFixed(4)}&name=${encodeURIComponent(location.name)}`
-                : '/chase'
-            }
-            className="chip-btn nav-chip chaser-nav-btn chaser-nav-top"
-            title="Storm chasers desk"
-            aria-label="Storm chasers"
-          >
-            <span aria-hidden>🌪</span>
-            <span className="chaser-nav-label">Chasers</span>
           </Link>
           {/* Hidden alerts → circle in top bar */}
           {alertsMinimized && activeAlerts.length > 0 && (
@@ -532,6 +516,18 @@ export default function DashboardPage() {
               )}
               <Link to={radarPath} className="chip-btn icon-chip nav-chip" title="Full-page radar" aria-label="Radar">
                 📡
+              </Link>
+              <Link
+                to={
+                  location
+                    ? `/chase?lat=${location.latitude.toFixed(4)}&lon=${location.longitude.toFixed(4)}&name=${encodeURIComponent(location.name)}`
+                    : '/chase'
+                }
+                className="chip-btn icon-chip nav-chip hide-sm"
+                title="Storm chasers"
+                aria-label="Storm chasers"
+              >
+                🌪
               </Link>
             </nav>
             <SettingsBar
@@ -684,11 +680,10 @@ export default function DashboardPage() {
                   alertCount={alertsMinimized ? 0 : activeAlerts.length}
                   offline={offline}
                   air={air}
+                  onShare={() => void onShare()}
                 />
 
-                {/* Directly under “Right now” */}
-                {/* Hyperlocal next-hour precip (lock-screen style) */}
-                <NextHourHero
+                <TodayHero
                   weather={weather}
                   units={units}
                   placeName={
@@ -696,12 +691,11 @@ export default function DashboardPage() {
                       ? 'Home'
                       : location.name
                   }
+                  air={air}
                 />
 
-                <GlanceModules weather={weather} units={units} air={air} />
-
-                {/* One clear action strip — full NWS text stays in Alerts */}
-                {!alertsMinimized && (
+                {/* Compact alert action — full text only when expanded */}
+                {!alertsMinimized && activeAlerts.length > 0 && (
                   <WhatMattersNow
                     alerts={activeAlerts}
                     onOpenAlerts={() => {
@@ -713,28 +707,21 @@ export default function DashboardPage() {
                 )}
 
                 <div id="alerts-panel">
-                  {!alertsMinimized && <Alerts alerts={activeAlerts} />}
+                  {!alertsMinimized && activeAlerts.length > 0 && (
+                    <Alerts alerts={activeAlerts} />
+                  )}
                 </div>
-
-                <ForecastSummary
-                  weather={weather}
-                  units={units}
-                  placeName={location.name}
-                  air={air}
-                />
               </div>
 
               <HourlyForecast weather={weather} units={units} />
-              <WeekStrip weather={weather} units={units} />
 
+              {/* One 7-day control (removed duplicate WeekStrip) */}
               <div className="daily-mobile-slot">
                 <DailyForecast weather={weather} units={units} />
               </div>
 
-              {/* Radar above allergies */}
               {radarBlock}
 
-              {/* Allergies — pollen, mold-friendly air, tips */}
               <AllergySection air={air} weather={weather} />
 
               <>
@@ -743,80 +730,84 @@ export default function DashboardPage() {
                     <AirQuality air={air} />
                   </div>
 
-                  <Deferred
-                    force={!isMobile}
-                    rootMargin="100px 0px"
-                    minHeight={isMobile ? 72 : undefined}
-                  >
+                  <OutdoorGlance weather={weather} units={units} air={air} />
+
+                  {modPrefs.dress && (
                     <LazyPanel>
-                      <HazardBadges weather={weather} units={units} air={air} />
-                      <UvWindPanel weather={weather} units={units} />
-                      <OutdoorAirStrip weather={weather} air={air} />
-                      <ActivityModes weather={weather} units={units} air={air} />
+                      <DressForToday weather={weather} units={units} air={air} />
                     </LazyPanel>
-                  </Deferred>
+                  )}
 
-                  <Deferred
-                    force={!isMobile}
-                    rootMargin="160px 0px"
-                    minHeight={isMobile ? 64 : undefined}
-                  >
-                    <LazyPanel>
-                      <PrecipTotals weather={weather} units={units} />
-                      <VisibilityPanel weather={weather} units={units} air={air} />
-                      {!isMobile && <StormRisk weather={weather} profile={profile} />}
-                    </LazyPanel>
-                  </Deferred>
-
-                  <LazyPanel>
-                    <DressForToday weather={weather} units={units} air={air} />
-                  </LazyPanel>
-
-                  <Deferred force={!isMobile} rootMargin="120px 0px" minHeight={isMobile ? 200 : 320}>
-                    <LazyPanel>
-                      <WeatherVideos />
-                    </LazyPanel>
-                  </Deferred>
-
-                  <Deferred
-                    force={false}
-                    rootMargin={isMobile ? '40px 0px' : '200px 0px'}
-                    minHeight={isMobile ? 120 : 360}
-                    placeholder={
-                      isMobile ? (
-                        <p className="muted-center">Scroll for fire map…</p>
-                      ) : (
-                        <MapChunkFallback label="Fire map loads near view…" />
+                  {/* Fire map only when risk elevated or user opts in */}
+                  {(modPrefs.fireMap ||
+                    (() => {
+                      const fr = fireSmokeRisk(weather, air)
+                      const aqi = air?.current?.us_aqi ?? 0
+                      return (
+                        fr.fireLevel === 'elevated' ||
+                        fr.fireLevel === 'high' ||
+                        aqi >= 100 ||
+                        (fr.pm25 != null && fr.pm25 >= 35)
                       )
-                    }
-                  >
-                    <Suspense fallback={<MapChunkFallback label="Loading fire map…" />}>
-                      <FireMapPanel
-                        lat={location.latitude}
-                        lon={location.longitude}
-                        placeName={location.name}
-                        weather={weather}
-                        air={air}
-                        homeLocation={homeLocation}
-                      />
-                    </Suspense>
-                  </Deferred>
+                    })()) && (
+                    <Deferred
+                      force={false}
+                      rootMargin={isMobile ? '40px 0px' : '200px 0px'}
+                      minHeight={isMobile ? 120 : 280}
+                      placeholder={
+                        <p className="muted-center">Smoke / fire map loads near view…</p>
+                      }
+                    >
+                      <Suspense fallback={<MapChunkFallback label="Loading fire map…" />}>
+                        <FireMapPanel
+                          lat={location.latitude}
+                          lon={location.longitude}
+                          placeName={location.name}
+                          weather={weather}
+                          air={air}
+                          homeLocation={homeLocation}
+                        />
+                      </Suspense>
+                    </Deferred>
+                  )}
 
-                  <Deferred force={!isMobile} rootMargin="120px 0px" minHeight={isMobile ? 0 : 48}>
-                    <LazyPanel>
-                      <AreaChat location={location} />
-                    </LazyPanel>
-                  </Deferred>
+                  {modPrefs.videos && (
+                    <Deferred force={false} rootMargin="120px 0px" minHeight={isMobile ? 120 : 200}>
+                      <LazyPanel>
+                        <WeatherVideos />
+                      </LazyPanel>
+                    </Deferred>
+                  )}
 
-                  <Deferred force={!isMobile} rootMargin="100px 0px">
+                  {modPrefs.chat && (
+                    <Deferred force={false} rootMargin="120px 0px" minHeight={isMobile ? 0 : 48}>
+                      <LazyPanel>
+                        <AreaChat location={location} />
+                      </LazyPanel>
+                    </Deferred>
+                  )}
+
+                  {modPrefs.shareCard && (
+                    <Deferred force={false} rootMargin="100px 0px">
+                      <LazyPanel>
+                        <ShareWeatherCard weather={weather} location={location} units={units} />
+                      </LazyPanel>
+                    </Deferred>
+                  )}
+
+                  {/* Tropical only when active storms */}
+                  {storms.length > 0 && (
                     <LazyPanel>
-                      <ShareWeatherCard weather={weather} location={location} units={units} />
+                      <Tropical storms={storms} onFocus={openStorm} />
                     </LazyPanel>
-                  </Deferred>
+                  )}
 
                   <AdvancedSection title="More details" defaultOpen={false}>
                     <div className="advanced-grid">
                       <LazyPanel>
+                        <PrecipTotals weather={weather} units={units} />
+                        <VisibilityPanel weather={weather} units={units} air={air} />
+                        {!isMobile && <StormRisk weather={weather} profile={profile} />}
                         <HourlyCharts weather={weather} units={units} />
                         <PrecipChart weather={weather} units={units} />
                         <ComfortPanel weather={weather} units={units} />
@@ -830,23 +821,50 @@ export default function DashboardPage() {
                             lon={location.longitude}
                           />
                         )}
-                        {!isMobile && (
-                          <>
-                            {models.length >= 2 && (
-                              <ModelConfidence
-                                models={models}
-                                weather={weather}
-                                units={units}
-                              />
-                            )}
-                            <ModelCompare models={models} units={units} timezone={weather.timezone} />
-                          </>
+                        {(modPrefs.models || !isMobile) && models.length >= 2 && (
+                          <ModelConfidence
+                            models={models}
+                            weather={weather}
+                            units={units}
+                          />
+                        )}
+                        {(modPrefs.models || !isMobile) && (
+                          <ModelCompare models={models} units={units} timezone={weather.timezone} />
                         )}
                         {!isMobile && (
                           <CityCompare units={units} home={location} homeWeather={weather} />
                         )}
                       </LazyPanel>
                     </div>
+                  </AdvancedSection>
+
+                  {modPrefs.planning && (
+                    <AdvancedSection title="Planning & environment" defaultOpen={false} id="advanced-planning-main">
+                      <div className="advanced-grid">
+                        <LazyPanel>
+                          <ClimateCompare
+                            weather={weather}
+                            units={units}
+                            lat={location.latitude}
+                            lon={location.longitude}
+                          />
+                          <SnowOutlook weather={weather} units={units} />
+                          <TripPlanner
+                            weather={weather}
+                            units={units}
+                            placeName={location.name}
+                            origin={location}
+                          />
+                          <OutlookTips weather={weather} units={units} />
+                          <FireSmoke weather={weather} air={air} />
+                          <Sounding profile={profile} units={units} timezone={weather.timezone} />
+                        </LazyPanel>
+                      </div>
+                    </AdvancedSection>
+                  )}
+
+                  <AdvancedSection title="Customize home" defaultOpen={false} id="module-prefs">
+                    <ModulePrefsPanel prefs={modPrefs} onChange={setModulePrefs} />
                   </AdvancedSection>
               </>
             </div>
@@ -867,40 +885,14 @@ export default function DashboardPage() {
                 />
               </div>
 
-              <>
-                  <div className="daily-desktop-slot">
-                    <DailyForecast weather={weather} units={units} />
-                  </div>
+              <div className="daily-desktop-slot">
+                <DailyForecast weather={weather} units={units} />
+              </div>
 
-                  <div className="outdoor-desktop-slot">
-                    <SunMoon weather={weather} />
-                    <AirQuality air={air} />
-                  </div>
-
-                  <AdvancedSection title="Planning & environment" defaultOpen={false} id="advanced-side">
-                    <div className="advanced-grid">
-                      <LazyPanel>
-                        <ClimateCompare
-                          weather={weather}
-                          units={units}
-                          lat={location.latitude}
-                          lon={location.longitude}
-                        />
-                        <SnowOutlook weather={weather} units={units} />
-                        <TripPlanner
-                          weather={weather}
-                          units={units}
-                          placeName={location.name}
-                          origin={location}
-                        />
-                        <OutlookTips weather={weather} units={units} />
-                        <FireSmoke weather={weather} air={air} />
-                        <Sounding profile={profile} units={units} timezone={weather.timezone} />
-                        <Tropical storms={storms} onFocus={openStorm} />
-                      </LazyPanel>
-                    </div>
-                  </AdvancedSection>
-              </>
+              <div className="outdoor-desktop-slot">
+                <SunMoon weather={weather} />
+                <AirQuality air={air} />
+              </div>
 
               <footer className="credits">
                 <p>
@@ -930,19 +922,10 @@ export default function DashboardPage() {
                   </a>
                   .
                 </p>
-                {user && (
-                  <p className="tiny">Signed in as {user.email}</p>
-                )}
+                {user && <p className="tiny">Signed in as {user.email}</p>}
               </footer>
             </aside>
           </main>
-        )}
-
-        {/* Chat / community — below weather so it never blocks the forecast */}
-        {!weather && (
-          <Deferred rootMargin="200px 0px" minHeight={isMobile ? 0 : 48}>
-            <AreaChat location={location} />
-          </Deferred>
         )}
       </div>
     </div>

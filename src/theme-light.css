@@ -478,6 +478,31 @@ html.mobile-perf[data-theme='light'] .topbar {
   color: rgba(15, 23, 42, 0.62) !important;
 }
 
+[data-theme='light'] .today-hero {
+  background: linear-gradient(155deg, rgba(14, 165, 233, 0.1), rgba(255, 255, 255, 0.92)) !important;
+}
+[data-theme='light'] .today-chip,
+[data-theme='light'] .outdoor-stat,
+[data-theme='light'] .outdoor-glance-tips li,
+[data-theme='light'] .module-prefs-row {
+  background: rgba(15, 23, 42, 0.04) !important;
+  color: #0f172a !important;
+}
+[data-theme='light'] .today-hero-source,
+[data-theme='light'] .current-source-line,
+[data-theme='light'] .module-prefs-row em {
+  color: rgba(15, 23, 42, 0.55) !important;
+}
+[data-theme='light'] .outdoor-verdict-go {
+  color: #15803d !important;
+}
+[data-theme='light'] .outdoor-verdict-caution {
+  color: #a16207 !important;
+}
+[data-theme='light'] .outdoor-verdict-avoid {
+  color: #b91c1c !important;
+}
+
 [data-theme='light'] .globe-options-chip.active,
 [data-theme='light'] .globe-options-trigger.active {
   background: linear-gradient(135deg, rgba(14, 165, 233, 0.28), rgba(56, 189, 248, 0.18)) !important;
