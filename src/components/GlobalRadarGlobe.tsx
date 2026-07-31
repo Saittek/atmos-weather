@@ -14,9 +14,11 @@ import {
   destinationPoint,
   screenToLatLonOrtho,
   solarElevationSin,
+  sublunarPoint,
   subsolarPoint,
   terminatorLine,
 } from '../utils/sunTerminator'
+import { moonPhase } from '../utils/moon'
 
 const SPEED_MS = { slow: 900, normal: 520, fast: 300 } as const
 type SpeedKey = keyof typeof SPEED_MS
@@ -315,6 +317,9 @@ export function GlobalRadarGlobe() {
   const showTropicalRef = useRef(true)
   const showDayNightRef = useRef(true)
   const markersRef = useRef<maplibregl.Marker[]>([])
+  const sunMarkerRef = useRef<maplibregl.Marker | null>(null)
+  const moonMarkerRef = useRef<maplibregl.Marker | null>(null)
+  const showBodiesRef = useRef(true)
 
   /** Prevent overlapping radar swaps (main flicker source). */
   const radarBusyRef = useRef(false)
@@ -351,6 +356,8 @@ export function GlobalRadarGlobe() {
   const [showLabels, setShowLabels] = useState(true)
   const [showIR, setShowIR] = useState(false)
   const [showDayNight, setShowDayNight] = useState(true)
+  /** Real-time Sun + Moon at subsolar / sublunar points */
+  const [showBodies, setShowBodies] = useState(true)
   const [spinning, setSpinning] = useState(false)
   const [basemapId, setBasemapId] = useState<BasemapId>('satellite')
   const [activeRegion, setActiveRegion] = useState('world')
@@ -361,12 +368,101 @@ export function GlobalRadarGlobe() {
   showRadarRef.current = showRadar
   showTropicalRef.current = showTropical
   showDayNightRef.current = showDayNight
+  showBodiesRef.current = showBodies
   spinningRef.current = spinning
   basemapIdRef.current = basemapId
 
   const clearStormMarkers = useCallback(() => {
     for (const m of markersRef.current) m.remove()
     markersRef.current = []
+  }, [])
+
+  const clearCelestialMarkers = useCallback(() => {
+    sunMarkerRef.current?.remove()
+    sunMarkerRef.current = null
+    moonMarkerRef.current?.remove()
+    moonMarkerRef.current = null
+  }, [])
+
+  /**
+   * Place / update Sun & Moon at real subsolar & sublunar lon/lat.
+   * Hide each when on the far side of the globe from the camera.
+   */
+  const updateCelestialBodies = useCallback((map: MapLibreMap, date = new Date()) => {
+    if (!showBodiesRef.current) {
+      if (sunMarkerRef.current) {
+        const el = sunMarkerRef.current.getElement()
+        if (el) el.style.opacity = '0'
+      }
+      if (moonMarkerRef.current) {
+        const el = moonMarkerRef.current.getElement()
+        if (el) el.style.opacity = '0'
+      }
+      return
+    }
+
+    const sun = subsolarPoint(date)
+    const moon = sublunarPoint(date)
+    const phase = moonPhase(date)
+    const center = map.getCenter()
+    const cLng = center.lng
+    const cLat = center.lat
+
+    const ensureMarker = (
+      ref: { current: maplibregl.Marker | null },
+      kind: 'sun' | 'moon',
+      lon: number,
+      lat: number,
+      label: string,
+      title: string,
+    ) => {
+      if (!ref.current) {
+        const el = document.createElement('div')
+        el.className = `globe-body-marker globe-body-${kind}`
+        el.setAttribute('role', 'img')
+        el.setAttribute('aria-label', title)
+        el.innerHTML =
+          kind === 'sun'
+            ? `<span class="globe-body-glow" aria-hidden="true"></span><span class="globe-body-core" aria-hidden="true">☀</span><span class="globe-body-label">Sun</span>`
+            : `<span class="globe-body-glow" aria-hidden="true"></span><span class="globe-body-core" aria-hidden="true">${phase.emoji}</span><span class="globe-body-label">Moon</span>`
+        el.title = title
+        ref.current = new maplibregl.Marker({
+          element: el,
+          anchor: 'center',
+          // Keep icons upright while lon/lat tracks the real subsolar/sublunar point
+          pitchAlignment: 'viewport',
+          rotationAlignment: 'viewport',
+        })
+          .setLngLat([lon, lat])
+          .addTo(map)
+      } else {
+        ref.current.setLngLat([lon, lat])
+        const el = ref.current.getElement()
+        if (el) {
+          el.title = title
+          if (kind === 'moon') {
+            const core = el.querySelector('.globe-body-core')
+            if (core) core.textContent = phase.emoji
+          }
+        }
+      }
+
+      const el = ref.current.getElement()
+      if (!el) return
+      // Slightly stricter than storms — keep icons off the noisy limb
+      const front = isFrontOfGlobe(lon, lat, cLng, cLat, 0.06)
+      el.style.opacity = front ? '1' : '0'
+      el.style.pointerEvents = 'none'
+      el.style.transition = 'opacity 0.15s linear'
+      // Store label for a11y
+      el.setAttribute('data-label', label)
+    }
+
+    const sunTitle = `Sun overhead near ${sun.lat.toFixed(1)}°, ${sun.lon.toFixed(1)}°`
+    const moonTitle = `Moon (${phase.name}, ${phase.illumination}% lit) overhead near ${moon.lat.toFixed(1)}°, ${moon.lon.toFixed(1)}°`
+
+    ensureMarker(sunMarkerRef, 'sun', sun.lon, sun.lat, 'Sun', sunTitle)
+    ensureMarker(moonMarkerRef, 'moon', moon.lon, moon.lat, 'Moon', moonTitle)
   }, [])
 
   /**
@@ -627,6 +723,12 @@ export function GlobalRadarGlobe() {
       const data = tropicalDataRef.current
       if (!map) return
 
+      try {
+        updateCelestialBodies(map)
+      } catch {
+        /* ignore */
+      }
+
       const hideMarkers = () => {
         for (const m of markersRef.current) {
           const el = m.getElement()
@@ -804,7 +906,7 @@ export function GlobalRadarGlobe() {
         el.style.transition = 'opacity 0.12s linear'
       }
     })
-  }, [scheduleDayNight])
+  }, [scheduleDayNight, updateCelestialBodies])
 
   const placeMarkers = useCallback(
     (map: MapLibreMap, data: TropicalGlobeData, visible: boolean) => {
@@ -1226,6 +1328,11 @@ export function GlobalRadarGlobe() {
 
         setLoading(false)
         scheduleOverlay()
+        try {
+          updateCelestialBodies(map)
+        } catch {
+          /* ignore */
+        }
       } catch (e) {
         if (cancelled) return
         setError(e instanceof Error ? e.message : 'Failed to load Earth')
@@ -1235,13 +1342,27 @@ export function GlobalRadarGlobe() {
 
     void boot()
 
+    // Keep Sun/Moon in real time (positions drift slowly; 30s is fine)
+    const bodyTimer = window.setInterval(() => {
+      const m = mapRef.current
+      if (m && readyRef.current) {
+        try {
+          updateCelestialBodies(m)
+        } catch {
+          /* ignore */
+        }
+      }
+    }, 30_000)
+
     return () => {
       cancelled = true
       mountedRef.current = false
       readyRef.current = false
+      window.clearInterval(bodyTimer)
       stopPlayTimer()
       stopSpin()
       clearStormMarkers()
+      clearCelestialMarkers()
       if (overlayRafRef.current != null) {
         window.cancelAnimationFrame(overlayRafRef.current)
         overlayRafRef.current = null
@@ -1384,6 +1505,21 @@ export function GlobalRadarGlobe() {
     showDayNightRef.current = showDayNight
     scheduleDayNight(true)
   }, [showDayNight, scheduleDayNight])
+
+  useEffect(() => {
+    showBodiesRef.current = showBodies
+    const map = mapRef.current
+    if (!map || !readyRef.current) return
+    if (!showBodies) {
+      clearCelestialMarkers()
+      return
+    }
+    try {
+      updateCelestialBodies(map)
+    } catch {
+      /* ignore */
+    }
+  }, [showBodies, updateCelestialBodies, clearCelestialMarkers])
 
   // Play / pause — single timer, no double-start; pause when tab hidden (saves GPU)
   useEffect(() => {
@@ -1667,6 +1803,16 @@ export function GlobalRadarGlobe() {
                 <button
                   type="button"
                   role="menuitemcheckbox"
+                  className={`chip-btn globe-options-chip ${showBodies ? 'active' : ''}`}
+                  onClick={() => setShowBodies((v) => !v)}
+                  aria-checked={showBodies}
+                  title="Sun and Moon at real overhead positions on Earth"
+                >
+                  Sun/Moon
+                </button>
+                <button
+                  type="button"
+                  role="menuitemcheckbox"
                   className={`chip-btn globe-options-chip ${showTropical ? 'active' : ''}`}
                   onClick={() => setShowTropical((v) => !v)}
                   aria-checked={showTropical}
@@ -1751,6 +1897,18 @@ export function GlobalRadarGlobe() {
                   <span className="globe-legend-swatch globe-legend-night" />
                   Night side
                 </div>
+              )}
+              {showBodies && (
+                <>
+                  <div className="globe-legend-item">
+                    <span className="globe-legend-swatch globe-legend-sun" />
+                    Sun (overhead)
+                  </div>
+                  <div className="globe-legend-item">
+                    <span className="globe-legend-swatch globe-legend-moon" />
+                    Moon (overhead)
+                  </div>
+                </>
               )}
               <div className="globe-legend-item">
                 <span className="globe-legend-swatch globe-legend-past" />

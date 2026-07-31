@@ -47,6 +47,76 @@ export function subsolarPoint(date: Date = new Date()): { lon: number; lat: numb
   return { lon: subsolarLongitude(date), lat: solarDeclination(date) }
 }
 
+/** Julian Day (UT) from JS Date */
+function julianDay(date: Date): number {
+  return date.getTime() / 86_400_000 + 2_440_587.5
+}
+
+/**
+ * Sublunar point: lat/lon on Earth where the Moon is overhead right now.
+ * Low-order lunar theory (Meeus-style) — good enough for a globe marker (~1°).
+ */
+export function sublunarPoint(date: Date = new Date()): { lon: number; lat: number } {
+  const JD = julianDay(date)
+  const T = (JD - 2_451_545.0) / 36_525
+
+  // Moon mean elements (degrees)
+  let Lp = 218.316_447_7 + 481_267.881_234_21 * T // mean longitude
+  let D = 297.850_192_1 + 445_267.111_403_4 * T // mean elongation
+  let M = 357.529_109_2 + 35_999.050_290_9 * T // Sun mean anomaly
+  let Mp = 134.963_396_4 + 477_198.867_505_5 * T // Moon mean anomaly
+  let F = 93.272_095 + 483_202.017_523_3 * T // arg of latitude
+
+  const norm360 = (x: number) => {
+    let v = x % 360
+    if (v < 0) v += 360
+    return v
+  }
+  Lp = norm360(Lp)
+  D = toRad(norm360(D))
+  M = toRad(norm360(M))
+  Mp = toRad(norm360(Mp))
+  F = toRad(norm360(F))
+
+  // Ecliptic longitude / latitude (main terms)
+  const lonEcl =
+    Lp +
+    6.289 * Math.sin(Mp) +
+    1.274 * Math.sin(2 * D - Mp) +
+    0.658 * Math.sin(2 * D) +
+    0.214 * Math.sin(2 * Mp) -
+    0.186 * Math.sin(M) -
+    0.114 * Math.sin(2 * F)
+  const latEcl =
+    5.128 * Math.sin(F) +
+    0.281 * Math.sin(Mp + F) +
+    0.278 * Math.sin(Mp - F) +
+    0.173 * Math.sin(2 * D - F)
+
+  const λ = toRad(norm360(lonEcl))
+  const β = toRad(latEcl)
+  // True obliquity of ecliptic
+  const ε = toRad(23.439_291 - 0.013_004_2 * T)
+
+  // Ecliptic → equatorial
+  const sinδ = Math.sin(β) * Math.cos(ε) + Math.cos(β) * Math.sin(ε) * Math.sin(λ)
+  const δ = Math.asin(Math.max(-1, Math.min(1, sinδ)))
+  const y = Math.sin(λ) * Math.cos(ε) - Math.tan(β) * Math.sin(ε)
+  const x = Math.cos(λ)
+  let α = Math.atan2(y, x) // RA radians
+  if (α < 0) α += 2 * Math.PI
+
+  // Greenwich mean sidereal time (degrees)
+  const D_j2000 = JD - 2_451_545.0
+  let GMST = 280.460_618_37 + 360.985_647_366_29 * D_j2000
+  GMST = norm360(GMST)
+
+  const raDeg = toDeg(α)
+  const lat = toDeg(δ)
+  const lon = normalizeLon(raDeg - GMST)
+  return { lon, lat }
+}
+
 /**
  * sin(solar elevation). Positive = day, negative = night, ~0 at the terminator.
  * Hot path: pass sunLon/sunLat when looping many pixels (avoids recompute).
