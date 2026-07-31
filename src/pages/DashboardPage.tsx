@@ -35,6 +35,11 @@ import { ModelConfidence } from '../components/ModelConfidence'
 import { TodayHero } from '../components/TodayHero'
 import { OutdoorGlance } from '../components/OutdoorGlance'
 import { ModulePrefsPanel } from '../components/ModulePrefsPanel'
+import { WhatChanged } from '../components/WhatChanged'
+import { WeekendBrief } from '../components/WeekendBrief'
+import { AlertTimeline } from '../components/AlertTimeline'
+import { FirstRunCoach, markFirstWeatherOk } from '../components/FirstRunCoach'
+import { loadPushStatus, sendTestNotification } from '../api/push'
 import { useAuth } from '../hooks/useAuth'
 import { useRainWatch } from '../hooks/useRainWatch'
 import { isDaytimeNow } from '../utils/daylight'
@@ -169,6 +174,7 @@ export default function DashboardPage() {
     density,
     favorites,
     homeLocation,
+    workLocation,
     severeMode,
     stormMode,
     notifyAlerts,
@@ -188,6 +194,9 @@ export default function DashboardPage() {
     setHomeLocation,
     isHome,
     goHome,
+    setWorkLocation,
+    isWork,
+    goWork,
     loadForLocation,
     requestMyLocation,
     syncNow,
@@ -205,7 +214,19 @@ export default function DashboardPage() {
     maxKm: 60,
   })
 
-  const rainWatch = useRainWatch(favorites, notifyAlerts, location, homeLocation)
+  const rainWatch = useRainWatch(favorites, notifyAlerts, location, homeLocation, workLocation)
+
+  useEffect(() => {
+    if (weather && location) markFirstWeatherOk()
+  }, [weather, location])
+
+  const [pushLabel, setPushLabel] = useState<string | null>(() => {
+    const s = loadPushStatus()
+    if (s.lastTestAt) return `Last test ${new Date(s.lastTestAt).toLocaleString()}`
+    if (s.lastError) return s.lastError
+    if (s.lastOkAt) return `Push OK ${new Date(s.lastOkAt).toLocaleString()}`
+    return null
+  })
 
   useHomeAlerts({
     home: homeLocation,
@@ -224,6 +245,19 @@ export default function DashboardPage() {
   const pull = usePullToRefresh(doRefresh, isMobile)
 
   const [shareMsg, setShareMsg] = useState<string | null>(null)
+
+  const onTestNotify = useCallback(async () => {
+    const r = await sendTestNotification()
+    if (r.ok) {
+      setPushLabel(`Test sent · ${new Date().toLocaleTimeString()}`)
+      setShareMsg('Test notification sent')
+      window.setTimeout(() => setShareMsg(null), 2500)
+    } else {
+      setPushLabel(r.reason || 'Test failed')
+      setShareMsg(r.reason || 'Test notification failed')
+      window.setTimeout(() => setShareMsg(null), 3500)
+    }
+  }, [])
   /** When true, full alert strip is hidden — circle shows in the top bar */
   const [alertsMinimized, setAlertsMinimized] = useState(() => {
     try {
@@ -514,6 +548,17 @@ export default function DashboardPage() {
                   🏠
                 </button>
               )}
+              {workLocation && (
+                <button
+                  type="button"
+                  className={`chip-btn icon-chip nav-chip work-nav-btn ${isWork(location) ? 'active' : ''}`}
+                  title={`Go work · ${workLocation.name || 'Work'}`}
+                  aria-label="Go to work"
+                  onClick={() => goWork()}
+                >
+                  💼
+                </button>
+              )}
               <Link to={radarPath} className="chip-btn icon-chip nav-chip" title="Full-page radar" aria-label="Radar">
                 📡
               </Link>
@@ -544,6 +589,8 @@ export default function DashboardPage() {
               cloudSynced={cloudSynced}
               hasHome={Boolean(homeLocation)}
               isHome={isHome(location)}
+              hasWork={Boolean(workLocation)}
+              isWork={isWork(location)}
               onUnits={setUnits}
               onTheme={setTheme}
               onDensity={setDensity}
@@ -565,9 +612,17 @@ export default function DashboardPage() {
                   })
                 }
               }}
+              onGoWork={() => goWork()}
+              onSetWork={() => {
+                if (!location) return
+                if (isWork(location)) setWorkLocation(null)
+                else setWorkLocation(location)
+              }}
               onShare={() => void onShare()}
               onRefresh={() => refresh()}
               onCloudSync={() => void syncNow()}
+              onTestNotify={() => void onTestNotify()}
+              pushStatusLabel={pushLabel}
               loading={loading}
               refreshing={refreshing}
             />
@@ -689,21 +744,42 @@ export default function DashboardPage() {
                   placeName={
                     homeLocation && sameExactPlace(location, homeLocation)
                       ? 'Home'
-                      : location.name
+                      : workLocation && sameExactPlace(location, workLocation)
+                        ? 'Work'
+                        : location.name
                   }
                   air={air}
                 />
 
+                <WhatChanged
+                  location={location}
+                  weather={weather}
+                  alerts={activeAlerts}
+                  units={units}
+                />
+
+                <WeekendBrief weather={weather} units={units} placeName={location.name} />
+
                 {/* Compact alert action — full text only when expanded */}
                 {!alertsMinimized && activeAlerts.length > 0 && (
-                  <WhatMattersNow
-                    alerts={activeAlerts}
-                    onOpenAlerts={() => {
-                      document
-                        .getElementById('alerts-panel')
-                        ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                    }}
-                  />
+                  <>
+                    <WhatMattersNow
+                      alerts={activeAlerts}
+                      onOpenAlerts={() => {
+                        document
+                          .getElementById('alerts-panel')
+                          ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                      }}
+                    />
+                    <AlertTimeline
+                      alerts={activeAlerts}
+                      onOpenDetails={() => {
+                        document
+                          .getElementById('alerts-panel')
+                          ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                      }}
+                    />
+                  </>
                 )}
 
                 <div id="alerts-panel">
@@ -928,6 +1004,13 @@ export default function DashboardPage() {
           </main>
         )}
       </div>
+
+      <FirstRunCoach
+        weatherReady={Boolean(weather && location)}
+        notifyOn={notifyAlerts}
+        hasHome={Boolean(homeLocation)}
+        onEnableNotify={() => setNotifyAlerts(true)}
+      />
     </div>
   )
 }

@@ -22,6 +22,8 @@ export interface CloudPrefs {
   lastLocation: LocationResult | null
   /** Exact home (full-precision lat/lon) */
   homeLocation?: LocationResult | null
+  /** Exact work / second pin */
+  workLocation?: LocationResult | null
   favorites: LocationResult[]
   severeMode: boolean
   stormMode?: boolean

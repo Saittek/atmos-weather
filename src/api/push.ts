@@ -48,6 +48,105 @@ export async function ensurePushSubscription(): Promise<{ ok: boolean; reason?: 
   return subscribeWebPush({ forceServerSync: true })
 }
 
+const PUSH_STATUS_KEY = 'solara-push-status-v1'
+
+export interface PushStatus {
+  lastOkAt?: number
+  lastError?: string
+  lastTestAt?: number
+  platform?: string
+}
+
+export function loadPushStatus(): PushStatus {
+  try {
+    const raw = localStorage.getItem(PUSH_STATUS_KEY)
+    if (!raw) return {}
+    return JSON.parse(raw) as PushStatus
+  } catch {
+    return {}
+  }
+}
+
+function savePushStatus(patch: PushStatus) {
+  try {
+    const next = { ...loadPushStatus(), ...patch }
+    localStorage.setItem(PUSH_STATUS_KEY, JSON.stringify(next))
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Local test notification so users can verify permission without waiting for weather. */
+export async function sendTestNotification(): Promise<{ ok: boolean; reason?: string }> {
+  try {
+    if (isNativeApp()) {
+      try {
+        const { LocalNotifications } = await import('@capacitor/local-notifications')
+        const perm = await LocalNotifications.requestPermissions()
+        if (perm.display !== 'granted') {
+          return { ok: false, reason: 'Notification permission denied' }
+        }
+        await LocalNotifications.schedule({
+          notifications: [
+            {
+              id: Math.floor(Date.now() % 1_000_000),
+              title: 'Solara test',
+              body: 'Alerts will look like this when weather risks appear.',
+              schedule: { at: new Date(Date.now() + 500) },
+            },
+          ],
+        })
+        savePushStatus({ lastTestAt: Date.now(), lastOkAt: Date.now(), platform: 'native' })
+        return { ok: true }
+      } catch {
+        /* fall through to web */
+      }
+    }
+
+    if (!('Notification' in window)) {
+      return { ok: false, reason: 'Notifications not supported' }
+    }
+    if (Notification.permission !== 'granted') {
+      const p = await Notification.requestPermission()
+      if (p !== 'granted') return { ok: false, reason: 'Permission denied' }
+    }
+    // Prefer SW showNotification when available (works more like real push)
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.ready
+      await reg.showNotification('Solara test', {
+        body: 'Alerts will look like this when the app is closed.',
+        icon: '/icons/icon-192.png',
+        tag: 'solara-test',
+        data: { url: '/' },
+      })
+    } else {
+      new Notification('Solara test', {
+        body: 'Alerts will look like this when the app is closed.',
+        icon: '/icons/icon-192.png',
+        tag: 'solara-test',
+      })
+    }
+    savePushStatus({ lastTestAt: Date.now(), lastOkAt: Date.now(), platform: 'web' })
+    // Also re-sync subscription if signed in
+    const sub = await ensurePushSubscription()
+    if (!sub.ok && sub.reason) {
+      savePushStatus({ lastError: sub.reason })
+    } else {
+      savePushStatus({ lastOkAt: Date.now(), lastError: undefined })
+    }
+    return { ok: true }
+  } catch (e) {
+    const reason = e instanceof Error ? e.message : 'Test failed'
+    savePushStatus({ lastError: reason })
+    return { ok: false, reason }
+  }
+}
+
+export function recordPushSyncResult(ok: boolean, reason?: string) {
+  if (ok) savePushStatus({ lastOkAt: Date.now(), lastError: undefined })
+  else if (reason) savePushStatus({ lastError: reason })
+}
+
 /** Subscribe browser/PWA to Web Push (requires signed-in account for server delivery). */
 export async function subscribeWebPush(opts?: {
   forceServerSync?: boolean

@@ -42,6 +42,8 @@ export interface Prefs {
   lastLocation?: LocationResult
   /** Exact home pin — full GPS/manual precision, not city center */
   homeLocation?: LocationResult | null
+  /** Work / second pin */
+  workLocation?: LocationResult | null
   favorites: LocationResult[]
   severeMode: boolean
   /** Radar-first, intense UI — the signature “stand out” mode */
@@ -66,6 +68,7 @@ function loadPrefs(): Prefs {
         density: p.density ?? 'comfortable',
         lastLocation: p.lastLocation,
         homeLocation: p.homeLocation ?? null,
+        workLocation: p.workLocation ?? null,
         favorites: Array.isArray(p.favorites) ? p.favorites : [],
         severeMode: p.severeMode ?? true,
         stormMode: p.stormMode ?? false,
@@ -84,6 +87,7 @@ function loadPrefs(): Prefs {
         density: 'comfortable',
         lastLocation: p.lastLocation,
         homeLocation: null,
+        workLocation: null,
         favorites: [],
         severeMode: true,
         stormMode: false,
@@ -101,6 +105,7 @@ function loadPrefs(): Prefs {
     theme: 'dark',
     density: 'comfortable',
     homeLocation: null,
+    workLocation: null,
     favorites: [],
     severeMode: true,
     stormMode: false,
@@ -126,6 +131,7 @@ function prefsToCloud(p: Prefs): CloudPrefs {
     density: p.density,
     lastLocation: p.lastLocation ?? null,
     homeLocation: p.homeLocation ?? null,
+    workLocation: p.workLocation ?? null,
     favorites: p.favorites,
     severeMode: p.severeMode,
     stormMode: p.stormMode,
@@ -152,12 +158,20 @@ function cloudToPrefs(c: CloudPrefs, local: Prefs): Prefs {
     Number.isFinite(cloudHome.longitude)
       ? cloudHome
       : (local.homeLocation ?? null)
+  const cloudWork = c.workLocation
+  const workLocation =
+    cloudWork != null &&
+    Number.isFinite(cloudWork.latitude) &&
+    Number.isFinite(cloudWork.longitude)
+      ? cloudWork
+      : (local.workLocation ?? null)
   return {
     units: c.units ?? local.units,
     theme: c.theme ?? local.theme,
     density: c.density ?? local.density,
     lastLocation: c.lastLocation ?? local.lastLocation,
     homeLocation,
+    workLocation,
     favorites: [...map.values()].slice(0, 12),
     severeMode: c.severeMode ?? local.severeMode,
     stormMode: c.stormMode ?? local.stormMode,
@@ -637,8 +651,9 @@ export function useWeather() {
         }
         // Web Push (background) + native hooks when available
         try {
-          const { ensurePushSubscription } = await import('../api/push')
+          const { ensurePushSubscription, recordPushSyncResult } = await import('../api/push')
           const result = await ensurePushSubscription()
+          recordPushSyncResult(result.ok, result.reason)
           if (!result.ok) {
             // Still allow in-app/local notify when push subscribe needs sign-in
             if (result.reason?.toLowerCase().includes('sign in')) {
@@ -647,7 +662,7 @@ export function useWeather() {
               showStatus(result.reason)
             }
           } else {
-            showStatus('Alert notifications enabled')
+            showStatus('Alert notifications enabled · closed-app push registered')
           }
         } catch {
           /* optional */
@@ -699,6 +714,30 @@ export function useWeather() {
     [prefs.favorites],
   )
 
+  const pinExact = useCallback((loc: LocationResult, label: string): LocationResult | null => {
+    const pin: LocationResult = {
+      id: loc.id || 1,
+      name: (loc.name || label).trim() || label,
+      latitude: Number(loc.latitude),
+      longitude: Number(loc.longitude),
+      elevation: loc.elevation,
+      country_code: loc.country_code,
+      country: loc.country,
+      admin1: loc.admin1,
+      timezone: loc.timezone,
+      population: loc.population,
+    }
+    if (
+      !Number.isFinite(pin.latitude) ||
+      !Number.isFinite(pin.longitude) ||
+      Math.abs(pin.latitude) > 90 ||
+      Math.abs(pin.longitude) > 180
+    ) {
+      return null
+    }
+    return pin
+  }, [])
+
   const setHomeLocation = useCallback(
     (loc: LocationResult | null) => {
       const p = prefsRef.current
@@ -711,25 +750,8 @@ export function useWeather() {
         )
         return
       }
-      // Preserve full precision — never round GPS/manual coords
-      const home: LocationResult = {
-        id: loc.id || 1,
-        name: (loc.name || 'Home').trim() || 'Home',
-        latitude: Number(loc.latitude),
-        longitude: Number(loc.longitude),
-        elevation: loc.elevation,
-        country_code: loc.country_code,
-        country: loc.country,
-        admin1: loc.admin1,
-        timezone: loc.timezone,
-        population: loc.population,
-      }
-      if (
-        !Number.isFinite(home.latitude) ||
-        !Number.isFinite(home.longitude) ||
-        Math.abs(home.latitude) > 90 ||
-        Math.abs(home.longitude) > 180
-      ) {
+      const home = pinExact(loc, 'Home')
+      if (!home) {
         showStatus('Invalid coordinates for home')
         return
       }
@@ -740,7 +762,6 @@ export function useWeather() {
           ? `Home set · ${coords} · syncing to phone when signed in`
           : `Home set · ${coords} · Sign in to use this home on your phone`,
       )
-      // Refresh native widget for the new home (uses current weather if same place)
       const w = weatherRef.current
       if (w && locationRef.current && locationKey(locationRef.current) === locationKey(home)) {
         void publishNativeWidgetSnapshot({
@@ -755,8 +776,49 @@ export function useWeather() {
         }, 80)
       }
     },
-    [commitPrefs, showStatus, user],
+    [commitPrefs, showStatus, user, pinExact],
   )
+
+  const setWorkLocation = useCallback(
+    (loc: LocationResult | null) => {
+      const p = prefsRef.current
+      if (!loc) {
+        commitPrefs({ ...p, workLocation: null })
+        showStatus(user ? 'Work cleared · syncing' : 'Work cleared on this device')
+        return
+      }
+      const work = pinExact(loc, 'Work')
+      if (!work) {
+        showStatus('Invalid coordinates for work')
+        return
+      }
+      // Label clearly if name is a city only
+      if (!/work/i.test(work.name)) {
+        work.name = `${work.name.replace(/\s*\(Work\)\s*$/i, '').trim()} (Work)`
+      }
+      commitPrefs({ ...p, workLocation: work })
+      showStatus(
+        user
+          ? `Work set · ${work.latitude.toFixed(5)}, ${work.longitude.toFixed(5)}`
+          : `Work set · rain watch will include this pin`,
+      )
+    },
+    [commitPrefs, showStatus, user, pinExact],
+  )
+
+  const isWork = useCallback(
+    (loc: LocationResult | null) => sameExactPlace(loc, prefs.workLocation),
+    [prefs.workLocation],
+  )
+
+  const goWork = useCallback(() => {
+    const work = prefsRef.current.workLocation
+    if (!work) {
+      showStatus('No work pin yet')
+      return
+    }
+    void loadForLocation(work)
+  }, [loadForLocation, showStatus])
 
   const isHome = useCallback(
     (loc: LocationResult | null) => sameExactPlace(loc, prefs.homeLocation),
@@ -858,6 +920,15 @@ export function useWeather() {
         const loc = locationRef.current
         if (loc) void loadForLocationRef.current?.(loc, { soft: true })
       }
+      // Re-sync push when notify is on (token/subscription recovery)
+      if (prefsRef.current.notifyAlerts && away >= 60_000) {
+        void import('../api/push')
+          .then(async ({ ensurePushSubscription, recordPushSyncResult }) => {
+            const r = await ensurePushSubscription()
+            recordPushSyncResult(r.ok, r.reason)
+          })
+          .catch(() => {})
+      }
       hiddenAt = 0
     }
     document.addEventListener('visibilitychange', onVis)
@@ -930,6 +1001,7 @@ export function useWeather() {
     density: prefs.density,
     favorites: prefs.favorites,
     homeLocation: prefs.homeLocation ?? null,
+    workLocation: prefs.workLocation ?? null,
     severeMode: prefs.severeMode,
     stormMode: prefs.stormMode,
     notifyAlerts: prefs.notifyAlerts,
@@ -953,6 +1025,9 @@ export function useWeather() {
     setHomeLocation,
     isHome,
     goHome,
+    setWorkLocation,
+    isWork,
+    goWork,
     loadForLocation,
     requestMyLocation,
     /** @deprecated use requestMyLocation */

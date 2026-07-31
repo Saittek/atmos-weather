@@ -21,6 +21,8 @@ interface Props {
   cloudSynced: boolean
   hasHome?: boolean
   isHome?: boolean
+  hasWork?: boolean
+  isWork?: boolean
   onUnits: (u: Units) => void
   onTheme: (t: ThemeMode) => void
   onDensity: (d: DensityMode) => void
@@ -35,9 +37,13 @@ interface Props {
   onToggleFavorite: () => void
   onGoHome?: () => void
   onSetHome?: () => void
+  onGoWork?: () => void
+  onSetWork?: () => void
   onShare: () => void
   onRefresh: () => void
   onCloudSync: () => void
+  onTestNotify?: () => void | Promise<void>
+  pushStatusLabel?: string | null
   loading: boolean
   refreshing?: boolean
 }
@@ -56,6 +62,8 @@ export function SettingsBar({
   cloudSynced,
   hasHome,
   isHome,
+  hasWork,
+  isWork,
   onUnits,
   onTheme,
   onDensity,
@@ -66,9 +74,13 @@ export function SettingsBar({
   onToggleFavorite,
   onGoHome,
   onSetHome,
+  onGoWork,
+  onSetWork,
   onShare,
   onRefresh,
   onCloudSync,
+  onTestNotify,
+  pushStatusLabel,
   loading,
   refreshing,
 }: Props) {
@@ -190,9 +202,39 @@ export function SettingsBar({
           />
           <span>
             <strong>Notify</strong>
-            <em>Rain watch &amp; alerts (re-registers push when on)</em>
+            <em>Rain watch &amp; alerts when closed (sign in for server push)</em>
           </span>
         </label>
+        {notifyAlerts && onTestNotify && (
+          <div className="settings-push-test">
+            <button type="button" className="chip-btn" onClick={() => void onTestNotify()}>
+              Send test notification
+            </button>
+            {pushStatusLabel && <p className="settings-push-status">{pushStatusLabel}</p>}
+          </div>
+        )}
+        {onSetWork && (
+          <div className="settings-more-row settings-more-action">
+            <span>
+              <strong>Work pin</strong>
+              <em>
+                {isWork
+                  ? 'This place is Work — rain watch includes it'
+                  : hasWork
+                    ? 'Replace work with this place'
+                    : 'Second pin for commute rain watch'}
+              </em>
+            </span>
+            <button type="button" className="chip-btn" onClick={() => onSetWork()}>
+              {isWork ? 'Clear work' : 'Set work'}
+            </button>
+          </div>
+        )}
+        {hasWork && onGoWork && !isWork && (
+          <button type="button" className="chip-btn settings-go-work" onClick={onGoWork}>
+            Go to work
+          </button>
+        )}
         <label className="settings-more-row">
           <input
             type="checkbox"

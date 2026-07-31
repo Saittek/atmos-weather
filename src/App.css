@@ -9970,3 +9970,200 @@ a:focus:not(:focus-visible) {
   color: var(--text-mute, rgba(226, 232, 240, 0.55));
   margin-top: 0.1rem;
 }
+
+/* ===== What changed ===== */
+.what-changed {
+  padding: 0.7rem 0.9rem;
+  margin-bottom: 0.55rem;
+}
+.what-changed.is-significant {
+  border-color: rgba(56, 189, 248, 0.35);
+  background: linear-gradient(145deg, rgba(14, 165, 233, 0.12), rgba(15, 23, 42, 0.35));
+}
+.what-changed-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  align-items: baseline;
+  margin-bottom: 0.35rem;
+}
+.what-changed-head strong {
+  font-size: 0.88rem;
+}
+.what-changed-head span {
+  font-size: 0.7rem;
+  color: var(--text-mute, rgba(226, 232, 240, 0.55));
+}
+.what-changed-list {
+  margin: 0;
+  padding: 0 0 0 1.1rem;
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
+/* ===== Weekend brief ===== */
+.weekend-brief-tip {
+  margin: 0 0 0.65rem;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+.weekend-brief-days {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr));
+  gap: 0.45rem;
+}
+.weekend-day {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.55rem 0.6rem;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.16);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  min-width: 0;
+}
+.weekend-day-name {
+  font-weight: 750;
+  font-size: 0.82rem;
+}
+.weekend-day-icon {
+  font-size: 1.25rem;
+}
+.weekend-day-hl {
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+.weekend-day-meta {
+  font-size: 0.7rem;
+  color: var(--text-dim, rgba(226, 232, 240, 0.7));
+}
+
+/* ===== Alert timeline ===== */
+.alert-timeline-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.65rem;
+}
+.alert-tl-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  align-items: baseline;
+  margin-bottom: 0.35rem;
+}
+.alert-tl-top strong {
+  font-size: 0.9rem;
+}
+.alert-tl-phase {
+  font-size: 0.68rem;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+}
+.alert-tl-track {
+  position: relative;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.2);
+  overflow: visible;
+  margin-bottom: 0.3rem;
+}
+.alert-tl-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(248, 113, 113, 0.7), rgba(251, 191, 36, 0.75));
+}
+.alert-tl-now {
+  position: absolute;
+  top: 50%;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: #f8fafc;
+  border: 2px solid #38bdf8;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25);
+}
+.alert-tl-times {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  color: var(--text-mute, rgba(226, 232, 240, 0.55));
+}
+.alert-tl-more {
+  margin-top: 0.55rem;
+}
+
+/* ===== First-run coach ===== */
+.first-run-coach {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: end center;
+  padding: 1rem;
+  padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+  background: rgba(2, 6, 23, 0.45);
+  backdrop-filter: blur(4px);
+}
+.first-run-coach-card {
+  width: min(26rem, 100%);
+  padding: 1.1rem 1.15rem 1rem;
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.96);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+  color: #f1f5f9;
+}
+.first-run-kicker {
+  margin: 0 0 0.35rem;
+  font-size: 0.68rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.9);
+}
+.first-run-coach-card h2 {
+  margin: 0 0 0.4rem;
+  font-size: 1.15rem;
+}
+.first-run-coach-card p {
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: rgba(226, 232, 240, 0.88);
+}
+.first-run-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+.first-run-install {
+  margin-bottom: 0.65rem;
+}
+.settings-push-test {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0 0.15rem 0.35rem;
+}
+.settings-push-status {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--text-mute, rgba(226, 232, 240, 0.55));
+}
+.settings-more-action {
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.settings-go-work {
+  margin: 0 0.15rem 0.35rem;
+}
+.work-nav-btn.active {
+  border-color: rgba(125, 211, 252, 0.55) !important;
+}

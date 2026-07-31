@@ -48,6 +48,7 @@ export function useRainWatch(
   enabled: boolean,
   currentLoc: LocationResult | null,
   homeLoc?: LocationResult | null,
+  workLoc?: LocationResult | null,
 ) {
   const [snapshots, setSnapshots] = useState<LocationSnapshot[]>([])
   const [loading, setLoading] = useState(false)
@@ -66,8 +67,9 @@ export function useRainWatch(
     if (typeof document !== 'undefined' && document.hidden) return
 
     const map = new Map<string, LocationResult>()
-    // Exact home always watched when set
+    // Exact home + work always watched when set
     if (homeLoc) map.set(`home:${locationKey(homeLoc)}`, homeLoc)
+    if (workLoc) map.set(`work:${locationKey(workLoc)}`, workLoc)
     // Cap network fan-out on mobile
     const favCap = mobile ? 2 : 6
     for (const p of favorites.slice(0, favCap)) {
@@ -75,7 +77,7 @@ export function useRainWatch(
     }
     // Skip re-fetching current location on mobile — main weather already covers it
     if (currentLoc && !mobile) map.set(locationKey(currentLoc), currentLoc)
-    else if (currentLoc && mobile && !favorites.length && !homeLoc) {
+    else if (currentLoc && mobile && !favorites.length && !homeLoc && !workLoc) {
       map.set(locationKey(currentLoc), currentLoc)
     }
     const places = [...map.values()]
@@ -123,10 +125,12 @@ export function useRainWatch(
     } finally {
       setLoading(false)
     }
-  }, [favorites, enabled, currentLoc, homeLoc])
+  }, [favorites, enabled, currentLoc, homeLoc, workLoc])
 
   const currentLat = currentLoc?.latitude
   const currentLon = currentLoc?.longitude
+  const workLat = workLoc?.latitude
+  const homeLat = homeLoc?.latitude
 
   useEffect(() => {
     const mobile =
@@ -137,7 +141,7 @@ export function useRainWatch(
       return
     }
     const start = window.setTimeout(() => void refresh(), mobile ? 8000 : 2000)
-    if (!favorites.length && currentLat == null) {
+    if (!favorites.length && currentLat == null && homeLat == null && workLat == null) {
       return () => window.clearTimeout(start)
     }
     const id = window.setInterval(() => void refresh(), (mobile ? 20 : 10) * 60 * 1000)
@@ -145,7 +149,7 @@ export function useRainWatch(
       window.clearTimeout(start)
       window.clearInterval(id)
     }
-  }, [refresh, favorites.length, currentLat, currentLon, enabled])
+  }, [refresh, favorites.length, currentLat, currentLon, enabled, homeLat, workLat])
 
   return { snapshots, loading, banner, refresh }
 }

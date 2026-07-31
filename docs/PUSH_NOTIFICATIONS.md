@@ -84,15 +84,11 @@ Also in Xcode / Apple Developer:
 2. Enable **Push Notifications** on App ID `com.solara.weather` (Identifiers → App IDs)
 3. Create an **APNs Auth Key** (.p8) and note Key ID + Team ID
 4. Use the same bundle id as `APNS_BUNDLE_ID`
-5. Add to `ios/App/App/App.entitlements`:
-   ```xml
-   <key>aps-environment</key>
-   <string>production</string>
-   ```
-   Then re-run Codemagic so a **new** App Store profile includes Push.  
-   (TestFlight currently ships **without** `aps-environment` so archive works before Push is enabled on the App ID.)
+5. `ios/App/App/App.entitlements` includes `aps-environment=production` again for closed-app APNs.
+6. Codemagic App Store profile must include **Push Notifications** — enable it on App ID `com.solara.weather` first, or archive fails with “profile doesn't include aps-environment”.
+7. In the web app: **Settings → Notify** + **Send test notification**. Sign in so `/api/push/subscribe` stores the subscription for delivery when the tab is closed.
 
-Until secrets + entitlement + App ID capability are set, native still gets **local notifications** for in-app threat proximity (TOR/SVR polygons near you). Web push is unchanged.
+Until secrets + App ID Push capability are set, native still gets **local notifications** for in-app threat proximity. Web push works when signed in + Notify on.
 
 ## Privacy
 

@@ -1,5 +1,5 @@
 /* Solara PWA — network-first HTML, cache hashed assets only + Web Push */
-const CACHE = 'solara-v8'
+const CACHE = 'solara-v9'
 
 self.addEventListener('install', (event) => {
   // Activate immediately so mobile clients leave broken old caches
