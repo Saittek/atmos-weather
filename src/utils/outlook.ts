@@ -2,6 +2,7 @@ import type { WeatherData } from '../api/types'
 import type { Units } from './format'
 import { convertTemp, formatPrecip, formatTemp } from './format'
 import { getWeatherInfo } from './weatherCodes'
+import { todayDailyIndex } from './weatherStory'
 
 function localWeekday(iso: string, timezone: string): number {
   try {
@@ -82,15 +83,19 @@ export function weekendOutlook(weather: WeatherData, units: Units): string {
 export function dayCompareSummary(weather: WeatherData, units: Units): string {
   const d = weather.daily
   if (d.time.length < 2) return ''
-  const t0 = convertTemp(d.temperature_2m_max[0], units)
-  const t1 = convertTemp(d.temperature_2m_max[1], units)
+  // Use calendar today — index 0 may be yesterday when past_days is requested
+  const ti = todayDailyIndex(weather)
+  const t1i = ti + 1
+  if (t1i >= d.time.length) return ''
+  const t0 = convertTemp(d.temperature_2m_max[ti], units)
+  const t1 = convertTemp(d.temperature_2m_max[t1i], units)
   const diff = Math.round(t1 - t0)
   const unit = units === 'metric' ? '°C' : '°F'
   if (Math.abs(diff) < 2) {
-    return `Tomorrow looks similar to today (high near ${formatTemp(d.temperature_2m_max[1], units)}).`
+    return `Tomorrow looks similar to today (high near ${formatTemp(d.temperature_2m_max[t1i], units)}).`
   }
   if (diff > 0) {
-    return `Tomorrow warms up by about ${diff}${unit} (high ${formatTemp(d.temperature_2m_max[1], units)}).`
+    return `Tomorrow warms up by about ${diff}${unit} (high ${formatTemp(d.temperature_2m_max[t1i], units)}).`
   }
-  return `Tomorrow cools by about ${Math.abs(diff)}${unit} (high ${formatTemp(d.temperature_2m_max[1], units)}).`
+  return `Tomorrow cools by about ${Math.abs(diff)}${unit} (high ${formatTemp(d.temperature_2m_max[t1i], units)}).`
 }

@@ -138,13 +138,13 @@ export function blendHourly(
   return out
 }
 
-/** Day 0 (today) highs/lows/weather from short when available */
+/**
+ * Merge short-model daily fields into long by **calendar date string**.
+ * Important: long may include past_days (index 0 = yesterday) — never assume [0] is today.
+ */
 export function blendDaily(short: DailyWeather | undefined, long: DailyWeather): DailyWeather {
   if (!short?.time?.length) return long
   const out: DailyWeather = JSON.parse(JSON.stringify(long)) as DailyWeather
-  const longToday = long.time[0]
-  const si = short.time.indexOf(longToday)
-  if (si < 0) return long
 
   const numKeys: (keyof DailyWeather)[] = [
     'weather_code',
@@ -165,13 +165,20 @@ export function blendDaily(short: DailyWeather | undefined, long: DailyWeather):
     'wind_gusts_10m_max',
     'wind_direction_10m_dominant',
   ]
-  for (const k of numKeys) {
-    const sv = short[k]?.[si]
-    if (isFiniteNum(sv) && out[k]) (out[k] as number[])[0] = sv
+
+  // Prefer short-model values for every day both series share (usually today + tomorrow)
+  for (let si = 0; si < short.time.length; si++) {
+    const day = short.time[si]?.slice(0, 10)
+    if (!day) continue
+    const li = out.time.findIndex((t) => t.startsWith(day))
+    if (li < 0) continue
+    for (const k of numKeys) {
+      const sv = short[k]?.[si]
+      if (isFiniteNum(sv) && out[k]) (out[k] as number[])[li] = sv
+    }
+    if (short.sunrise?.[si] && out.sunrise) out.sunrise[li] = short.sunrise[si]
+    if (short.sunset?.[si] && out.sunset) out.sunset[li] = short.sunset[si]
   }
-  // Keep sunrise/sunset from whichever has them
-  if (short.sunrise?.[si] && out.sunrise) out.sunrise[0] = short.sunrise[si]
-  if (short.sunset?.[si] && out.sunset) out.sunset[0] = short.sunset[si]
   return out
 }
 

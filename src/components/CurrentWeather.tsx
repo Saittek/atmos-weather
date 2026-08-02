@@ -62,8 +62,17 @@ export function CurrentWeather({
   const info = getWeatherInfo(displayCode, isDay)
   const ti = todayDailyIndex(weather)
   const today = weather.daily
-  const high = today.temperature_2m_max[ti]
-  const low = today.temperature_2m_min[ti]
+  // If actual now exceeds the forecast max (or a mis-aligned daily slot), show a sensible high
+  const highRaw = today.temperature_2m_max[ti]
+  const lowRaw = today.temperature_2m_min[ti]
+  const high =
+    highRaw != null && Number.isFinite(highRaw)
+      ? Math.max(highRaw, c.temperature_2m)
+      : c.temperature_2m
+  const low =
+    lowRaw != null && Number.isFinite(lowRaw)
+      ? Math.min(lowRaw, c.temperature_2m)
+      : c.temperature_2m
   const rainLabel = nextPrecipLabel(weather)
   const h = weather.hourly
   const now = Date.now()

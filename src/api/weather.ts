@@ -16,6 +16,15 @@ import { isDaytimeNow } from '../utils/daylight'
 import { blendWeatherData, pickModels, detectForecastRegion } from './forecastModels'
 import { fetchNearestEcccCityPage, mergeEcccIntoWeather } from './ecccCityPage'
 import { getApiBase } from '../lib/native'
+import { todayDailyIndex } from '../utils/weatherStory'
+
+function todayDailyIndexSafe(w: WeatherData): number {
+  try {
+    return Math.max(0, todayDailyIndex(w))
+  } catch {
+    return 0
+  }
+}
 
 const GEOCODE = 'https://geocoding-api.open-meteo.com/v1/search'
 const FORECAST = 'https://api.open-meteo.com/v1/forecast'
@@ -496,8 +505,8 @@ export async function fetchLocationSnapshot(
       precipSoon,
       rainStartsInMin,
       popMax6h,
-      high: w.daily.temperature_2m_max[0],
-      low: w.daily.temperature_2m_min[0],
+      high: w.daily.temperature_2m_max[todayDailyIndexSafe(w)],
+      low: w.daily.temperature_2m_min[todayDailyIndexSafe(w)],
       aqi,
       hasAlert: filterActiveAlerts(alRes).length > 0,
     }

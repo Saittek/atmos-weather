@@ -387,26 +387,39 @@ export function mergeEcccIntoWeather(
     }
 
     const d = { ...out.daily } as DailyWeather
-    const n = Math.min(dayOrder.length, d.time.length)
-    for (let i = 0; i < n; i++) {
+    // Open-Meteo often includes past_days — index 0 may be YESTERDAY.
+    // ECCC dayOrder[0] is always "Today" (first daytime period). Align by calendar date.
+    const tz = out.timezone || 'UTC'
+    const todayStr = new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date())
+    let todayIdx = d.time.findIndex((t) => t.startsWith(todayStr))
+    if (todayIdx < 0) todayIdx = 0
+
+    for (let i = 0; i < dayOrder.length; i++) {
+      const di = todayIdx + i
+      if (di < 0 || di >= d.time.length) break
       const a = dayOrder[i]
-      if (a.high != null) d.temperature_2m_max[i] = a.high
-      if (a.low != null) d.temperature_2m_min[i] = a.low
-      if (a.code != null) d.weather_code[i] = a.code
-      if (a.pop != null) d.precipitation_probability_max[i] = a.pop
-      if (a.uv != null) d.uv_index_max[i] = a.uv
-      if (a.high != null) d.apparent_temperature_max[i] = a.high
-      if (a.low != null) d.apparent_temperature_min[i] = a.low
+      // Prefer ECCC highs/lows, but never drop below model if ECCC is missing
+      if (a.high != null) d.temperature_2m_max[di] = a.high
+      if (a.low != null) d.temperature_2m_min[di] = a.low
+      if (a.code != null) d.weather_code[di] = a.code
+      if (a.pop != null) d.precipitation_probability_max[di] = a.pop
+      if (a.uv != null) d.uv_index_max[di] = a.uv
+      if (a.high != null) d.apparent_temperature_max[di] = a.high
+      if (a.low != null) d.apparent_temperature_min[di] = a.low
     }
 
-    // Sunrise/sunset for today from riseSet — keep absolute ISO (with Z)
-    // so clients can compare against Date.now() without TZ ambiguity
+    // Sunrise/sunset for *today* from riseSet (not index 0 when past_days is set)
     const riseSet = p.riseSet as { sunrise?: { en?: string }; sunset?: { en?: string } } | undefined
-    if (riseSet?.sunrise?.en && d.sunrise?.[0] != null) {
-      d.sunrise[0] = riseSet.sunrise.en
+    if (riseSet?.sunrise?.en && d.sunrise?.[todayIdx] != null) {
+      d.sunrise[todayIdx] = riseSet.sunrise.en
     }
-    if (riseSet?.sunset?.en && d.sunset?.[0] != null) {
-      d.sunset[0] = riseSet.sunset.en
+    if (riseSet?.sunset?.en && d.sunset?.[todayIdx] != null) {
+      d.sunset[todayIdx] = riseSet.sunset.en
     }
 
     out.daily = d

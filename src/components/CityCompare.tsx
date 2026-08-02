@@ -10,6 +10,7 @@ import {
 import { isDaytimeNow } from '../utils/daylight'
 import { getWeatherInfo } from '../utils/weatherCodes'
 import { willIGetWet } from '../utils/wetSummary'
+import { todayDailyIndex } from '../utils/weatherStory'
 
 interface Props {
   units: Units
@@ -79,12 +80,12 @@ export function CityCompare({ units, home, homeWeather }: Props) {
         <p>{info.label}</p>
         <ul className="compare-stats">
           <li>
-            Today H/L {formatTemp(d.temperature_2m_max[0], units)} /{' '}
-            {formatTemp(d.temperature_2m_min[0], units)}
+            Today H/L {formatTemp(d.temperature_2m_max[todayDailyIndex(side.weather)], units)} /{' '}
+            {formatTemp(d.temperature_2m_min[todayDailyIndex(side.weather)], units)}
           </li>
           <li>
-            Precip today {formatPrecip(d.precipitation_sum[0], units)} · pop{' '}
-            {d.precipitation_probability_max[0] ?? 0}%
+            Precip today {formatPrecip(d.precipitation_sum[todayDailyIndex(side.weather)], units)} · pop{' '}
+            {d.precipitation_probability_max[todayDailyIndex(side.weather)] ?? 0}%
           </li>
           <li>Wind {formatSpeed(c.wind_speed_10m, units)}</li>
           <li className={`wet-line ${wet.level}`}>{wet.title}</li>
