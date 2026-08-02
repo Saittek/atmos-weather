@@ -10240,21 +10240,21 @@ a:focus:not(:focus-visible) {
 .globe-stage-space {
   background: #010208;
 }
+/* Stars sit ABOVE the map (MapLibre WebGL is opaque) with Earth punched out */
 .globe-space-canvas {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  z-index: 0;
+  z-index: 4;
   pointer-events: none;
 }
 .globe-stage-space .globe-canvas {
   z-index: 1;
-  /* Let starfield show through MapLibre clear color */
-  background: transparent !important;
+  background: #010208 !important;
 }
 .globe-stage-space .globe-canvas .maplibregl-canvas {
-  background: transparent !important;
+  background: #010208 !important;
 }
 .globe-stage-space .globe-daynight-canvas {
   z-index: 2;
@@ -10263,14 +10263,16 @@ a:focus:not(:focus-visible) {
   position: absolute;
   left: 0;
   top: 0;
-  width: 52px;
-  height: 52px;
+  width: 72px;
+  height: 72px;
   pointer-events: none;
   opacity: 0;
+  visibility: hidden;
   will-change: transform, opacity;
-  transition: opacity 0.18s linear;
+  transition: opacity 0.2s linear;
   transform: translate3d(-9999px, -9999px, 0);
   transform-style: preserve-3d;
+  z-index: 8;
 }
 .globe-space-sun {
   width: 56px;

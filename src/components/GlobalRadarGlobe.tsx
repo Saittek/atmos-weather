@@ -12,7 +12,6 @@ import type { TropicalGlobeData, TropicalStorm } from '../api/types'
 import { formatRadarTime } from '../utils/format'
 import {
   destinationPoint,
-  projectSpaceBody,
   screenToLatLonOrtho,
   solarElevationSin,
   sublunarPoint,
@@ -402,14 +401,39 @@ export function GlobalRadarGlobe() {
     markersRef.current = []
   }, [])
 
-  /** Paint a deep-space starfield behind the globe. */
+  /** Estimate Earth disk center + radius in CSS pixels (same approach as day/night). */
+  const earthDiskPx = useCallback((map: MapLibreMap) => {
+    const mapCanvas = map.getCanvas()
+    const cssW = mapCanvas.clientWidth || 1
+    const cssH = mapCanvas.clientHeight || 1
+    const center = map.getCenter()
+    const cLng = center.lng
+    const cLat = center.lat
+    const centerPt = map.project([cLng, cLat])
+    let Rcss = 0
+    for (let b = 0; b < 360; b += 30) {
+      const [lon, lat] = destinationPoint(cLng, cLat, 89.2, b)
+      if (frontCosC(lon, lat, cLng, cLat) <= -0.05) continue
+      const p = map.project([lon, lat])
+      if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) continue
+      const d = Math.hypot(p.x - centerPt.x, p.y - centerPt.y)
+      if (d > Rcss && d < Math.hypot(cssW, cssH) * 1.15) Rcss = d
+    }
+    if (Rcss < 12) Rcss = Math.min(cssW, cssH) * 0.42
+    return { cx: centerPt.x, cy: centerPt.y, R: Rcss * 1.02, cLng, cLat, cssW, cssH }
+  }, [])
+
+  /**
+   * Starfield OVER the map (MapLibre canvas is opaque, so underlay never shows).
+   * Punch a hole over the Earth disk so stars only fill deep space around the planet.
+   */
   const paintStarfield = useCallback(() => {
     const canvas = spaceCanvasRef.current
     const map = mapRef.current
     if (!canvas) return
     const mapCanvas = map?.getCanvas()
-    const w = mapCanvas?.clientWidth || canvas.clientWidth || 1
-    const h = mapCanvas?.clientHeight || canvas.clientHeight || 1
+    const w = mapCanvas?.clientWidth || canvas.clientWidth || window.innerWidth || 1
+    const h = mapCanvas?.clientHeight || canvas.clientHeight || window.innerHeight || 1
     const dpr = Math.min(window.devicePixelRatio || 1, 2)
     if (canvas.width !== Math.floor(w * dpr) || canvas.height !== Math.floor(h * dpr)) {
       canvas.width = Math.floor(w * dpr)
@@ -421,114 +445,156 @@ export function GlobalRadarGlobe() {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    // Nebula-ish deep space
-    const g = ctx.createRadialGradient(w * 0.35, h * 0.3, 0, w * 0.5, h * 0.5, Math.max(w, h) * 0.75)
-    g.addColorStop(0, '#0a1028')
-    g.addColorStop(0.45, '#050814')
-    g.addColorStop(1, '#010208')
+    ctx.clearRect(0, 0, w, h)
+
+    // Soft space wash outside the planet
+    const g = ctx.createRadialGradient(w * 0.5, h * 0.45, Math.min(w, h) * 0.15, w * 0.5, h * 0.5, Math.max(w, h) * 0.7)
+    g.addColorStop(0, 'rgba(8, 14, 36, 0)')
+    g.addColorStop(0.45, 'rgba(4, 8, 22, 0.35)')
+    g.addColorStop(1, 'rgba(1, 2, 10, 0.72)')
     ctx.fillStyle = g
     ctx.fillRect(0, 0, w, h)
-    // Soft milky band
-    ctx.save()
-    ctx.translate(w * 0.5, h * 0.55)
-    ctx.rotate(-0.4)
-    const band = ctx.createLinearGradient(0, -h * 0.08, 0, h * 0.08)
-    band.addColorStop(0, 'rgba(80, 100, 160, 0)')
-    band.addColorStop(0.5, 'rgba(90, 110, 180, 0.07)')
-    band.addColorStop(1, 'rgba(80, 100, 160, 0)')
-    ctx.fillStyle = band
-    ctx.fillRect(-w, -h * 0.1, w * 2, h * 0.2)
-    ctx.restore()
 
     if (!starsRef.current) {
-      const n = Math.floor((w * h) / 1800)
+      const n = Math.floor((w * h) / 1400)
       const stars: { x: number; y: number; r: number; a: number }[] = []
       for (let i = 0; i < n; i++) {
         stars.push({
           x: Math.random() * w,
           y: Math.random() * h,
-          r: Math.random() < 0.08 ? 1.4 + Math.random() * 1.2 : 0.4 + Math.random() * 0.9,
-          a: 0.35 + Math.random() * 0.65,
+          r: Math.random() < 0.1 ? 1.5 + Math.random() * 1.4 : 0.45 + Math.random() * 1.0,
+          a: 0.45 + Math.random() * 0.55,
         })
       }
       starsRef.current = stars
     }
     for (const s of starsRef.current) {
       ctx.beginPath()
-      ctx.fillStyle = `rgba(230, 240, 255, ${s.a})`
+      ctx.fillStyle = `rgba(235, 242, 255, ${s.a})`
       ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2)
       ctx.fill()
     }
-  }, [])
+
+    // Cut out Earth so stars don't sit on continents
+    if (map && readyRef.current) {
+      try {
+        const disk = earthDiskPx(map)
+        ctx.save()
+        ctx.globalCompositeOperation = 'destination-out'
+        ctx.beginPath()
+        ctx.arc(disk.cx, disk.cy, disk.R * 0.99, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.restore()
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [earthDiskPx])
 
   /**
-   * Place Sun & Moon in space (outside Earth radius) along real subsolar/sublunar directions.
-   * CSS 3D spheres — not surface markers.
+   * Place Sun & Moon in space outside the Earth disk, along real sky directions.
    */
-  const updateCelestialBodies = useCallback((map: MapLibreMap, date = new Date()) => {
-    const sunEl = sunBodyRef.current
-    const moonEl = moonBodyRef.current
-    if (!sunEl || !moonEl) return
+  const updateCelestialBodies = useCallback(
+    (map: MapLibreMap, date = new Date()) => {
+      const sunEl = sunBodyRef.current
+      const moonEl = moonBodyRef.current
+      if (!sunEl || !moonEl) return
 
-    if (!showBodiesRef.current) {
-      sunEl.style.opacity = '0'
-      moonEl.style.opacity = '0'
-      return
-    }
-
-    const sun = subsolarPoint(date)
-    const moon = sublunarPoint(date)
-    const phase = moonPhase(date)
-    const center = map.getCenter()
-    const project = (ll: [number, number]) => map.project(ll)
-
-    const place = (
-      el: HTMLDivElement,
-      lon: number,
-      lat: number,
-      spaceR: number,
-      title: string,
-      kind: 'sun' | 'moon',
-    ) => {
-      const p = projectSpaceBody(project, center.lng, center.lat, lon, lat, spaceR)
-      if (!p) {
-        el.style.opacity = '0'
+      if (!showBodiesRef.current) {
+        sunEl.style.opacity = '0'
+        moonEl.style.opacity = '0'
+        sunEl.style.visibility = 'hidden'
+        moonEl.style.visibility = 'hidden'
         return
       }
-      const base = kind === 'sun' ? 58 : 40
-      const size = Math.round(base * p.scale)
-      el.style.width = `${size}px`
-      el.style.height = `${size}px`
-      el.style.opacity = p.inFront || p.depth > -0.05 ? '1' : '0'
-      el.style.transform = `translate3d(${Math.round(p.x - size / 2)}px, ${Math.round(p.y - size / 2)}px, 0)`
-      // In front of Earth → above map; near limb still visible beside the disk
-      el.style.zIndex = p.inFront ? '5' : p.depth > 0 ? '3' : '1'
-      el.title = title
-      el.setAttribute('aria-label', title)
-      if (kind === 'moon') {
-        const illum = phase.illumination / 100
-        el.style.setProperty('--moon-illum', String(illum))
-        el.dataset.waxing = phase.phase < 0.5 ? '1' : '0'
-      }
-    }
 
-    place(
-      sunEl,
-      sun.lon,
-      sun.lat,
-      2.15,
-      `Sun in space · subsolar ${sun.lat.toFixed(1)}°, ${sun.lon.toFixed(1)}°`,
-      'sun',
-    )
-    place(
-      moonEl,
-      moon.lon,
-      moon.lat,
-      1.72,
-      `Moon in space · ${phase.name} (${phase.illumination}% lit) · ${moon.lat.toFixed(1)}°, ${moon.lon.toFixed(1)}°`,
-      'moon',
-    )
-  }, [])
+      const sun = subsolarPoint(date)
+      const moon = sublunarPoint(date)
+      const phase = moonPhase(date)
+      const disk = earthDiskPx(map)
+
+      const place = (
+        el: HTMLDivElement,
+        lon: number,
+        lat: number,
+        spaceMul: number,
+        title: string,
+        kind: 'sun' | 'moon',
+      ) => {
+        const cosC = frontCosC(lon, lat, disk.cLng, disk.cLat)
+        // Behind the planet from camera → hide
+        if (cosC < -0.12) {
+          el.style.opacity = '0'
+          el.style.visibility = 'hidden'
+          return
+        }
+
+        // Direction from disk center toward the body on the sphere
+        let surf = map.project([lon, lat])
+        let dx = surf.x - disk.cx
+        let dy = surf.y - disk.cy
+        let len = Math.hypot(dx, dy)
+        if (len < 8) {
+          // Nearly face-on: nudge along a projected offset so we don't stick to center
+          const [ol, oa] = destinationPoint(disk.cLng, disk.cLat, 25, 40)
+          const mid = map.project([ol, oa])
+          // Blend toward body azimuth using lon/lat deltas
+          const [blon, blat] = destinationPoint(disk.cLng, disk.cLat, 20, 0)
+          // Use body-relative sample
+          const sample = map.project([
+            disk.cLng + (lon - disk.cLng) * 0.2,
+            disk.cLat + (lat - disk.cLat) * 0.2,
+          ])
+          dx = sample.x - disk.cx || mid.x - disk.cx
+          dy = sample.y - disk.cy || mid.y - disk.cy
+          len = Math.hypot(dx, dy) || 1
+          void blon
+          void blat
+        }
+        const ux = dx / len
+        const uy = dy / len
+        // Outside the limb: farther for sun, slightly closer for moon
+        const dist = disk.R * spaceMul
+        const x = disk.cx + ux * dist
+        const y = disk.cy + uy * dist
+        // Perspective scale: larger when facing camera
+        const scale = 0.7 + 0.55 * Math.max(0, cosC)
+        const base = kind === 'sun' ? 72 : 48
+        const size = Math.round(base * scale)
+
+        el.style.visibility = 'visible'
+        el.style.opacity = '1'
+        el.style.width = `${size}px`
+        el.style.height = `${size}px`
+        el.style.transform = `translate3d(${Math.round(x - size / 2)}px, ${Math.round(y - size / 2)}px, 0)`
+        el.style.zIndex = cosC > 0.2 ? '8' : '6'
+        el.title = title
+        el.setAttribute('aria-label', title)
+        if (kind === 'moon') {
+          el.style.setProperty('--moon-illum', String(phase.illumination / 100))
+          el.dataset.waxing = phase.phase < 0.5 ? '1' : '0'
+        }
+      }
+
+      place(
+        sunEl,
+        sun.lon,
+        sun.lat,
+        1.45,
+        `Sun · direction ${sun.lat.toFixed(1)}°, ${sun.lon.toFixed(1)}°`,
+        'sun',
+      )
+      place(
+        moonEl,
+        moon.lon,
+        moon.lat,
+        1.28,
+        `Moon · ${phase.name} · ${moon.lat.toFixed(1)}°, ${moon.lon.toFixed(1)}°`,
+        'moon',
+      )
+    },
+    [earthDiskPx],
+  )
 
   /**
    * Fast day/night:
