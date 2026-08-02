@@ -6890,28 +6890,29 @@ label.fire-toggle {
 /* ===== Pull to refresh ===== */
 .ptr-indicator {
   position: fixed;
-  top: 0;
+  top: max(0.55rem, env(safe-area-inset-top, 0px));
   left: 50%;
   z-index: 99990;
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.45rem 0.85rem;
+  padding: 0.5rem 0.95rem;
   border-radius: 999px;
-  background: rgba(10, 16, 32, 0.88);
-  border: 1px solid rgba(56, 189, 248, 0.35);
+  background: rgba(10, 16, 32, 0.92);
+  border: 1px solid rgba(56, 189, 248, 0.4);
   color: #e2e8f0;
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   font-weight: 650;
   pointer-events: none;
+  /* base X center; Y set inline from pull distance */
   transform: translateX(-50%);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
   transition: opacity 0.15s ease;
 }
 .ptr-indicator.is-ready {
-  border-color: rgba(56, 189, 248, 0.7);
+  border-color: rgba(56, 189, 248, 0.75);
   color: #7dd3fc;
 }
 .ptr-spinner {
@@ -6920,6 +6921,7 @@ label.fire-toggle {
   border-radius: 50%;
   border: 2px solid rgba(148, 163, 184, 0.35);
   border-top-color: #38bdf8;
+  flex-shrink: 0;
 }
 .ptr-indicator.is-refreshing .ptr-spinner {
   animation: ptr-spin 0.7s linear infinite;
@@ -6927,6 +6929,13 @@ label.fire-toggle {
 @keyframes ptr-spin {
   to { transform: rotate(360deg); }
 }
+[data-theme='light'] .ptr-indicator {
+  background: rgba(255, 255, 255, 0.94);
+  color: #0f172a;
+  border-color: rgba(14, 165, 233, 0.4);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+}
+
 
 /* ===== Dress for today ===== */
 .dress-panel {

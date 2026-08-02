@@ -238,11 +238,13 @@ export default function DashboardPage() {
 
   const rainWatchRefresh = rainWatch.refresh
   const doRefresh = useCallback(async () => {
-    refresh()
+    // Wait for weather reload so the spinner stays up until data arrives
+    await Promise.resolve(refresh())
     await rainWatchRefresh()
   }, [refresh, rainWatchRefresh])
 
-  const pull = usePullToRefresh(doRefresh, isMobile)
+  // Touch devices + native app — pull down at top of page to refresh
+  const pull = usePullToRefresh(doRefresh, true)
 
   const [shareMsg, setShareMsg] = useState<string | null>(null)
 
@@ -454,11 +456,20 @@ export default function DashboardPage() {
       {(pull.pulling || pull.refreshing) && (
         <div
           className={`ptr-indicator ${pull.refreshing ? 'is-refreshing' : ''} ${pull.progress >= 1 ? 'is-ready' : ''}`}
-          style={{ transform: `translateY(${pull.refreshing ? 12 : Math.max(0, pull.distance - 24)}px)` }}
-          aria-hidden
+          style={{
+            transform: `translate(-50%, ${pull.refreshing ? 10 : Math.max(0, pull.distance - 20)}px)`,
+          }}
+          role="status"
+          aria-live="polite"
         >
-          <span className="ptr-spinner" />
-          <span>{pull.refreshing ? 'Updating…' : pull.progress >= 1 ? 'Release' : 'Pull to refresh'}</span>
+          <span className="ptr-spinner" aria-hidden />
+          <span>
+            {pull.refreshing
+              ? 'Updating…'
+              : pull.progress >= 1
+                ? 'Release to refresh'
+                : 'Pull to refresh'}
+          </span>
         </div>
       )}
 
