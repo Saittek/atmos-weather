@@ -4016,8 +4016,10 @@ html.mobile-perf[data-theme='light'] .topbar {
 .rain-hour-fill.wet,
 .rain-hour-fill.fill-rain.wet,
 .rain-hour-fill.fill-mix.wet {
-  background: linear-gradient(180deg, #7dd3fc, #2563eb 75%, #1e3a8a);
-  box-shadow: 0 0 10px rgba(56, 189, 248, 0.35);
+  background: linear-gradient(180deg, #bae6fd, #38bdf8 40%, #2563eb 78%, #1e3a8a);
+  box-shadow:
+    0 0 12px rgba(56, 189, 248, 0.55),
+    0 0 4px rgba(125, 211, 252, 0.4);
 }
 .rain-hour-fill.fill-snow.wet {
   background: linear-gradient(180deg, #f8fafc, #cbd5e1 55%, #94a3b8);
@@ -4051,7 +4053,7 @@ html.mobile-perf[data-theme='light'] .topbar {
   height: 100%;
   border-radius: 50%;
   overflow: hidden;
-  background: radial-gradient(circle at 40% 30%, rgba(125, 211, 252, 0.28), transparent 65%);
+  background: radial-gradient(circle at 40% 30%, rgba(56, 189, 248, 0.42), rgba(14, 165, 233, 0.12) 55%, transparent 70%);
 }
 .precip-motion.snow .precip-motion-stage {
   background: radial-gradient(circle at 40% 30%, rgba(226, 232, 240, 0.4), transparent 65%);
@@ -4061,67 +4063,72 @@ html.mobile-perf[data-theme='light'] .topbar {
 }
 .precip-motion .drop {
   position: absolute;
-  width: 18%;
-  height: 28%;
+  width: 24%;
+  height: 36%;
   border-radius: 40% 40% 50% 50%;
-  background: linear-gradient(180deg, #e0f2fe, #38bdf8 55%, #0284c7);
-  box-shadow: 0 0 4px rgba(56, 189, 248, 0.55);
-  animation: precip-drop-fall 0.85s linear infinite;
-  opacity: 0.95;
+  background: linear-gradient(180deg, #fff 0%, #e0f2fe 25%, #38bdf8 60%, #0284c7 100%);
+  box-shadow:
+    0 0 5px rgba(125, 211, 252, 0.95),
+    0 0 9px rgba(56, 189, 248, 0.7);
+  animation: precip-drop-fall 0.75s linear infinite;
+  opacity: 1;
 }
 .precip-motion .drop.d1 {
-  left: 18%;
-  animation-duration: 0.75s;
+  left: 14%;
+  animation-duration: 0.65s;
 }
 .precip-motion .drop.d2 {
-  left: 42%;
-  width: 16%;
-  height: 26%;
-  animation-duration: 0.95s;
-  animation-delay: 0.2s;
+  left: 40%;
+  width: 22%;
+  height: 34%;
+  animation-duration: 0.85s;
+  animation-delay: 0.18s;
 }
 .precip-motion .drop.d3 {
-  left: 64%;
-  animation-duration: 0.7s;
-  animation-delay: 0.4s;
-}
-.precip-motion .drop.d4 {
-  left: 30%;
-  animation-duration: 0.88s;
-  animation-delay: 0.15s;
-}
-.precip-motion .drop.d5 {
-  left: 72%;
-  animation-duration: 0.65s;
+  left: 62%;
+  animation-duration: 0.62s;
   animation-delay: 0.35s;
 }
+.precip-motion .drop.d4 {
+  left: 28%;
+  animation-duration: 0.78s;
+  animation-delay: 0.12s;
+}
+.precip-motion .drop.d5 {
+  left: 74%;
+  animation-duration: 0.58s;
+  animation-delay: 0.28s;
+}
 .precip-motion.level-3 .drop {
-  animation-duration: 0.55s;
+  animation-duration: 0.48s;
+  width: 26%;
+  height: 40%;
 }
 .precip-motion .wave {
   position: absolute;
-  left: 10%;
-  right: 10%;
-  bottom: 8%;
-  height: 28%;
+  left: 8%;
+  right: 8%;
+  bottom: 6%;
+  height: 32%;
   border-radius: 50%;
-  background: radial-gradient(ellipse at center, rgba(56, 189, 248, 0.55), transparent 70%);
-  animation: precip-wave 1.4s ease-in-out infinite;
+  background: radial-gradient(ellipse at center, rgba(56, 189, 248, 0.75), rgba(14, 165, 233, 0.25) 55%, transparent 72%);
+  animation: precip-wave 1.25s ease-in-out infinite;
 }
 .precip-motion .wave.w2 {
-  bottom: 2%;
-  opacity: 0.6;
-  animation-delay: 0.5s;
+  bottom: 0%;
+  opacity: 0.75;
+  animation-delay: 0.45s;
 }
 .precip-motion .splash {
   position: absolute;
-  left: 35%;
-  bottom: 12%;
-  width: 30%;
-  height: 18%;
+  left: 32%;
+  bottom: 10%;
+  width: 36%;
+  height: 22%;
   border-radius: 50%;
-  background: rgba(186, 230, 253, 0.7);
-  animation: precip-splash 0.9s ease-out infinite;
+  background: rgba(224, 242, 254, 0.9);
+  box-shadow: 0 0 6px rgba(125, 211, 252, 0.8);
+  animation: precip-splash 0.8s ease-out infinite;
 }
 .precip-motion .flake {
   position: absolute;
@@ -4174,17 +4181,17 @@ html.mobile-perf[data-theme='light'] .topbar {
 }
 @keyframes precip-drop-fall {
   0% {
-    transform: translateY(-120%) scaleY(0.8);
+    transform: translateY(-130%) scaleY(0.75);
     opacity: 0;
   }
-  15% {
+  8% {
     opacity: 1;
   }
-  85% {
+  88% {
     opacity: 1;
   }
   100% {
-    transform: translateY(140%) scaleY(1.1);
+    transform: translateY(145%) scaleY(1.15);
     opacity: 0;
   }
 }
@@ -4192,20 +4199,20 @@ html.mobile-perf[data-theme='light'] .topbar {
   0%,
   100% {
     transform: scaleX(0.85) scaleY(0.7);
-    opacity: 0.45;
+    opacity: 0.55;
   }
   50% {
-    transform: scaleX(1.15) scaleY(1);
-    opacity: 0.9;
+    transform: scaleX(1.2) scaleY(1.05);
+    opacity: 1;
   }
 }
 @keyframes precip-splash {
   0% {
-    transform: scale(0.4);
-    opacity: 0.8;
+    transform: scale(0.35);
+    opacity: 1;
   }
   100% {
-    transform: scale(1.6);
+    transform: scale(1.75);
     opacity: 0;
   }
 }
@@ -4233,9 +4240,9 @@ html.mobile-perf[data-theme='light'] .topbar {
   position: absolute;
   left: 0;
   right: 0;
-  height: 36%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
-  animation: fill-water-flow 1.2s linear infinite;
+  height: 40%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.7), transparent);
+  animation: fill-water-flow 1.05s linear infinite;
 }
 .rain-hour-fill .fill-water i:nth-child(1) {
   top: 10%;

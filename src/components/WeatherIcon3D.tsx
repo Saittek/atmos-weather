@@ -365,7 +365,8 @@ export function WeatherIcon3D({
   const uid = useId().replace(/:/g, '')
   const boltGradId = `boltGrad-${uid}`
   const { kind, intensity } = weatherKindFromCode(code, isDay)
-  const dropCount = intensity === 1 ? 6 : intensity === 2 ? 10 : 14
+  /* More drops so rain reads clearly on dark clouds / small icons */
+  const dropCount = intensity === 1 ? 9 : intensity === 2 ? 14 : 18
   const flakeCount = intensity === 1 ? 7 : intensity === 2 ? 11 : 15
   // No periodic remount — remounting every few seconds caused a visible snap to frame 0
 

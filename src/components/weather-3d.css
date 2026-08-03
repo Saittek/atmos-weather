@@ -472,91 +472,127 @@
 /* ========== RAIN / DRIZZLE ========== */
 .w3d-precip {
   position: absolute;
-  left: 18%;
-  right: 14%;
-  top: 54%;
-  bottom: 6%;
+  left: 12%;
+  right: 10%;
+  top: 48%;
+  bottom: 4%;
   z-index: 5;
   overflow: hidden;
   pointer-events: none;
 }
 .w3d-precip span {
   position: absolute;
-  top: -30%;
-  width: 2.5px;
-  height: 26%;
+  top: -35%;
+  width: 3.5px;
+  height: 34%;
   border-radius: 99px;
-  background: linear-gradient(180deg, transparent, #bae6fd 20%, #38bdf8 70%, #0ea5e9);
-  left: calc(4% + (var(--i) / var(--n, 10)) * 90%);
-  animation: w3d-fall 0.7s linear infinite;
+  /* Brighter core + cyan tail so drops read on dark clouds */
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.95) 12%,
+    #e0f2fe 28%,
+    #38bdf8 62%,
+    #0284c7 100%
+  );
+  left: calc(3% + (var(--i) / var(--n, 10)) * 92%);
+  animation: w3d-fall 0.65s linear infinite;
   /* default delay if not set inline — staggered mid-stream */
-  animation-delay: calc((var(--i) / var(--n, 10)) * -0.7s);
+  animation-delay: calc((var(--i) / var(--n, 10)) * -0.65s);
   opacity: 0;
   will-change: transform, opacity;
-  box-shadow: 0 0 4px rgba(56, 189, 248, 0.45);
+  box-shadow:
+    0 0 5px rgba(125, 211, 252, 0.9),
+    0 0 10px rgba(56, 189, 248, 0.65),
+    0 1px 2px rgba(14, 165, 233, 0.5);
+  filter: saturate(1.15);
 }
 .w3d-precip.light span {
-  height: 16%;
-  width: 2px;
-  opacity: 0.65;
-  animation-duration: 1.05s;
-  background: linear-gradient(180deg, transparent, #7dd3fc 40%, #38bdf8);
+  height: 24%;
+  width: 2.75px;
+  animation-duration: 0.95s;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.85) 18%,
+    #bae6fd 45%,
+    #38bdf8 100%
+  );
+  box-shadow:
+    0 0 4px rgba(125, 211, 252, 0.85),
+    0 0 8px rgba(56, 189, 248, 0.5);
 }
 .w3d-precip.med span {
-  height: 24%;
-  animation-duration: 0.8s;
+  height: 32%;
+  width: 3.5px;
+  animation-duration: 0.72s;
 }
 .w3d-precip.heavy span {
-  height: 32%;
-  width: 3px;
-  animation-duration: 0.55s;
-  opacity: 1;
+  height: 42%;
+  width: 4.25px;
+  animation-duration: 0.48s;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    #fff 10%,
+    #e0f2fe 25%,
+    #38bdf8 55%,
+    #0369a1 100%
+  );
+  box-shadow:
+    0 0 6px rgba(186, 230, 253, 1),
+    0 0 14px rgba(56, 189, 248, 0.85),
+    0 2px 4px rgba(14, 165, 233, 0.55);
 }
 .w3d-precip.shower span {
-  animation-duration: 0.65s;
+  animation-duration: 0.58s;
+  width: 3.75px;
 }
 .w3d-precip.icy span {
-  background: linear-gradient(180deg, transparent, #e0f2fe 25%, #7dd3fc 60%, #a5f3fc);
-  box-shadow: 0 0 5px rgba(165, 243, 252, 0.6);
+  background: linear-gradient(180deg, transparent, #f0f9ff 15%, #e0f2fe 40%, #7dd3fc 70%, #a5f3fc);
+  box-shadow:
+    0 0 6px rgba(224, 242, 254, 0.95),
+    0 0 12px rgba(165, 243, 252, 0.75);
 }
 
 /* Seamless loop: fully transparent at wrap so restart is invisible */
 @keyframes w3d-fall {
   0% {
-    transform: translate3d(0, 0, 0) rotate(12deg);
+    transform: translate3d(0, 0, 0) rotate(14deg);
     opacity: 0;
   }
-  6% {
-    opacity: 0.95;
+  4% {
+    opacity: 1;
   }
-  88% {
-    opacity: 0.95;
+  90% {
+    opacity: 1;
   }
   100% {
-    transform: translate3d(-8px, 165%, 0) rotate(12deg);
+    transform: translate3d(-10px, 170%, 0) rotate(14deg);
     opacity: 0;
   }
 }
 
 .w3d-splash {
   position: absolute;
-  left: 20%;
-  right: 16%;
-  bottom: 8%;
-  height: 10%;
+  left: 16%;
+  right: 12%;
+  bottom: 5%;
+  height: 14%;
   z-index: 4;
-  background: radial-gradient(ellipse, rgba(56, 189, 248, 0.35), transparent 70%);
-  animation: w3d-splash 0.9s ease-in-out infinite;
+  background: radial-gradient(ellipse, rgba(125, 211, 252, 0.55), rgba(56, 189, 248, 0.2) 45%, transparent 72%);
+  animation: w3d-splash 0.85s ease-in-out infinite;
+  filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.45));
 }
 @keyframes w3d-splash {
   0%,
   100% {
-    opacity: 0.3;
-    transform: scaleX(0.9);
+    opacity: 0.45;
+    transform: scaleX(0.88);
   }
   50% {
-    opacity: 0.7;
-    transform: scaleX(1.1);
+    opacity: 0.95;
+    transform: scaleX(1.18);
   }
 }
 
@@ -743,7 +779,17 @@
 
 /* Intensity tweaks */
 .w3d-i3 .w3d-precip.heavy span {
-  animation-duration: 0.45s;
+  animation-duration: 0.4s;
+  width: 4.5px;
+}
+.w3d-i2 .w3d-precip.med span {
+  width: 3.75px;
+}
+/* Static list icons: still show a visible rain streak sample */
+.w3d-sm:not(.w3d-force) .w3d-precip span {
+  opacity: 0.95;
+  top: 8%;
+  height: 55%;
 }
 .w3d-i1 .w3d-snow span {
   animation-duration: 2.8s;
@@ -753,7 +799,7 @@
 .w3d-sm:not(.w3d-force) .w3d-ray:nth-child(n + 7) {
   display: none;
 }
-.w3d-sm:not(.w3d-force) .w3d-precip span:nth-child(n + 7),
+.w3d-sm:not(.w3d-force) .w3d-precip span:nth-child(n + 9),
 .w3d-sm:not(.w3d-force) .w3d-snow span:nth-child(n + 7),
 .w3d-sm:not(.w3d-force) .w3d-hail span:nth-child(n + 5) {
   display: none;
@@ -780,13 +826,13 @@
   animation-duration: 2.6s;
 }
 .w3d-force .w3d-precip.light span {
-  animation-duration: 1s;
+  animation-duration: 0.9s;
 }
 .w3d-force .w3d-precip.med span {
-  animation-duration: 0.75s;
+  animation-duration: 0.65s;
 }
 .w3d-force .w3d-precip.heavy span {
-  animation-duration: 0.55s;
+  animation-duration: 0.45s;
 }
 .w3d-force .w3d-snow span {
   animation-duration: 2.2s;
