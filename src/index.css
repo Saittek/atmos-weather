@@ -91,9 +91,7 @@ body.native-ios .alert-top-bar:not(.alert-top-bar-mini) {
 body.native-ios .app {
   --topbar-offset: max(0.35rem, calc(var(--sat) * 0.2));
 }
-body.native-ios .app.has-alerts {
-  --alert-bar-h: calc(3.35rem + var(--sat));
-}
+/* --alert-bar-h is measured from the live strip (includes safe-area padding) */
 body.native-ios .app.has-alerts.alerts-minimized {
   /* Circle lives in the top bar — no extra strip under the notch */
   --alert-bar-h: 0px;

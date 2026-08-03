@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { WeatherAlert } from '../api/types'
 import { alertActionTips } from '../utils/alertTips'
 import { filterActiveAlerts } from '../utils/activeAlerts'
@@ -103,6 +103,7 @@ export function AlertTopBar({
   const minimized = controlled ? minimizedProp : internalMini
   const [expanded, setExpanded] = useState(false)
   const [openId, setOpenId] = useState<string | null>(null)
+  const barRef = useRef<HTMLDivElement>(null)
   const active = useMemo(() => filterActiveAlerts(alerts), [alerts])
 
   const setMinimized = (v: boolean) => {
@@ -123,6 +124,31 @@ export function AlertTopBar({
       onMinimizedChange?.(false)
     }
   }, [active.length, minimized, controlled, onMinimizedChange])
+
+  // Keep fixed topbar below the real alert strip height (wrap / expand / safe-area)
+  useEffect(() => {
+    const setH = (px: number) => {
+      const app = document.querySelector('.app')
+      if (app instanceof HTMLElement) {
+        app.style.setProperty('--alert-bar-h', `${Math.max(0, Math.ceil(px))}px`)
+      }
+    }
+    if (!active.length || minimized) {
+      setH(0)
+      return
+    }
+    const el = barRef.current
+    if (!el) return
+    const apply = () => setH(el.getBoundingClientRect().height)
+    apply()
+    const ro = new ResizeObserver(apply)
+    ro.observe(el)
+    window.addEventListener('resize', apply)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('resize', apply)
+    }
+  }, [active.length, minimized, expanded, openId, alerts])
 
   if (!active.length) return null
 
@@ -145,7 +171,12 @@ export function AlertTopBar({
   }
 
   return (
-    <div className="alert-top-bar" role="region" aria-label="Weather alerts for this location">
+    <div
+      ref={barRef}
+      className="alert-top-bar"
+      role="region"
+      aria-label="Weather alerts for this location"
+    >
       <div className="alert-top-inner">
         <div className="alert-top-compact">
           <span className="alert-top-pulse" aria-hidden />

@@ -481,24 +481,6 @@ export default function DashboardPage() {
         onMinimizedChange={setAlertsMinimized}
       />
 
-      {location && threat.threats.length > 0 && (
-        <div className="dashboard-threat-wrap">
-          <ThreatBanner
-            threats={threat.threats}
-            loading={threat.loading}
-            muted={threat.muted}
-            onMute={threat.setMuted}
-            onJump={() => {
-              const p = location
-              navigate(
-                `/chase?lat=${p.latitude.toFixed(4)}&lon=${p.longitude.toFixed(4)}&name=${encodeURIComponent(p.name)}`,
-              )
-            }}
-            onRefresh={() => threat.refresh()}
-          />
-        </div>
-      )}
-
       <Onboarding />
 
       {/* Fixed topbar lives outside .app-shell so overflow-x:clip never affects pin-to-viewport */}
@@ -650,6 +632,25 @@ export default function DashboardPage() {
             <button type="button" className="chip-btn" onClick={() => setStormMode(false)}>
               Exit
             </button>
+          </div>
+        )}
+
+        {/* Threat strip lives in the padded shell — not under the fixed top bar */}
+        {location && threat.threats.length > 0 && (
+          <div className="dashboard-threat-wrap">
+            <ThreatBanner
+              threats={threat.threats}
+              loading={threat.loading}
+              muted={threat.muted}
+              onMute={threat.setMuted}
+              onJump={() => {
+                const p = location
+                navigate(
+                  `/chase?lat=${p.latitude.toFixed(4)}&lon=${p.longitude.toFixed(4)}&name=${encodeURIComponent(p.name)}`,
+                )
+              }}
+              onRefresh={() => threat.refresh()}
+            />
           </div>
         )}
 
