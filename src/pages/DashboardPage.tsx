@@ -96,9 +96,6 @@ const ComfortPanel = lazy(() =>
 const LifestyleScores = lazy(() =>
   import('../components/LifestyleScores').then((m) => ({ default: m.LifestyleScores })),
 )
-const WeatherDetails = lazy(() =>
-  import('../components/WeatherDetails').then((m) => ({ default: m.WeatherDetails })),
-)
 const DayLastYear = lazy(() =>
   import('../components/DayLastYear').then((m) => ({ default: m.DayLastYear })),
 )
@@ -899,7 +896,6 @@ export default function DashboardPage() {
                         <PrecipChart weather={weather} units={units} />
                         <ComfortPanel weather={weather} units={units} />
                         <LifestyleScores weather={weather} units={units} />
-                        <WeatherDetails weather={weather} units={units} />
                         {!isMobile && (
                           <DayLastYear
                             weather={weather}
