@@ -52,15 +52,19 @@ workflows:
           echo "App Group: group.com.solara.weather"
           echo "REQUIRED on Apple Developer before archive succeeds:"
           echo "  1) App Group group.com.solara.weather"
-          echo "  2) App ID $BUNDLE_ID: App Groups + Push Notifications"
+          echo "  2) App ID $BUNDLE_ID: App Groups (Push optional — only if aps-environment is in entitlements)"
           echo "  3) App ID $BUNDLE_ID_WIDGET: App Groups"
           echo "  4) App Store Connect app record for $BUNDLE_ID"
           echo "See docs/SHIP_NOW.md"
           test -f ios/App/App/App.entitlements
-          grep -q 'aps-environment' ios/App/App/App.entitlements
           grep -q 'group.com.solara.weather' ios/App/App/App.entitlements
           grep -q 'group.com.solara.weather' ios/App/SolaraWidget/SolaraWidget.entitlements
-          grep -q 'remote-notification' ios/App/App/Info.plist || true
+          if grep -q 'aps-environment' ios/App/App/App.entitlements; then
+            echo "NOTE: aps-environment present — App ID MUST have Push Notifications enabled"
+            echo "      or archive fails with 'profile doesn't include Push / aps-environment'"
+          else
+            echo "Push entitlement OFF (web push still works). Enable Push on App ID before re-adding aps-environment."
+          fi
           echo "Entitlements OK"
 
       - name: Install JS dependencies

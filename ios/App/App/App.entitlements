@@ -2,11 +2,23 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>aps-environment</key>
-	<string>production</string>
+	<!-- App Groups: widget snapshot sharing (required for Home Screen widget) -->
 	<key>com.apple.security.application-groups</key>
 	<array>
 		<string>group.com.solara.weather</string>
 	</array>
+	<!--
+	  Push (aps-environment) is OFF until App ID com.solara.weather has
+	  Push Notifications enabled in Apple Developer and Codemagic regenerates
+	  the App Store profile with that capability.
+
+	  To re-enable native closed-app APNs:
+	  1) developer.apple.com → Identifiers → com.solara.weather → Push Notifications ON
+	  2) Add back:
+	       <key>aps-environment</key>
+	       <string>production</string>
+	  3) Re-run Codemagic ios-testflight
+	  See docs/SHIP_NOW.md
+	-->
 </dict>
 </plist>

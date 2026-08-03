@@ -53,8 +53,12 @@ for (const f of must) {
 // --- Entitlements ---
 console.log('\nEntitlements')
 const appEnt = read('ios/App/App/App.entitlements') || ''
-if (appEnt.includes('aps-environment')) ok('App: aps-environment (Push)')
-else fail('App missing aps-environment')
+if (appEnt.includes('aps-environment')) {
+  ok('App: aps-environment (Push) — App ID must have Push Notifications enabled')
+  warn('If Codemagic fails on aps-environment: enable Push on App ID or remove aps-environment')
+} else {
+  ok('App: Push entitlement OFF (archive-safe; web push still works)')
+}
 if (appEnt.includes('group.com.solara.weather')) ok('App: App Group')
 else fail('App missing App Group')
 
@@ -63,8 +67,11 @@ if (wEnt.includes('group.com.solara.weather')) ok('Widget: App Group')
 else fail('Widget missing App Group')
 
 const info = read('ios/App/App/Info.plist') || ''
-if (info.includes('remote-notification')) ok('Info.plist: UIBackgroundModes remote-notification')
-else warn('Info.plist: add UIBackgroundModes remote-notification for background APNs')
+if (info.includes('remote-notification')) {
+  ok('Info.plist: UIBackgroundModes remote-notification')
+} else {
+  ok('Info.plist: no remote-notification mode (OK until native APNs)')
+}
 if (info.includes('NSLocationWhenInUseUsageDescription')) ok('Info.plist: location usage string')
 else fail('Info.plist missing location usage')
 

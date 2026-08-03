@@ -17,8 +17,9 @@ Open [developer.apple.com/account/resources/identifiers](https://developer.apple
 ### 2. Main App ID `com.solara.weather`
 - Capabilities:
   - **App Groups** → enable → select `group.com.solara.weather`
-  - **Push Notifications** → enable
-- Save
+  - **Push Notifications** → enable *(required only when `aps-environment` is in App.entitlements)*
+- Save  
+- **Current main branch:** Push entitlement is **off** so Codemagic can archive without Push on the App ID. Web push still works. Re-enable per `docs/PUSH_NOTIFICATIONS.md` when ready for native APNs.
 
 ### 3. Widget App ID `com.solara.weather.widget`
 - Type: App (explicit)
