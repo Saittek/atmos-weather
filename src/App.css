@@ -8049,6 +8049,54 @@ html.mobile-perf .earth-nav-glow {
   text-transform: uppercase;
   color: var(--text-mute, rgba(148, 163, 184, 0.95));
 }
+.favorites-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.favorites-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+.favorites-mini-btn {
+  font-size: 0.72rem !important;
+  padding: 0.28rem 0.6rem !important;
+}
+.favorites-panel.is-minimized {
+  padding-bottom: 0.65rem;
+}
+.favorites-mini-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  margin: 0;
+  padding: 0.55rem 0.65rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+}
+.favorites-mini-summary:hover {
+  background: rgba(56, 189, 248, 0.08);
+  border-color: rgba(56, 189, 248, 0.3);
+}
+.favorites-mini-chev {
+  opacity: 0.7;
+  font-size: 0.75rem;
+}
+.favorites-body {
+  min-width: 0;
+}
 .favorites-empty-msg {
   margin: 0.25rem 0 0;
   font-size: 0.85rem;
