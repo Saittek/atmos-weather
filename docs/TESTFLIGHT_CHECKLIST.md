@@ -1,5 +1,7 @@
 # Solara TestFlight checklist
 
+**Start here for everything:** **`docs/SHIP_NOW.md`**
+
 After merging to `main`, ship a native build so iOS matches the live website.
 
 ## Codemagic

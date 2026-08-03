@@ -51,6 +51,11 @@
 	<string>Solara uses your location to show local weather, radar, and severe weather alerts for your area.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Solara uses your location to show local weather, radar, and severe weather alerts for your area.</string>
+	<!-- Required for APNs when the app is backgrounded / closed -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>CFBundleURLTypes</key>

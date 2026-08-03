@@ -71,12 +71,14 @@ Worker send path is implemented (`worker/apns.js`) and runs from the 10‑minute
 
 ```bash
 npx wrangler secret put APNS_KEY_ID        # e.g. AB12CD34EF
-npx wrangler secret put APNS_TEAM_ID       # Apple Team ID
-npx wrangler secret put APNS_BUNDLE_ID     # e.g. com.yourco.solara
+npx wrangler secret put APNS_TEAM_ID       # Apple Team ID (10 chars)
+npx wrangler secret put APNS_BUNDLE_ID     # com.solara.weather
 npx wrangler secret put APNS_PRIVATE_KEY   # full .p8 PEM including BEGIN/END lines
 # Production App Store / TestFlight builds:
 npx wrangler secret put APNS_PRODUCTION    # true
 ```
+
+Verify: `curl -s https://solaraweather.com/api/health` → `secrets.apns: true` after deploy.
 
 Also in Xcode / Apple Developer:
 

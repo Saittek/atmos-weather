@@ -44,6 +44,25 @@ workflows:
       cocoapods: default
 
     scripts:
+      - name: Ship preflight (entitlements + Apple notes)
+        script: |
+          set -euo pipefail
+          echo "=== Solara iOS preflight ==="
+          echo "Bundle IDs: $BUNDLE_ID + $BUNDLE_ID_WIDGET"
+          echo "App Group: group.com.solara.weather"
+          echo "REQUIRED on Apple Developer before archive succeeds:"
+          echo "  1) App Group group.com.solara.weather"
+          echo "  2) App ID $BUNDLE_ID: App Groups + Push Notifications"
+          echo "  3) App ID $BUNDLE_ID_WIDGET: App Groups"
+          echo "  4) App Store Connect app record for $BUNDLE_ID"
+          echo "See docs/SHIP_NOW.md"
+          test -f ios/App/App/App.entitlements
+          grep -q 'aps-environment' ios/App/App/App.entitlements
+          grep -q 'group.com.solara.weather' ios/App/App/App.entitlements
+          grep -q 'group.com.solara.weather' ios/App/SolaraWidget/SolaraWidget.entitlements
+          grep -q 'remote-notification' ios/App/App/Info.plist || true
+          echo "Entitlements OK"
+
       - name: Install JS dependencies
         script: |
           npm ci || npm install

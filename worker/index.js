@@ -662,6 +662,11 @@ export default {
             jwt: Boolean(getJwtSecret(env)),
             cron: Boolean(env.CRON_SECRET && String(env.CRON_SECRET).length >= 8),
             vapidPrivate: Boolean(env.VAPID_PRIVATE_KEY),
+            apns:
+              Boolean(env.APNS_KEY_ID) &&
+              Boolean(env.APNS_TEAM_ID) &&
+              Boolean(env.APNS_BUNDLE_ID) &&
+              Boolean(env.APNS_PRIVATE_KEY),
           },
         })
       }

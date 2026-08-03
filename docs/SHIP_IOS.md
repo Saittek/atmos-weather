@@ -1,5 +1,7 @@
 # Ship iOS (one-button path)
 
+**Full master checklist (Apple portal + Codemagic + secrets):** **`docs/SHIP_NOW.md`**
+
 Web deploys with `npm run deploy`. **Native Solara** only updates after a **Codemagic** build.
 
 ## Automatic (preferred)
