@@ -4,7 +4,6 @@
 import type { WeatherData } from '../api/types'
 import type { Units } from '../utils/format'
 import {
-  convertTemp,
   formatHour,
   formatPrecip,
   formatPrecipAmount,
@@ -56,10 +55,6 @@ export function HourlyForecast({ weather, units }: Props) {
     (i) => i < hourly.time.length,
   )
 
-  const temps = items.map((i) => convertTemp(hourly.temperature_2m[i], units))
-  const minT = Math.min(...temps)
-  const maxT = Math.max(...temps)
-  const range = Math.max(maxT - minT, 1)
   const maxPrecip = Math.max(
     0.3,
     ...items.map((i) => hourly.precipitation[i] ?? 0),
@@ -89,10 +84,8 @@ export function HourlyForecast({ weather, units }: Props) {
           const precip = hourly.precipitation[i] ?? 0
           const gust = hourly.wind_gusts_10m[i] ?? 0
           const feel = hourly.apparent_temperature[i]
-          const tempN = convertTemp(t, units)
-          const barH = 16 + ((tempN - minT) / range) * 44
           const precipH = hasPrecipMm(precip)
-            ? Math.max(4, Math.round((precip / maxPrecip) * 28))
+            ? Math.max(6, Math.round((precip / maxPrecip) * 36))
             : 0
           const wet = pop >= 30 || hasPrecipMm(precip)
           const rainLabel = hourPrecipLabel(precip, units)
@@ -115,9 +108,7 @@ export function HourlyForecast({ weather, units }: Props) {
                 />
               </span>
               <span className="h-temp">{formatTemp(t, units)}</span>
-              <div className="h-temp-track" aria-hidden>
-                <div className="h-bar" style={{ height: `${barH}px` }} />
-              </div>
+              {/* Single blue bar = expected rain amount for this hour */}
               <div className="h-precip-col" aria-hidden>
                 {precipH > 0 ? (
                   <div className="h-precip-bar" style={{ height: `${precipH}px` }} />
@@ -155,8 +146,7 @@ export function HourlyForecast({ weather, units }: Props) {
         })}
       </div>
       <p className="hourly-legend">
-        <span>Temp</span>
-        <span className="hourly-legend-rain">Rain ({unit})</span>
+        <span className="hourly-legend-rain">Bar + amount = rain ({unit})</span>
         <span>% chance</span>
       </p>
     </section>

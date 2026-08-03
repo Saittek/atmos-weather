@@ -7918,27 +7918,22 @@ html.mobile-perf .earth-nav-glow {
 .hourly-card.is-wet .h-pop {
   color: #7dd3fc;
 }
-.h-temp-track {
-  height: 52px;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-}
+/* Single blue bar = hourly rain (temp bar removed) */
 .h-precip-col {
-  height: 30px;
+  height: 40px;
   width: 100%;
   display: flex;
   align-items: flex-end;
   justify-content: center;
 }
 .h-precip-bar {
-  width: 10px;
-  border-radius: 4px 4px 2px 2px;
+  width: 12px;
+  border-radius: 5px 5px 2px 2px;
   background: linear-gradient(180deg, #7dd3fc, #2563eb);
-  min-height: 3px;
+  min-height: 4px;
 }
 .h-precip-empty {
-  width: 10px;
+  width: 12px;
   height: 2px;
   border-radius: 2px;
   background: rgba(255, 255, 255, 0.08);
