@@ -1,17 +1,18 @@
 /**
- * Horizontal hourly strip — Apple / AccuWeather style:
- * time · icon · temp · precip bar · PoP · light wind when elevated
+ * Horizontal hourly strip — time · icon · temp · precip amount · PoP · wind when high
  */
 import type { WeatherData } from '../api/types'
 import type { Units } from '../utils/format'
 import {
   convertTemp,
   formatHour,
+  formatPrecip,
   formatPrecipAmount,
   formatSpeed,
   formatTemp,
   hasPrecipMm,
   parseWeatherLocal,
+  precipUnit,
 } from '../utils/format'
 import { isSunUpAt } from '../utils/daylight'
 import { getWeatherInfo } from '../utils/weatherCodes'
@@ -35,6 +36,12 @@ function hourLabel(iso: string, timezone: string, isNow: boolean): string {
   }
 }
 
+/** Compact per-hour amount with unit (always shown). */
+function hourPrecipLabel(mm: number, units: Units): string {
+  if (!Number.isFinite(mm) || mm < 0.05) return `0 ${precipUnit(units)}`
+  return formatPrecip(mm, units)
+}
+
 export function HourlyForecast({ weather, units }: Props) {
   const { hourly, timezone } = weather
   const now = Date.now()
@@ -44,7 +51,6 @@ export function HourlyForecast({ weather, units }: Props) {
   const idx = start < 0 ? 0 : start
   const mobile =
     typeof window !== 'undefined' && window.matchMedia('(max-width: 720px)').matches
-  // Competitors typically show 24–48h scroll
   const count = mobile ? 24 : 48
   const items = Array.from({ length: count }, (_, i) => i + idx).filter(
     (i) => i < hourly.time.length,
@@ -60,6 +66,7 @@ export function HourlyForecast({ weather, units }: Props) {
   )
 
   const endIso = items.length ? hourly.time[items[items.length - 1]] : null
+  const unit = precipUnit(units)
 
   return (
     <section className="panel hourly-panel">
@@ -67,8 +74,8 @@ export function HourlyForecast({ weather, units }: Props) {
         <h2>Hourly</h2>
         <span className="panel-hint">
           {endIso
-            ? `${hourLabel(hourly.time[idx], timezone, true)} → ${hourLabel(endIso, timezone, false)}`
-            : 'Scroll →'}
+            ? `${hourLabel(hourly.time[idx], timezone, true)} → ${hourLabel(endIso, timezone, false)} · rain in ${unit}`
+            : `Scroll → · rain in ${unit}`}
         </span>
       </div>
       <div className="hourly-scroll" role="list">
@@ -88,17 +95,17 @@ export function HourlyForecast({ weather, units }: Props) {
             ? Math.max(4, Math.round((precip / maxPrecip) * 28))
             : 0
           const wet = pop >= 30 || hasPrecipMm(precip)
+          const rainLabel = hourPrecipLabel(precip, units)
+          const timeLbl = hourLabel(hourly.time[i], timezone, i === idx)
 
           return (
             <div
               className={`hourly-card ${wet ? 'is-wet' : ''} ${i === idx ? 'is-now' : ''}`}
               key={hourly.time[i]}
               role="listitem"
-              title={`${hourLabel(hourly.time[i], timezone, i === idx)}: ${formatTemp(t, units)} (feels ${formatTemp(feel, units)}) · ${info.label}${pop ? ` · ${pop}%` : ''}${hasPrecipMm(precip) ? ` · ${formatPrecipAmount(precip, units)}` : ''}${gust >= 40 ? ` · gusts ${formatSpeed(gust, units)}` : ''}`}
+              title={`${timeLbl}: ${formatTemp(t, units)} (feels ${formatTemp(feel, units)}) · ${info.label} · rain ${rainLabel}${pop ? ` · ${Math.round(pop)}% chance` : ''}${gust >= 40 ? ` · gusts ${formatSpeed(gust, units)}` : ''}`}
             >
-              <span className="h-time">
-                {hourLabel(hourly.time[i], timezone, i === idx)}
-              </span>
+              <span className="h-time">{timeLbl}</span>
               <span className="h-icon" title={info.description}>
                 <WeatherIcon3D
                   code={code}
@@ -118,14 +125,29 @@ export function HourlyForecast({ weather, units }: Props) {
                   <div className="h-precip-empty" />
                 )}
               </div>
+              <span
+                className={`h-rain-amt ${hasPrecipMm(precip) ? 'has-rain' : ''}`}
+                aria-label={`${timeLbl} expected precipitation ${rainLabel}`}
+              >
+                {hasPrecipMm(precip) ? (
+                  <>
+                    <em className="h-rain-num">{formatPrecipAmount(precip, units)}</em>
+                    <em className="h-rain-unit">{unit}</em>
+                  </>
+                ) : (
+                  <em className="h-rain-dry">0 {unit}</em>
+                )}
+              </span>
               <span className={`h-pop ${pop >= 30 ? 'wet' : ''}`}>
                 {pop > 0 ? `${Math.round(pop)}%` : '—'}
               </span>
               {gust >= 45 ? (
-                <span className="h-wind">{formatSpeed(gust, units)}</span>
+                <span className="h-wind" title="Wind gusts">
+                  💨 {formatSpeed(gust, units)}
+                </span>
               ) : (
-                <span className="h-wind muted">
-                  {hasPrecipMm(precip) ? formatPrecipAmount(precip, units) : ''}
+                <span className="h-wind muted" aria-hidden>
+                  {' '}
                 </span>
               )}
             </div>
@@ -133,8 +155,8 @@ export function HourlyForecast({ weather, units }: Props) {
         })}
       </div>
       <p className="hourly-legend">
-        <span>Temp bars</span>
-        <span className="hourly-legend-rain">Rain amount</span>
+        <span>Temp</span>
+        <span className="hourly-legend-rain">Rain ({unit})</span>
         <span>% chance</span>
       </p>
     </section>

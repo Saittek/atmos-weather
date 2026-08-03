@@ -7943,6 +7943,45 @@ html.mobile-perf .earth-nav-glow {
   border-radius: 2px;
   background: rgba(255, 255, 255, 0.08);
 }
+/* Expected rain amount for this hour (always visible) */
+.h-rain-amt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  min-height: 1.55rem;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.h-rain-amt em {
+  font-style: normal;
+}
+.h-rain-num {
+  font-size: 0.78rem;
+  font-weight: 750;
+  color: var(--text-dim, rgba(226, 232, 240, 0.85));
+}
+.h-rain-unit {
+  font-size: 0.58rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: var(--text-mute, rgba(148, 163, 184, 0.9));
+  text-transform: lowercase;
+}
+.h-rain-amt.has-rain .h-rain-num {
+  color: #7dd3fc;
+}
+.h-rain-amt.has-rain .h-rain-unit {
+  color: #38bdf8;
+}
+.h-rain-dry {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-mute, rgba(148, 163, 184, 0.75));
+  opacity: 0.85;
+}
 .h-wind {
   font-size: 0.58rem;
   color: var(--text-mute);
@@ -7960,6 +7999,13 @@ html.mobile-perf .earth-nav-glow {
   font-size: 0.68rem;
   color: var(--text-mute);
 }
+.hourly-legend-rain {
+  color: #7dd3fc;
+}
+.hourly-card {
+  flex: 0 0 76px;
+}
+
 .hourly-legend-rain {
   color: #7dd3fc;
 }
