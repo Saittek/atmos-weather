@@ -16,7 +16,13 @@ export function AccountMenu({ onCloudSync, synced }: Props) {
   // Only show spinner when we have no user yet (token revalidating with no cache)
   if (loading && !user) {
     return (
-      <button type="button" className="chip-btn account-btn" disabled title="Signing you in…">
+      <button
+        type="button"
+        className="chip-btn icon-chip account-btn"
+        disabled
+        title="Signing you in…"
+        aria-label="Signing you in"
+      >
         …
       </button>
     )
@@ -27,7 +33,7 @@ export function AccountMenu({ onCloudSync, synced }: Props) {
       <>
         <button
           type="button"
-          className="chip-btn account-btn account-signin"
+          className="chip-btn icon-chip account-btn account-signin"
           onClick={() => setAuthOpen(true)}
           title="Account"
           aria-label="Account"
@@ -35,7 +41,6 @@ export function AccountMenu({ onCloudSync, synced }: Props) {
           <span className="account-signin-icon" aria-hidden>
             👤
           </span>
-          <span className="account-label">Account</span>
         </button>
         <AuthModal
           open={authOpen}
@@ -50,12 +55,12 @@ export function AccountMenu({ onCloudSync, synced }: Props) {
     <div className="account-menu-wrap">
       <button
         type="button"
-        className={`chip-btn account-btn active ${synced ? 'synced' : ''}`}
+        className={`chip-btn icon-chip account-btn active ${synced ? 'synced' : ''}`}
         onClick={() => setOpen((o) => !o)}
         title={user.email}
+        aria-label={`Account · ${user.name}`}
       >
         <span className="account-avatar">{(user.name || user.email).charAt(0).toUpperCase()}</span>
-        <span className="account-label">{user.name.split(' ')[0]}</span>
       </button>
       {open &&
         createPortal(

@@ -690,14 +690,15 @@ a:hover {
 .alert-hide-btn {
   margin-top: 0.65rem;
 }
-/* Minimized alerts = circle in the main top bar (next to brand / chaser) */
+/* Minimized alerts = same circle size as other topbar buttons */
 .alert-topbar-circle {
   position: relative;
   flex-shrink: 0;
-  width: 2.35rem;
-  height: 2.35rem;
-  min-width: 2.35rem;
-  min-height: 2.35rem;
+  /* size from unified .icon-chip rules when inside .topbar */
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
   padding: 0;
   border-radius: 50%;
   border: 2px solid rgba(254, 202, 202, 0.65);
@@ -715,6 +716,7 @@ a:hover {
     0 4px 14px rgba(127, 29, 29, 0.45);
   animation: alert-circle-pulse 2s ease-in-out infinite;
   z-index: 3;
+  box-sizing: border-box;
 }
 .alert-topbar-circle:hover {
   transform: scale(1.06);
@@ -767,14 +769,7 @@ html.mobile-perf .alert-topbar-circle {
   border-color: rgba(255, 255, 255, 0.3) !important;
   color: #fff !important;
 }
-@media (max-width: 380px) {
-  .alert-topbar-circle {
-    width: 2.2rem;
-    height: 2.2rem;
-    min-width: 2.2rem;
-    min-height: 2.2rem;
-  }
-}
+
 .alert-top-list {
   list-style: none;
   margin: 0.45rem 0 0;
@@ -969,16 +964,39 @@ html.mobile-perf .alert-topbar-circle {
   display: none;
 }
 
-.icon-chip {
-  width: 36px;
-  height: 36px;
-  min-width: 36px;
+/* Unified top-bar control: always a perfect circle (same size for every action) */
+.icon-chip,
+.topbar .chip-btn.icon-chip,
+.topbar .nav-chip.icon-chip,
+.topbar .alert-topbar-circle,
+.topbar .account-btn.icon-chip,
+.topbar .earth-nav-btn {
+  --topbar-btn: 40px;
+  width: var(--topbar-btn) !important;
+  height: var(--topbar-btn) !important;
+  min-width: var(--topbar-btn) !important;
+  min-height: var(--topbar-btn) !important;
+  max-width: var(--topbar-btn) !important;
+  max-height: var(--topbar-btn) !important;
   padding: 0 !important;
-  display: inline-grid;
+  display: inline-grid !important;
   place-items: center;
   border-radius: 50% !important;
-  font-size: 1rem;
+  font-size: 1.05rem;
   line-height: 1;
+  gap: 0 !important;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+@media (max-width: 380px) {
+  .icon-chip,
+  .topbar .chip-btn.icon-chip,
+  .topbar .nav-chip.icon-chip,
+  .topbar .alert-topbar-circle,
+  .topbar .account-btn.icon-chip,
+  .topbar .earth-nav-btn {
+    --topbar-btn: 36px;
+  }
 }
 
 .settings-more-wrap {
@@ -7184,23 +7202,18 @@ html.mobile-perf .panel {
   letter-spacing: 0.02em;
 }
 
-/* Earth / 3D globe nav — mini planet button */
+/* Earth / 3D globe nav — circular control matching other topbar icons */
 .earth-nav-btn {
-  display: inline-flex !important;
-  align-items: center;
-  gap: 0.35rem;
-  flex-shrink: 0;
   text-decoration: none !important;
-  padding: 0.3rem 0.5rem 0.3rem 0.35rem !important;
-  background: linear-gradient(145deg, rgba(14, 116, 144, 0.35), rgba(15, 23, 42, 0.65)) !important;
-  border-color: rgba(56, 189, 248, 0.4) !important;
+  background: linear-gradient(145deg, rgba(14, 116, 144, 0.4), rgba(15, 23, 42, 0.7)) !important;
+  border-color: rgba(56, 189, 248, 0.45) !important;
   color: #e0f2fe !important;
-  font-weight: 700;
+  overflow: hidden;
 }
 .earth-nav-orb {
   position: relative;
-  width: 1.65rem;
-  height: 1.65rem;
+  width: 1.45rem;
+  height: 1.45rem;
   border-radius: 50%;
   flex-shrink: 0;
   background:
@@ -7210,8 +7223,7 @@ html.mobile-perf .panel {
     linear-gradient(145deg, #0ea5e9 0%, #0369a1 45%, #14532d 100%);
   box-shadow:
     inset -3px -2px 6px rgba(0, 0, 0, 0.35),
-    0 0 0 1px rgba(125, 211, 252, 0.35),
-    0 2px 10px rgba(14, 165, 233, 0.35);
+    0 0 0 1px rgba(125, 211, 252, 0.35);
   overflow: hidden;
 }
 .earth-nav-glow {
@@ -7222,8 +7234,7 @@ html.mobile-perf .panel {
   animation: earth-spin-sheen 8s linear infinite;
 }
 .earth-nav-label {
-  font-size: 0.78rem;
-  letter-spacing: 0.02em;
+  display: none; /* icon-only — same shape as other topbar buttons */
 }
 @keyframes earth-spin-sheen {
   from {
@@ -7237,54 +7248,48 @@ html.mobile-perf .earth-nav-glow {
   animation: none;
 }
 
+/* Account button: circle only (no pill with text) */
+.topbar .account-btn.icon-chip {
+  gap: 0 !important;
+}
+.topbar .account-btn .account-label {
+  display: none;
+}
+.topbar .account-btn .account-avatar {
+  width: 1.35rem;
+  height: 1.35rem;
+  font-size: 0.7rem;
+}
+.topbar .account-btn .account-signin-icon {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.topbar-left,
+.topbar-right,
+.quick-nav,
+.settings-bar {
+  align-items: center;
+  gap: 0.35rem;
+}
+
 @media (max-width: 720px) {
   .topbar-left {
     grid-area: brand;
     max-width: none;
     gap: 0.3rem;
   }
-  .chaser-nav-top {
-    width: 2.35rem;
-    height: 2.35rem;
-    min-width: 2.35rem;
-    min-height: 2.35rem;
-    justify-content: center;
-    padding: 0 !important;
-    border-radius: 50% !important;
-  }
-  .chaser-nav-label {
-    display: none;
-  }
-  .earth-nav-btn {
-    width: 2.35rem;
-    height: 2.35rem;
-    min-width: 2.35rem;
-    min-height: 2.35rem;
-    justify-content: center;
-    padding: 0 !important;
-    border-radius: 50% !important;
-  }
-  .earth-nav-orb {
-    width: 1.55rem;
-    height: 1.55rem;
-  }
 }
 @media (max-width: 380px) {
-  .chaser-nav-top {
-    width: 2.2rem;
-    height: 2.2rem;
-    min-width: 2.2rem;
-    min-height: 2.2rem;
-  }
-  .earth-nav-btn {
-    width: 2.2rem;
-    height: 2.2rem;
-    min-width: 2.2rem;
-    min-height: 2.2rem;
-  }
   .brand-mark {
     width: 38px;
     height: 38px;
+  }
+  .alert-topbar-circle {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    min-height: 36px;
   }
 }
 

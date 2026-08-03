@@ -500,17 +500,16 @@ export default function DashboardPage() {
               {stormMode && <span className="brand-tag">Storm mode</span>}
             </div>
           </div>
-          {/* Primary modes: Earth + Radar. Chaser lives under Modes. */}
+          {/* Primary modes — icon-only circles (same shape as right-side controls) */}
           <Link
             to="/globe"
-            className="chip-btn nav-chip earth-nav-btn"
+            className="chip-btn icon-chip nav-chip earth-nav-btn"
             title="3D Earth · global radar"
             aria-label="3D Earth with global radar"
           >
             <span className="earth-nav-orb" aria-hidden>
               <span className="earth-nav-glow" />
             </span>
-            <span className="earth-nav-label hide-sm">Earth</span>
           </Link>
           {/* Hidden alerts → circle in top bar */}
           {alertsMinimized && activeAlerts.length > 0 && (
