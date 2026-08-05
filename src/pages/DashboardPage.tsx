@@ -21,6 +21,7 @@ import { AllergySection } from '../components/AllergySection'
 import { Onboarding } from '../components/Onboarding'
 import { AlertTopBar, AlertTopBarCircle, setAlertsMinimizedStored } from '../components/AlertTopBar'
 import { AmbientOrbs } from '../components/AmbientOrbs'
+import { WeatherAtmosphere } from '../components/WeatherAtmosphere'
 import { AdvancedSection } from '../components/AdvancedSection'
 import { isMobileViewport } from '../utils/device'
 import { DashboardSkeleton } from '../components/Skeleton'
@@ -448,6 +449,13 @@ export default function DashboardPage() {
       {!isMobile && <div className="bg-noise" aria-hidden />}
       <div className="bg-scrim" aria-hidden />
       {!isMobile && <AmbientOrbs />}
+      {weather && (
+        <WeatherAtmosphere
+          code={weather.current.weather_code}
+          isDay={isDaytimeNow(weather)}
+          mobile={isMobile}
+        />
+      )}
 
       {/* Pull-to-refresh indicator (mobile) */}
       {(pull.pulling || pull.refreshing) && (

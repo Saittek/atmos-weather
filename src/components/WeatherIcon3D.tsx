@@ -512,7 +512,8 @@ export function WeatherIcon3D({
         return (
           <>
             <Clouds dark storm />
-            <Drops n={8} className="w3d-precip heavy" />
+            <Drops n={Math.max(dropCount, 14)} className="w3d-precip heavy" />
+            <div className="w3d-splash" />
             <Bolt gradId={boltGradId} />
           </>
         )
@@ -520,7 +521,8 @@ export function WeatherIcon3D({
         return (
           <>
             <Clouds dark storm />
-            <Drops n={6} className="w3d-precip heavy" />
+            <Drops n={Math.max(dropCount, 12)} className="w3d-precip heavy" />
+            <div className="w3d-splash" />
             <Bolt hail gradId={boltGradId} />
           </>
         )
