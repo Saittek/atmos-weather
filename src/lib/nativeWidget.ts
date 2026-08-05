@@ -8,6 +8,7 @@ import type { Units } from '../utils/format'
 import { getWeatherInfo } from '../utils/weatherCodes'
 import { todayDailyIndex, nextPrecipLabel } from '../utils/weatherStory'
 import { willIGetWet } from '../utils/wetSummary'
+import { buildStargazeBrief, gradeLabel } from '../utils/stargaze'
 import { isIOS, isNativeApp } from './native'
 
 export interface WidgetSnapshotPayload {
@@ -34,6 +35,9 @@ export interface WidgetSnapshotPayload {
   sunset?: string
   precipMm?: number
   dayHint?: string
+  /** Tonight stargaze score 0–100 when available */
+  stargazeScore?: number
+  stargazeLabel?: string
 }
 
 function buildDayHint(opts: {
@@ -45,8 +49,14 @@ function buildDayHint(opts: {
   highC?: number
   nextPrecip?: string | null
   wetTitle?: string | null
+  stargazeScore?: number
+  stargazeLabel?: string
 }): string | undefined {
-  const { code, pop, uvMax, windKmh, precipMm, highC, nextPrecip, wetTitle } = opts
+  const { code, pop, uvMax, windKmh, precipMm, highC, nextPrecip, wetTitle, stargazeScore, stargazeLabel } =
+    opts
+  if (stargazeScore != null && stargazeScore >= 68 && stargazeLabel) {
+    return `✨ Tonight ${stargazeScore} · ${stargazeLabel} for stars`
+  }
   // Prefer hyperlocal next precip when available
   if (nextPrecip && /rain|snow|shower|precip|wet|umbrella/i.test(nextPrecip)) {
     return nextPrecip.length > 48 ? `${nextPrecip.slice(0, 45)}…` : nextPrecip
@@ -106,6 +116,18 @@ export function buildWidgetSnapshot(
   const precipN = precipMm != null && Number.isFinite(precipMm) ? Number(precipMm) : undefined
   const nextPrecip = nextPrecipLabel(weather)
   const wet = willIGetWet(weather)
+  let stargazeScore: number | undefined
+  let stargazeLabel: string | undefined
+  try {
+    const sg = buildStargazeBrief(weather, {
+      lat: location.latitude,
+      lon: location.longitude,
+    })
+    stargazeScore = sg.imagingScore
+    stargazeLabel = gradeLabel(sg.imagingGrade)
+  } catch {
+    /* optional */
+  }
 
   return {
     placeName: (location.name || 'Home').replace(/\s*\(Home\)\s*$/i, '').trim() || 'Home',
@@ -143,7 +165,11 @@ export function buildWidgetSnapshot(
       highC: highN,
       nextPrecip,
       wetTitle: wet.title,
+      stargazeScore,
+      stargazeLabel,
     }),
+    stargazeScore,
+    stargazeLabel,
   }
 }
 

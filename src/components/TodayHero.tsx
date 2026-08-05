@@ -3,7 +3,9 @@
  * (Next-hour hero removed — hourly strip covers precip by hour.)
  */
 import { useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import type { AirQualityData, WeatherData } from '../api/types'
+import { buildStargazeBrief, gradeLabel } from '../utils/stargaze'
 import type { Units } from '../utils/format'
 import {
   convertTemp,
@@ -66,6 +68,18 @@ export function TodayHero({ weather, units, placeName, air = null, sourceLine }:
     weather.daily.temperature_2m_min[ti] ?? c.temperature_2m,
     c.temperature_2m,
   )
+
+  const stargaze = useMemo(() => {
+    try {
+      return buildStargazeBrief(weather, {
+        lat: weather.latitude,
+        lon: weather.longitude,
+        air,
+      })
+    } catch {
+      return null
+    }
+  }, [weather, air])
 
   const conditionCards = [
     {
@@ -178,6 +192,15 @@ export function TodayHero({ weather, units, placeName, air = null, sourceLine }:
           <span className="today-chip">
             ↑ {formatTime(sunrise, tz)} · ↓ {formatTime(sunset, tz)}
           </span>
+        )}
+        {stargaze && stargaze.imagingScore >= 45 && (
+          <Link
+            to={`/stargaze?lat=${weather.latitude.toFixed(4)}&lon=${weather.longitude.toFixed(4)}&name=${encodeURIComponent(placeName)}`}
+            className="today-chip today-chip-link"
+            title="Open Stargaze planner"
+          >
+            ✨ Tonight {stargaze.imagingScore} · {gradeLabel(stargaze.imagingGrade)}
+          </Link>
         )}
       </div>
 

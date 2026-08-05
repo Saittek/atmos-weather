@@ -220,7 +220,12 @@ struct SolaraWidgetView: View {
                 .foregroundColor(Color.white.opacity(0.7))
                 .lineLimit(1)
             Spacer(minLength: 0)
-            if let hint = snap.dayHint, !hint.isEmpty {
+            if let sg = snap.stargazeScore, sg >= 55 {
+                Text("✨ \(sg) · \(snap.stargazeLabel ?? "stars")")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(Color(red: 0.7, green: 0.75, blue: 1.0))
+                    .lineLimit(1)
+            } else if let hint = snap.dayHint, !hint.isEmpty {
                 Text(hint)
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(accent.opacity(0.95))

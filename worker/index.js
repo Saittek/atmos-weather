@@ -7,6 +7,7 @@ import { runAlertPushCron } from './push-cron.js'
 import { getVapidConfig } from './push-send.js'
 import { getWeatherVideos } from './weather-videos.js'
 import { getTropicalGlobeData } from './tropical.js'
+import { computeIssPasses } from './iss-passes.js'
 
 const TOKEN_DAYS = 30
 const CELL = 0.2
@@ -657,6 +658,8 @@ export default {
             'weather-videos',
             'tropical',
             'metrics',
+            'sky-kp',
+            'sky-iss',
           ],
           runtime: 'cloudflare-worker',
           pushConfigured: Boolean(getVapidConfig(env)),
@@ -677,6 +680,58 @@ export default {
               'Native aps-environment may be off until App ID has Push; web push uses VAPID',
           },
         })
+      }
+
+      // ── Stargaze: planetary Kp (aurora) ──
+      if (path === '/api/sky/kp' && method === 'GET') {
+        try {
+          const res = await fetch(
+            'https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json',
+            { cf: { cacheTtl: 300, cacheEverything: true } },
+          )
+          if (!res.ok) return err('Kp upstream failed', 502)
+          const data = await res.json()
+          const last = Array.isArray(data) && data.length > 1 ? data[data.length - 1] : null
+          const kp = last ? parseFloat(String(last[1])) : NaN
+          if (!Number.isFinite(kp)) return err('Kp parse failed', 502)
+          const label =
+            kp >= 7
+              ? 'Strong storm (G3+)'
+              : kp >= 5
+                ? 'G1+ storm — aurora possible mid-latitudes'
+                : kp >= 4
+                  ? 'Active — aurora chance higher latitudes'
+                  : kp >= 3
+                    ? 'Unsettled'
+                    : 'Quiet'
+          return json({
+            kp,
+            label,
+            auroraLikely: kp >= 4,
+            source: 'NOAA SWPC',
+            at: last ? String(last[0] || '') : undefined,
+          })
+        } catch (e) {
+          return err(e?.message || 'Kp fetch failed', 502)
+        }
+      }
+
+      // ── Stargaze: rough ISS visible passes (circular-orbit approx from TLE) ──
+      if (path === '/api/sky/iss' && method === 'GET') {
+        const lat = parseFloat(url.searchParams.get('lat') || '')
+        const lon = parseFloat(url.searchParams.get('lon') || '')
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+          return err('lat/lon required', 400)
+        }
+        try {
+          const passes = await computeIssPasses(lat, lon)
+          return json({
+            passes,
+            note: 'Approx ISS passes (elev ≥ 20°). Confirm with NASA Spot the Station.',
+          })
+        } catch (e) {
+          return err(e?.message || 'ISS pass calc failed', 502)
+        }
       }
 
       // Coarse client error pings (no stacks / coords) — ops signal only

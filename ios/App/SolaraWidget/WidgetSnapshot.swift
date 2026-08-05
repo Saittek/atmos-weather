@@ -77,6 +77,9 @@ struct WidgetSnapshot: Codable, Equatable {
     var precipMm: Double?
     /// Short day-relevant tip, e.g. "High UV this afternoon"
     var dayHint: String?
+    /// Tonight stargaze score 0–100 (optional)
+    var stargazeScore: Int?
+    var stargazeLabel: String?
 
     var isStale: Bool {
         Date().timeIntervalSince1970 - updatedAt > SolaraWidgetStore.staleAfter

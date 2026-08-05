@@ -96,6 +96,10 @@ export function FirstRunCoach({
       title: 'Share the day',
       body: 'Tap ↗ on Right now to copy a link, or enable Share card in Settings → Show on home.',
     },
+    {
+      title: 'Stargaze ✨',
+      body: 'Plan the night: sky score, moon, Bortle, ISS passes, and “pack the scope” — open Stargaze from the top bar.',
+    },
   ]
 
   const s = steps[step] ?? steps[0]
