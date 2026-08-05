@@ -55,6 +55,10 @@ import {
   saveModulePrefs,
   type ModulePrefs,
 } from '../lib/modulePrefs'
+import {
+  loadAtmosphereEnabled,
+  saveAtmosphereEnabled,
+} from '../lib/atmospherePrefs'
 import { fireSmokeRisk } from '../utils/fireRisk'
 
 /** Heavy / below-fold — code-split off the critical path */
@@ -153,6 +157,11 @@ export default function DashboardPage() {
   const setModulePrefs = useCallback((next: ModulePrefs) => {
     setModPrefs(next)
     saveModulePrefs(next)
+  }, [])
+  const [atmosphereOn, setAtmosphereOn] = useState(() => loadAtmosphereEnabled())
+  const setAtmosphereEnabled = useCallback((on: boolean) => {
+    setAtmosphereOn(on)
+    saveAtmosphereEnabled(on)
   }, [])
   const {
     location,
@@ -288,6 +297,21 @@ export default function DashboardPage() {
   const onShare = useCallback(async () => {
     if (!location) return
     const url = shareUrl(location)
+    const title = `Solara · ${location.name}`
+    const text =
+      weather != null
+        ? `${location.name} weather — open in Solara`
+        : `Weather for ${location.name}`
+    if (typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ title, text, url })
+        setShareMsg('Shared')
+        window.setTimeout(() => setShareMsg(null), 2000)
+        return
+      } catch (e) {
+        if (e instanceof DOMException && e.name === 'AbortError') return
+      }
+    }
     try {
       await navigator.clipboard.writeText(url)
       setShareMsg('Link copied to clipboard')
@@ -295,7 +319,7 @@ export default function DashboardPage() {
       setShareMsg(url)
     }
     window.setTimeout(() => setShareMsg(null), 2500)
-  }, [location])
+  }, [location, weather])
 
   const radarPath = location
     ? `/radar?lat=${location.latitude.toFixed(4)}&lon=${location.longitude.toFixed(4)}&name=${encodeURIComponent(location.name)}`
@@ -449,7 +473,7 @@ export default function DashboardPage() {
       {!isMobile && <div className="bg-noise" aria-hidden />}
       <div className="bg-scrim" aria-hidden />
       {!isMobile && <AmbientOrbs />}
-      {weather && (
+      {weather && atmosphereOn && (
         <WeatherAtmosphere
           code={weather.current.weather_code}
           isDay={isDaytimeNow(weather)}
@@ -624,6 +648,8 @@ export default function DashboardPage() {
               pushStatusLabel={pushLabel}
               loading={loading}
               refreshing={refreshing}
+              atmosphereEnabled={atmosphereOn}
+              onAtmosphereEnabled={setAtmosphereEnabled}
             />
           </div>
       </header>
@@ -1026,6 +1052,7 @@ export default function DashboardPage() {
         weatherReady={Boolean(weather && location)}
         notifyOn={notifyAlerts}
         hasHome={Boolean(homeLocation)}
+        hasWork={Boolean(workLocation)}
         onEnableNotify={() => setNotifyAlerts(true)}
       />
     </div>

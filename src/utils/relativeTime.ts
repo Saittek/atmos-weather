@@ -6,3 +6,9 @@ export function formatUpdatedAgo(ts: number, now = Date.now()): string {
   if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`
   return `${Math.floor(sec / 86400)}d ago`
 }
+
+/** True when forecast snapshot is old enough that UI should warn. */
+export function isWeatherStale(ts: number | null | undefined, now = Date.now()): boolean {
+  if (ts == null || !Number.isFinite(ts)) return false
+  return now - ts > 45 * 60_000
+}

@@ -6,7 +6,8 @@ import { SolaraWidget } from '@solara/widget'
 import type { LocationResult, WeatherData } from '../api/types'
 import type { Units } from '../utils/format'
 import { getWeatherInfo } from '../utils/weatherCodes'
-import { todayDailyIndex } from '../utils/weatherStory'
+import { todayDailyIndex, nextPrecipLabel } from '../utils/weatherStory'
+import { willIGetWet } from '../utils/wetSummary'
 import { isIOS, isNativeApp } from './native'
 
 export interface WidgetSnapshotPayload {
@@ -42,8 +43,17 @@ function buildDayHint(opts: {
   windKmh?: number
   precipMm?: number
   highC?: number
+  nextPrecip?: string | null
+  wetTitle?: string | null
 }): string | undefined {
-  const { code, pop, uvMax, windKmh, precipMm, highC } = opts
+  const { code, pop, uvMax, windKmh, precipMm, highC, nextPrecip, wetTitle } = opts
+  // Prefer hyperlocal next precip when available
+  if (nextPrecip && /rain|snow|shower|precip|wet|umbrella/i.test(nextPrecip)) {
+    return nextPrecip.length > 48 ? `${nextPrecip.slice(0, 45)}…` : nextPrecip
+  }
+  if (wetTitle && /wet|umbrella|rain|snow/i.test(wetTitle) && !/dry/i.test(wetTitle)) {
+    return wetTitle.length > 48 ? `${wetTitle.slice(0, 45)}…` : wetTitle
+  }
   if (code >= 95) return 'Thunderstorm risk today'
   if (code >= 71 && code <= 77) return 'Snow in the forecast'
   if (pop != null && pop >= 60) return `Rain likely · ${pop}% chance`
@@ -85,23 +95,29 @@ export function buildWidgetSnapshot(
   const sunset = weather.daily?.sunset?.[ti]
   const precipMm = weather.daily?.precipitation_sum?.[ti]
 
-  const highN = high != null && Number.isFinite(high) ? Number(high) : undefined
+  const tempNow = Number(weather.current?.temperature_2m ?? 0)
+  const highN =
+    high != null && Number.isFinite(high) ? Math.max(Number(high), tempNow) : tempNow
+  const lowN =
+    low != null && Number.isFinite(low) ? Math.min(Number(low), tempNow) : tempNow
   const popN = pop != null && Number.isFinite(pop) ? Math.round(Number(pop)) : undefined
   const uvN = uvMax != null && Number.isFinite(uvMax) ? Number(uvMax) : undefined
   const windN = windKmh != null && Number.isFinite(windKmh) ? Number(windKmh) : undefined
   const precipN = precipMm != null && Number.isFinite(precipMm) ? Number(precipMm) : undefined
+  const nextPrecip = nextPrecipLabel(weather)
+  const wet = willIGetWet(weather)
 
   return {
     placeName: (location.name || 'Home').replace(/\s*\(Home\)\s*$/i, '').trim() || 'Home',
     lat: Number(location.latitude),
     lon: Number(location.longitude),
-    tempC: Number(weather.current?.temperature_2m ?? 0),
+    tempC: tempNow,
     feelsLikeC:
       weather.current?.apparent_temperature != null
         ? Number(weather.current.apparent_temperature)
         : undefined,
     highC: highN,
-    lowC: low != null && Number.isFinite(low) ? Number(low) : undefined,
+    lowC: lowN,
     code: Number(code),
     condition: info.label || info.description || 'Weather',
     pop: popN,
@@ -125,6 +141,8 @@ export function buildWidgetSnapshot(
       windKmh: windN,
       precipMm: precipN,
       highC: highN,
+      nextPrecip,
+      wetTitle: wet.title,
     }),
   }
 }

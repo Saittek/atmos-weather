@@ -46,6 +46,9 @@ interface Props {
   pushStatusLabel?: string | null
   loading: boolean
   refreshing?: boolean
+  /** Full-page rain/snow/lightning wash behind UI */
+  atmosphereEnabled?: boolean
+  onAtmosphereEnabled?: (v: boolean) => void
 }
 
 export function SettingsBar({
@@ -83,6 +86,8 @@ export function SettingsBar({
   pushStatusLabel,
   loading,
   refreshing,
+  atmosphereEnabled = true,
+  onAtmosphereEnabled,
 }: Props) {
   const [moreOpen, setMoreOpen] = useState(false)
   const moreRef = useRef<HTMLDivElement>(null)
@@ -172,6 +177,19 @@ export function SettingsBar({
       </div>
 
       <div className="settings-more-toggles">
+        {onAtmosphereEnabled && (
+          <label className="settings-more-row">
+            <input
+              type="checkbox"
+              checked={atmosphereEnabled}
+              onChange={(e) => onAtmosphereEnabled(e.target.checked)}
+            />
+            <span>
+              <strong>Weather atmosphere</strong>
+              <em>Rain, snow &amp; lightning wash behind the app</em>
+            </span>
+          </label>
+        )}
         <label className="settings-more-row">
           <input
             type="checkbox"

@@ -19,7 +19,7 @@ import {
 import { isDaytimeNow } from '../utils/daylight'
 import { nextPrecipLabel, todayDailyIndex } from '../utils/weatherStory'
 import { vsNormalLine } from '../utils/severeTimeline'
-import { formatUpdatedAgo } from '../utils/relativeTime'
+import { formatUpdatedAgo, isWeatherStale } from '../utils/relativeTime'
 import { isMobileViewport } from '../utils/device'
 import { WeatherIcon3D } from './WeatherIcon3D'
 
@@ -120,6 +120,16 @@ export function CurrentWeather({
 
   const updatedLabel =
     updatedAt != null ? formatUpdatedAgo(updatedAt, nowTick) : null
+  const stale = isWeatherStale(updatedAt, nowTick)
+
+  const sourceLine = (() => {
+    const s = weather.solara_source
+    if (s?.strategy) {
+      const short = s.shortModel ? ` · ${s.shortModel}` : ''
+      return `Sources · Solara blend (${s.strategy}${short}) · Open-Meteo`
+    }
+    return 'Sources · Open-Meteo'
+  })()
 
   const onMove = (e: MouseEvent<HTMLElement>) => {
     if (mobile) return
@@ -208,19 +218,23 @@ export function CurrentWeather({
             Local {formatTime(c.time, weather.timezone)}
             {weather.timezone_abbreviation ? ` · ${weather.timezone_abbreviation}` : ''}
             {updatedLabel && (
-              <span className="updated-at">
+              <span className={`updated-at${stale ? ' is-stale' : ''}`}>
                 {' '}
                 · {refreshing ? 'Refreshing…' : `Updated ${updatedLabel}`}
                 {offline ? ' · offline' : ''}
+                {stale && !refreshing ? ' · may be outdated' : ''}
               </span>
             )}
           </p>
           <p className="current-source-line">
-            {weather.solara_source?.strategy
-              ? `Sources · Solara blend · Open-Meteo`
-              : 'Sources · Open-Meteo'}
+            {sourceLine}
             {updatedLabel ? ` · ${refreshing ? 'refreshing' : updatedLabel}` : ''}
           </p>
+          {rainLabel && (
+            <p className="current-next-precip" role="status">
+              {rainLabel}
+            </p>
+          )}
         </div>
 
         <div className="current-3d-wrap" title={info.description}>
@@ -252,7 +266,12 @@ export function CurrentWeather({
         </div>
 
         <div className="current-chips" aria-label="Quick stats">
-          {offline && <span className="current-chip offline">Offline</span>}
+          {offline && <span className="current-chip offline">Offline · last saved</span>}
+          {stale && !offline && (
+            <span className="current-chip stale" title="Pull down to refresh">
+              Data aging
+            </span>
+          )}
           {alertCount > 0 && (
             <span className="current-chip alert">
               {alertCount} alert{alertCount > 1 ? 's' : ''}

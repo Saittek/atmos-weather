@@ -24,14 +24,15 @@ export interface ModulePrefs {
 
 const KEY = 'solara-module-prefs-v1'
 
+/** Calm defaults — fewer open panels on first launch / mobile. */
 export const DEFAULT_MODULE_PREFS: ModulePrefs = {
-  dress: true,
+  dress: false,
   videos: false,
   fireMap: false,
   chat: false,
   shareCard: false,
   models: false,
-  planning: true, // still under collapsed Advanced
+  planning: false, // Advanced still available when user opts in
 }
 
 export function loadModulePrefs(): ModulePrefs {

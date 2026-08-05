@@ -14,6 +14,7 @@ interface Props {
   notifyOn: boolean
   onEnableNotify: () => void | Promise<boolean | void>
   hasHome: boolean
+  hasWork?: boolean
 }
 
 export function markFirstWeatherOk(): void {
@@ -29,6 +30,7 @@ export function FirstRunCoach({
   notifyOn,
   onEnableNotify,
   hasHome,
+  hasWork = false,
 }: Props) {
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState(0)
@@ -61,8 +63,14 @@ export function FirstRunCoach({
     {
       title: 'You’re set',
       body: hasHome
-        ? 'Home is pinned. Solara will keep this place ready on open.'
-        : 'Tip: set Home (🏠) on a place so alerts and the widget use the right pin.',
+        ? 'Home is pinned. Solara will keep this place ready on open and on the widget.'
+        : 'Set Home with the 🏠 button so alerts, rain watch, and the widget use your pin.',
+    },
+    {
+      title: 'Home & Work',
+      body: hasWork
+        ? 'Work is saved too — use the Work chip in the top bar for one-tap commute weather.'
+        : 'Optional: open your office/school and save Work (briefcase chip) for commute checks.',
     },
     {
       title: 'Alerts when closed',
@@ -81,8 +89,12 @@ export function FirstRunCoach({
     {
       title: nativeIos ? 'Home Screen widget' : 'Install Solara',
       body: nativeIos
-        ? 'Long-press Home Screen → Add Widget → Solara Weather for glanceable temps and UV.'
+        ? 'Long-press Home Screen → Add Widget → Solara Weather for temp, rain %, UV, and a day tip.'
         : 'Install to your home screen for one-tap weather (PWA). On iPhone Safari: Share → Add to Home Screen.',
+    },
+    {
+      title: 'Share the day',
+      body: 'Tap ↗ on Right now to copy a link, or enable Share card in Settings → Show on home.',
     },
   ]
 

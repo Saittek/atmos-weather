@@ -91,3 +91,36 @@ export function setAnalyticsOptOut(optOut: boolean) {
 export function isAnalyticsOptedOut(): boolean {
   return optedOut()
 }
+
+/**
+ * Privacy-light client error ping (no stack, no coords).
+ * Used for ops signal only — never PII.
+ */
+export function trackClientError(message: string, context?: string): void {
+  if (typeof window === 'undefined') return
+  if (optedOut()) return
+  if (!import.meta.env.PROD && !import.meta.env.VITE_ANALYTICS_DEV) return
+
+  const base = getApiBase()
+  const url = `${base || ''}/api/metrics/error`
+  const body = JSON.stringify({
+    msg: String(message || 'error').slice(0, 160),
+    ctx: String(context || '').slice(0, 64),
+    path: normalizePagePath(window.location.pathname),
+  })
+
+  try {
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon(url, new Blob([body], { type: 'application/json' }))
+      return
+    }
+  } catch {
+    /* fall through */
+  }
+  void fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body,
+    keepalive: true,
+  }).catch(() => {})
+}

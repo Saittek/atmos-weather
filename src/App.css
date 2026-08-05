@@ -6894,6 +6894,24 @@ label.fire-toggle {
   border-color: rgba(167, 139, 250, 0.35);
   color: #c4b5fd;
 }
+.current-next-precip {
+  margin: 0.35rem 0 0;
+  font-size: 0.82rem;
+  font-weight: 650;
+  color: #7dd3fc;
+  line-height: 1.35;
+}
+[data-theme='light'] .current-next-precip {
+  color: #0369a1;
+}
+.updated-at.is-stale {
+  color: #fbbf24;
+}
+.current-chip.stale {
+  border-color: rgba(251, 191, 36, 0.45);
+  color: #fde68a;
+  background: rgba(251, 191, 36, 0.12);
+}
 .current-chip.offline {
   background: rgba(148, 163, 184, 0.2);
   color: #cbd5e1;

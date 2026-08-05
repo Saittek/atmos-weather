@@ -21,7 +21,7 @@ After merging to `main`, ship a native build so iOS matches the live website.
 | App ID | `com.solara.weather` |
 | Widget ID | `com.solara.weather.widget` |
 | App Group | `group.com.solara.weather` on **both** App IDs |
-| Push | Push Notifications capability on main App ID |
+| Push | **Optional for current main** — leave OFF until you re-add `aps-environment` |
 | Profiles | App Store distribution for app + widget |
 
 ## After install from TestFlight

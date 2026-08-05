@@ -1,7 +1,16 @@
 # Ship Solara now — master checklist
 
-**You** must finish the Apple portal steps (1–2).  
-**Repo + Codemagic** are prepared for everything after that.
+**You** finish Apple portal + click Codemagic (sections A–B).  
+**Repo** is archive-ready: Push entitlement **off**, App Groups on, widget embedded.
+
+**After TestFlight install:** run **`docs/DEVICE_QA.md`**.  
+**Ops / outages:** **`docs/OPS_RUNBOOK.md`**.
+
+```bash
+# From weather-app/
+npm run ship:preflight   # local checks + live /api/health
+npm run ship:ios         # same + Codemagic reminder
+```
 
 ---
 

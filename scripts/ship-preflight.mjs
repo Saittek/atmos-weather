@@ -43,6 +43,9 @@ const must = [
   'public/support.html',
   'docs/SHIP_NOW.md',
   'docs/APP_STORE_LISTING.md',
+  'docs/DEVICE_QA.md',
+  'docs/OPS_RUNBOOK.md',
+  'docs/TESTFLIGHT_CHECKLIST.md',
   'worker/apns.js',
 ]
 for (const f of must) {
@@ -53,7 +56,9 @@ for (const f of must) {
 // --- Entitlements ---
 console.log('\nEntitlements')
 const appEnt = read('ios/App/App/App.entitlements') || ''
-if (appEnt.includes('aps-environment')) {
+// Ignore XML comments — only real <key>aps-environment</key> counts
+const hasApsKey = /<key>\s*aps-environment\s*<\/key>/.test(appEnt)
+if (hasApsKey) {
   ok('App: aps-environment (Push) — App ID must have Push Notifications enabled')
   warn('If Codemagic fails on aps-environment: enable Push on App ID or remove aps-environment')
 } else {

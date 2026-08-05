@@ -646,6 +646,8 @@ export default {
         return json({
           ok: true,
           service: 'solara-api',
+          version: '1.0.0',
+          time: new Date().toISOString(),
           features: [
             'auth',
             'chat',
@@ -657,6 +659,7 @@ export default {
           ],
           runtime: 'cloudflare-worker',
           pushConfigured: Boolean(getVapidConfig(env)),
+          d1: Boolean(env.DB),
           // Secret presence only — never values
           secrets: {
             jwt: Boolean(getJwtSecret(env)),
@@ -668,7 +671,35 @@ export default {
               Boolean(env.APNS_BUNDLE_ID) &&
               Boolean(env.APNS_PRIVATE_KEY),
           },
+          ship: {
+            pushEntitlementNote:
+              'Native aps-environment may be off until App ID has Push; web push uses VAPID',
+          },
         })
+      }
+
+      // Coarse client error pings (no stacks / coords) — ops signal only
+      if (path === '/api/metrics/error' && method === 'POST') {
+        const limited = rateLimitAuth(request, 'err-metrics', 30, 60 * 1000)
+        if (limited) return limited
+        const body = await request.json().catch(() => ({}))
+        const msg = String(body?.msg || 'error').slice(0, 160)
+        const ctx = String(body?.ctx || '').slice(0, 64)
+        const pathBucket = sanitizeMetricPath(body?.path || '/other')
+        console.warn('[client-error]', pathBucket, ctx, msg)
+        // Best-effort counter in D1 if table exists
+        try {
+          const day = new Date().toISOString().slice(0, 10)
+          await env.DB.prepare(
+            `INSERT INTO page_metrics (day, path, hits) VALUES (?, ?, 1)
+             ON CONFLICT(day, path) DO UPDATE SET hits = hits + 1`,
+          )
+            .bind(day, `err:${pathBucket}`)
+            .run()
+        } catch {
+          /* table may be missing in older envs */
+        }
+        return json({ ok: true })
       }
 
       // ── Privacy-light page metrics (aggregate path counts only) ──

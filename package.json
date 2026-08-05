@@ -22,7 +22,7 @@
     "test:smoke": "node scripts/smoke.mjs",
     "test:smoke:local": "node scripts/smoke.mjs",
     "ship:preflight": "node scripts/ship-preflight.mjs",
-    "ship:ios": "node scripts/ship-preflight.mjs && node -e \"console.log('\\n→ Codemagic: start workflow ios-testflight on main\\n→ Guide: docs/SHIP_NOW.md\\n')\""
+    "ship:ios": "node scripts/ship-preflight.mjs && node -e \"console.log('\\n→ Codemagic: start workflow ios-testflight on main\\n→ Guide: docs/SHIP_NOW.md\\n→ After install: docs/DEVICE_QA.md\\n')\""
   },
   "dependencies": {
     "@block65/webcrypto-web-push": "^1.0.2",

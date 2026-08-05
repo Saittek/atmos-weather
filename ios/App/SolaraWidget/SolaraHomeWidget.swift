@@ -220,6 +220,13 @@ struct SolaraWidgetView: View {
                 .foregroundColor(Color.white.opacity(0.7))
                 .lineLimit(1)
             Spacer(minLength: 0)
+            if let hint = snap.dayHint, !hint.isEmpty {
+                Text(hint)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(accent.opacity(0.95))
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.85)
+            }
             HStack(spacing: 6) {
                 if let hi = snap.highLabel, let lo = snap.lowLabel {
                     Text("H\(hi) L\(lo)")

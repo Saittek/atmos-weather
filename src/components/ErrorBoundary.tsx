@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
+import { trackClientError } from '../lib/analytics'
 
 interface Props {
   children: ReactNode
@@ -18,6 +19,11 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('Solara UI error:', error, info.componentStack)
+    try {
+      trackClientError(error.message || 'render', 'error-boundary')
+    } catch {
+      /* ignore */
+    }
   }
 
   private retry = () => {

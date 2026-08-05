@@ -23,7 +23,11 @@ export function ShareWeatherCard({ weather, location, units }: Props) {
   const hi = weather.daily.temperature_2m_max[ti]
   const lo = weather.daily.temperature_2m_min[ti]
 
-  const text = `${location.name}: ${formatTemp(c.temperature_2m, units)} ${info.label}. ${wet.title} H ${formatTemp(hi, units)} / L ${formatTemp(lo, units)}. — via Solara`
+  const highSafe =
+    hi != null && Number.isFinite(hi) ? Math.max(hi, c.temperature_2m) : c.temperature_2m
+  const lowSafe =
+    lo != null && Number.isFinite(lo) ? Math.min(lo, c.temperature_2m) : c.temperature_2m
+  const text = `${location.name}: ${formatTemp(c.temperature_2m, units)} ${info.label}. ${wet.title}. H ${formatTemp(highSafe, units)} / L ${formatTemp(lowSafe, units)} — via Solara Weather`
   const url = shareUrl(location)
 
   const copy = useCallback(async () => {
@@ -37,12 +41,19 @@ export function ShareWeatherCard({ weather, location, units }: Props) {
   }, [text, url])
 
   const nativeShare = useCallback(async () => {
-    if (navigator.share) {
+    if (typeof navigator.share === 'function') {
       try {
-        await navigator.share({ title: `Weather · ${location.name}`, text, url })
+        await navigator.share({
+          title: `Solara · ${location.name}`,
+          text,
+          url,
+        })
+        setMsg('Shared')
+        window.setTimeout(() => setMsg(null), 2000)
         return
-      } catch {
-        /* fall through */
+      } catch (e) {
+        // User cancel — don't fall through to copy spam
+        if (e instanceof DOMException && e.name === 'AbortError') return
       }
     }
     await copy()
@@ -89,7 +100,7 @@ export function ShareWeatherCard({ weather, location, units }: Props) {
     ctx.fillStyle = '#94a3b8'
     ctx.font = '500 18px system-ui,sans-serif'
     ctx.fillText(
-      `H ${formatTemp(hi, units)}  ·  L ${formatTemp(lo, units)}  ·  Feels ${formatTemp(c.apparent_temperature, units)}`,
+      `H ${formatTemp(highSafe, units)}  ·  L ${formatTemp(lowSafe, units)}  ·  Feels ${formatTemp(c.apparent_temperature, units)}`,
       40,
       360,
     )
