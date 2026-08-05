@@ -365,8 +365,19 @@ export function WeatherIcon3D({
   const uid = useId().replace(/:/g, '')
   const boltGradId = `boltGrad-${uid}`
   const { kind, intensity } = weatherKindFromCode(code, isDay)
-  /* More drops so rain reads clearly on dark clouds / small icons */
-  const dropCount = intensity === 1 ? 9 : intensity === 2 ? 14 : 18
+  /* Hero (lg/xl + forceAnimate) gets denser rain so “Right now” reads clearly */
+  const hero = forceAnimate && (size === 'lg' || size === 'xl')
+  const dropCount = hero
+    ? intensity === 1
+      ? 14
+      : intensity === 2
+        ? 20
+        : 26
+    : intensity === 1
+      ? 9
+      : intensity === 2
+        ? 14
+        : 18
   const flakeCount = intensity === 1 ? 7 : intensity === 2 ? 11 : 15
   // No periodic remount — remounting every few seconds caused a visible snap to frame 0
 
@@ -451,6 +462,7 @@ export function WeatherIcon3D({
           <>
             <Clouds />
             <Drops n={dropCount} className="w3d-precip light" />
+            {hero && <div className="w3d-splash" />}
           </>
         )
       case 'freezing-drizzle':
@@ -466,7 +478,7 @@ export function WeatherIcon3D({
           <>
             <Clouds dark={intensity > 1} />
             <Drops n={dropCount} className={`w3d-precip ${intensity > 2 ? 'heavy' : 'med'}`} />
-            {intensity > 2 && <div className="w3d-splash" />}
+            {(intensity > 1 || hero) && <div className="w3d-splash" />}
           </>
         )
       case 'freezing-rain':
@@ -475,6 +487,7 @@ export function WeatherIcon3D({
             <Clouds dark />
             <Drops n={dropCount} className="w3d-precip med icy" />
             <div className="w3d-ice-glaze" />
+            {hero && <div className="w3d-splash" />}
           </>
         )
       case 'snow':
@@ -498,6 +511,7 @@ export function WeatherIcon3D({
             <Sun small />
             <Clouds />
             <Drops n={dropCount} className={`w3d-precip shower ${intensity > 2 ? 'heavy' : 'med'}`} />
+            {(intensity > 1 || hero) && <div className="w3d-splash" />}
           </>
         )
       case 'snow-showers':
