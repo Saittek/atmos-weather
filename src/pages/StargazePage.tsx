@@ -4,10 +4,11 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { useWeather } from '../hooks/useWeather'
+import { useWeather, sameExactPlace } from '../hooks/useWeather'
 import { SearchBar } from '../components/SearchBar'
 import { UnitToggle } from '../components/UnitToggle'
 import { MoonPhaseIcon } from '../components/MoonPhaseIcon'
+import { ClearSkyChart } from '../components/ClearSkyChart'
 import type { LocationResult } from '../api/types'
 import { fetchIssPasses, fetchKpIndex, type IssSnapshot } from '../api/skyExtras'
 import { formatSpeed, formatTime } from '../utils/format'
@@ -20,7 +21,17 @@ import {
   type StargazeGrade,
   type StargazeHour,
 } from '../utils/stargaze'
-import { sameExactPlace } from '../hooks/useWeather'
+import { moonGeometry } from '../utils/moonTimes'
+import { brightPlanetsTonight } from '../utils/planetVisibility'
+import { upcomingSkyEvents } from '../utils/skyEvents'
+import {
+  addDarkSite,
+  distanceKm,
+  driveHintKm,
+  loadDarkSites,
+  removeDarkSite,
+  type DarkSite,
+} from '../utils/darkSites'
 
 const RED_KEY = 'solara-stargaze-red-v1'
 
@@ -92,6 +103,7 @@ export default function StargazePage() {
   const [compareOn, setCompareOn] = useState(false)
   const [homeWeatherScore, setHomeWeatherScore] = useState<number | null>(null)
   const [notifyMsg, setNotifyMsg] = useState<string | null>(null)
+  const [sites, setSites] = useState<DarkSite[]>(() => loadDarkSites())
 
   const qLat = parseFloat(params.get('lat') ?? '')
   const qLon = parseFloat(params.get('lon') ?? '')
@@ -344,6 +356,68 @@ export default function StargazePage() {
   const tz = weather?.timezone
   const placeName = location?.name || 'Choose a place'
 
+  const moonGeo = useMemo(() => {
+    if (!location) return null
+    return moonGeometry(location.latitude, location.longitude)
+  }, [location?.latitude, location?.longitude])
+
+  const planets = useMemo(() => {
+    if (!location) return []
+    return brightPlanetsTonight(location.latitude, location.longitude)
+  }, [location?.latitude, location?.longitude])
+
+  const events = useMemo(() => upcomingSkyEvents(new Date(), 5), [])
+
+  const fmtMs = (ms: number | null | undefined) => {
+    if (ms == null) return '—'
+    try {
+      return new Date(ms).toLocaleTimeString(undefined, {
+        hour: 'numeric',
+        minute: '2-digit',
+        timeZone: tz,
+      })
+    } catch {
+      return new Date(ms).toLocaleTimeString(undefined, {
+        hour: 'numeric',
+        minute: '2-digit',
+      })
+    }
+  }
+
+  const saveSite = () => {
+    if (!location) return
+    setSites(
+      addDarkSite({
+        name: location.name,
+        latitude: location.latitude,
+        longitude: location.longitude,
+      }),
+    )
+  }
+
+  // Annual darkness: hours of night per month (approx from lat)
+  const annualDark = useMemo(() => {
+    if (!location) return []
+    const lat = location.latitude
+    const months = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D']
+    return months.map((m, i) => {
+      // Rough: night hours ~ 12 - 4*sin(lat) * cos(day of year peak)
+      const day = i * 30 + 15
+      const decl = 23.44 * Math.cos(((day - 172) * Math.PI) / 180)
+      const latR = (lat * Math.PI) / 180
+      const dR = (decl * Math.PI) / 180
+      const cosH =
+        (Math.sin((-0.83 * Math.PI) / 180) - Math.sin(latR) * Math.sin(dR)) /
+        (Math.cos(latR) * Math.cos(dR))
+      let dayLen = 12
+      if (cosH >= 1) dayLen = 0
+      else if (cosH <= -1) dayLen = 24
+      else dayLen = (24 / Math.PI) * Math.acos(Math.max(-1, Math.min(1, cosH)))
+      const night = Math.max(0, Math.min(24, 24 - dayLen))
+      return { m, hours: Math.round(night * 10) / 10 }
+    })
+  }, [location?.latitude])
+
   return (
     <div className={`sg-page app${redMode ? ' sg-red' : ''}`} data-page="stargaze">
       <header className="sg-topbar">
@@ -411,7 +485,7 @@ export default function StargazePage() {
               <p className="sg-kicker">Tonight at {placeName}</p>
               <div className="sg-hero-grid">
                 <div className="sg-score-block">
-                  <p className="sg-score-label">Imaging score</p>
+                  <p className="sg-score-label">Imaging</p>
                   <p className="sg-score-big">
                     {shown.imagingScore}
                     <span className="sg-score-max">/100</span>
@@ -421,15 +495,13 @@ export default function StargazePage() {
                   </p>
                 </div>
                 <div className="sg-score-block secondary">
-                  <p className="sg-score-label">Right now</p>
+                  <p className="sg-score-label">Visual</p>
                   <p className="sg-score-mid">
-                    {shown.nowGrade === 'daylight' ? '—' : shown.nowScore}
-                    {shown.nowGrade !== 'daylight' && (
-                      <span className="sg-score-max">/100</span>
-                    )}
+                    {shown.visualScore}
+                    <span className="sg-score-max">/100</span>
                   </p>
-                  <p className={`sg-grade-pill ${gradeClass(shown.nowGrade)}`}>
-                    {gradeLabel(shown.nowGrade)}
+                  <p className={`sg-grade-pill ${gradeClass(shown.visualGrade)}`}>
+                    {gradeLabel(shown.visualGrade)}
                   </p>
                 </div>
                 <div className="sg-moon-block">
@@ -439,6 +511,15 @@ export default function StargazePage() {
                       {shown.moon.emoji} {shown.moon.name}
                     </p>
                     <p className="sg-moon-illum">{shown.moon.illumination}% illuminated</p>
+                    {moonGeo && (
+                      <p className="sg-moon-illum">
+                        ↑ {fmtMs(moonGeo.riseMs)} · transit {fmtMs(moonGeo.transitMs)}
+                        {moonGeo.transitAlt != null ? ` (${moonGeo.transitAlt}°)` : ''} · ↓{' '}
+                        {fmtMs(moonGeo.setMs)}
+                        {moonGeo.upNow ? ' · up now' : ''}
+                      </p>
+                    )}
+                    <p className="sg-moon-illum">{shown.sqm.label}</p>
                   </div>
                 </div>
               </div>
@@ -520,10 +601,10 @@ export default function StargazePage() {
 
             <section className="panel sg-darkness" aria-label="Darkness">
               <div className="panel-header">
-                <h2>Darkness</h2>
-                <span className="panel-hint">Astronomical night (sun &lt; −18°)</span>
+                <h2>Twilight & darkness</h2>
+                <span className="panel-hint">Civil · nautical · astronomical</span>
               </div>
-              <div className="sg-dark-grid">
+              <div className="sg-dark-grid sg-dark-grid-6">
                 <div>
                   <span className="label">Sunset</span>
                   <span className="value">
@@ -531,12 +612,28 @@ export default function StargazePage() {
                   </span>
                 </div>
                 <div>
-                  <span className="label">Dark from</span>
+                  <span className="label">Civil dusk</span>
+                  <span className="value">{shown.civilDuskLabel ?? '—'}</span>
+                </div>
+                <div>
+                  <span className="label">Nautical dusk</span>
+                  <span className="value">{shown.nauticalDuskLabel ?? '—'}</span>
+                </div>
+                <div>
+                  <span className="label">Astro dark from</span>
                   <span className="value">{shown.darkStartLabel ?? '—'}</span>
                 </div>
                 <div>
-                  <span className="label">Dark until</span>
+                  <span className="label">Astro dark until</span>
                   <span className="value">{shown.darkEndLabel ?? '—'}</span>
+                </div>
+                <div>
+                  <span className="label">Nautical dawn</span>
+                  <span className="value">{shown.nauticalDawnLabel ?? '—'}</span>
+                </div>
+                <div>
+                  <span className="label">Civil dawn</span>
+                  <span className="value">{shown.civilDawnLabel ?? '—'}</span>
                 </div>
                 <div>
                   <span className="label">Sunrise</span>
@@ -550,13 +647,162 @@ export default function StargazePage() {
               </p>
             </section>
 
+            {/* Planets */}
+            <section className="panel" aria-label="Planets">
+              <div className="panel-header">
+                <h2>Bright planets</h2>
+                <span className="panel-hint">Rough evening placement</span>
+              </div>
+              <ul className="sg-planets">
+                {planets.map((p) => (
+                  <li key={p.id} className={p.visible ? 'up' : 'down'}>
+                    <span>
+                      {p.emoji} {p.name}
+                    </span>
+                    <span>{p.note}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            {/* Events */}
+            <section className="panel" aria-label="Sky events">
+              <div className="panel-header">
+                <h2>Meteor showers & events</h2>
+              </div>
+              <ul className="sg-events">
+                {events.map((e) => (
+                  <li key={e.id} className={`sg-event ${e.status}`}>
+                    <span className="sg-event-emoji">{e.emoji}</span>
+                    <div>
+                      <strong>{e.name}</strong>
+                      <p>
+                        {e.when} · {e.rate}
+                      </p>
+                      <p className="sg-event-note">{e.note}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            {/* Annual darkness */}
+            <section className="panel" aria-label="Annual darkness">
+              <div className="panel-header">
+                <h2>Annual darkness</h2>
+                <span className="panel-hint">Avg night hours / month @ this lat</span>
+              </div>
+              <div className="sg-annual">
+                {annualDark.map((m) => (
+                  <div key={m.m} className="sg-annual-col">
+                    <div
+                      className="sg-annual-bar"
+                      style={{ height: `${(m.hours / 18) * 100}%` }}
+                      title={`${m.hours}h`}
+                    />
+                    <span>{m.m}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {/* Dark sites + radar */}
+            <section className="panel" aria-label="Dark sites">
+              <div className="panel-header">
+                <h2>Dark sites</h2>
+                <button type="button" className="chip-btn" onClick={saveSite}>
+                  Save this place
+                </button>
+              </div>
+              {sites.length === 0 && (
+                <p className="muted-center">Save observing spots for one-tap jumps.</p>
+              )}
+              <ul className="sg-sites">
+                {sites.map((s) => {
+                  const km = location
+                    ? distanceKm(location, s)
+                    : homeLocation
+                      ? distanceKm(homeLocation, s)
+                      : 0
+                  return (
+                    <li key={s.id}>
+                      <button
+                        type="button"
+                        className="sg-site-go"
+                        onClick={() =>
+                          onSelect({
+                            id: Date.now(),
+                            name: s.name,
+                            latitude: s.latitude,
+                            longitude: s.longitude,
+                          })
+                        }
+                      >
+                        <strong>{s.name}</strong>
+                        <span>
+                          {driveHintKm(km)}
+                          {homeLocation
+                            ? ` · ${driveHintKm(distanceKm(homeLocation, s))} from Home`
+                            : ''}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="chip-btn"
+                        onClick={() => setSites(removeDarkSite(s.id))}
+                      >
+                        ✕
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+              {location && (
+                <Link
+                  className="chip-btn sg-radar-link"
+                  to={`/radar?lat=${location.latitude.toFixed(4)}&lon=${location.longitude.toFixed(4)}&name=${encodeURIComponent(location.name)}`}
+                >
+                  📡 Live radar / clouds
+                </Link>
+              )}
+            </section>
+
+            {weather && (
+              <section className="panel sg-hours-panel" aria-label="Clear sky chart">
+                <div className="panel-header">
+                  <h2>Clear sky chart</h2>
+                  <span className="panel-hint">Cloud · transparency · seeing · dark</span>
+                </div>
+                <ClearSkyChart hours={shown.hours} />
+              </section>
+            )}
+
             {weather && (
               <section className="panel sg-hours-panel" aria-label="Hourly sky">
                 <div className="panel-header">
-                  <h2>Hourly sky quality</h2>
+                  <h2>Hourly score strip</h2>
                   <span className="panel-hint">Higher = better</span>
                 </div>
                 <HourStrip hours={shown.hours} />
+              </section>
+            )}
+
+            {shown.bestNightsMonth.length > 0 && (
+              <section className="panel" aria-label="Best nights">
+                <div className="panel-header">
+                  <h2>Best nights ahead</h2>
+                </div>
+                <ol className="sg-best-nights">
+                  {shown.bestNightsMonth.map((n, i) => (
+                    <li key={n.dateKey}>
+                      <span className="sg-bn-rank">#{i + 1}</span>
+                      <strong>{n.label}</strong>
+                      <span>
+                        {n.score}/100 · ☁️{n.cloudAvg}% · 🌙{n.moonIllum}%
+                      </span>
+                    </li>
+                  ))}
+                </ol>
               </section>
             )}
 

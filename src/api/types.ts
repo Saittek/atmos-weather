@@ -44,6 +44,10 @@ export interface HourlyWeather {
   weather_code: number[]
   pressure_msl: number[]
   cloud_cover: number[]
+  /** Open-Meteo layer clouds (optional if model omits) */
+  cloud_cover_low?: number[]
+  cloud_cover_mid?: number[]
+  cloud_cover_high?: number[]
   visibility: number[]
   wind_speed_10m: number[]
   wind_direction_10m: number[]

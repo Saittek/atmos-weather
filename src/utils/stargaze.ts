@@ -8,6 +8,7 @@ import { parseSunTime } from './daylight'
 import { fireSmokeRisk } from './fireRisk'
 import { parseWeatherLocal } from './format'
 import { moonPhase } from './moon'
+import { sqmFromBortle } from './sqmEstimate'
 import { suggestTargets, type SkyTarget } from './stargazeTargets'
 import { todayDailyIndex } from './weatherStory'
 
@@ -21,6 +22,12 @@ export interface StargazeHour {
   score: number
   grade: StargazeGrade
   cloud: number
+  cloudLow: number
+  cloudMid: number
+  cloudHigh: number
+  hasCloudLayers: boolean
+  /** 0–100 transparency (higher = clearer air) */
+  transparency: number
   humidity: number
   windKmh: number
   pop: number
@@ -28,8 +35,13 @@ export interface StargazeHour {
   visibilityM: number
   isNight: boolean
   isDark: boolean
+  /** Civil / nautical / astronomical */
+  twilight: 'day' | 'civil' | 'nautical' | 'astronomical' | 'night'
   seeing: number
   dewRisk: number
+  /** Visual score vs imaging (moon hurts imaging more) */
+  visualScore: number
+  imagingHourScore: number
 }
 
 export interface StargazeWindow {
@@ -62,11 +74,15 @@ export interface StargazeBrief {
   /** Composite after Bortle / smoke / etc. */
   imagingScore: number
   imagingGrade: StargazeGrade
+  /** Visual observing (moon less punitive) */
+  visualScore: number
+  visualGrade: StargazeGrade
   go: GoNoGo
   goLabel: string
   goDetail: string
   moon: ReturnType<typeof moonPhase>
   bortle: BortleEstimate
+  sqm: { sqm: number; label: string; mcd: number }
   seeingNow: number
   seeingLabel: string
   dewRisk: number
@@ -80,9 +96,18 @@ export interface StargazeBrief {
   darkEndMs: number | null
   darkStartLabel: string | null
   darkEndLabel: string | null
+  civilDuskMs: number | null
+  nauticalDuskMs: number | null
+  civilDawnMs: number | null
+  nauticalDawnMs: number | null
+  civilDuskLabel: string | null
+  nauticalDuskLabel: string | null
+  civilDawnLabel: string | null
+  nauticalDawnLabel: string | null
   hours: StargazeHour[]
   bestWindow: StargazeWindow | null
   nights: NightCard[]
+  bestNightsMonth: NightCard[]
   targets: SkyTarget[]
   tips: string[]
   factors: { label: string; value: string; tone: 'good' | 'ok' | 'bad' }[]
@@ -129,6 +154,58 @@ export function isAstronomicalDark(lat: number, lon: number, ms: number): boolea
 
 export function isNightSun(lat: number, lon: number, ms: number): boolean {
   return solarElevationDeg(lat, lon, ms) < -0.8
+}
+
+export function twilightBand(
+  lat: number,
+  lon: number,
+  ms: number,
+): StargazeHour['twilight'] {
+  const el = solarElevationDeg(lat, lon, ms)
+  if (el >= -0.8) return 'day'
+  if (el >= -6) return 'civil'
+  if (el >= -12) return 'nautical'
+  if (el >= -18) return 'astronomical'
+  return 'night'
+}
+
+/** Transparency 0–100 from RH, visibility, high cloud, smoke. */
+export function estimateTransparency(opts: {
+  humidity: number
+  visibilityM: number
+  cloudHigh: number
+  smokePenalty: number
+}): number {
+  let t = 92
+  if (opts.humidity > 50) t -= (opts.humidity - 50) * 0.7
+  if (opts.humidity > 80) t -= 10
+  if (opts.visibilityM < 15000) t -= 12
+  if (opts.visibilityM < 8000) t -= 18
+  if (opts.cloudHigh > 40) t -= (opts.cloudHigh - 40) * 0.35
+  t -= opts.smokePenalty * 1.2
+  return Math.round(clamp(t, 5, 98))
+}
+
+function findTwilightCrossing(
+  lat: number,
+  lon: number,
+  fromMs: number,
+  toMs: number,
+  targetEl: number,
+  rising: boolean,
+): number | null {
+  const step = 5 * 60_000
+  let prev = solarElevationDeg(lat, lon, fromMs)
+  for (let t = fromMs + step; t <= toMs; t += step) {
+    const el = solarElevationDeg(lat, lon, t)
+    if (rising) {
+      if (prev < targetEl && el >= targetEl) return t
+    } else {
+      if (prev > targetEl && el <= targetEl) return t
+    }
+    prev = el
+  }
+  return null
 }
 
 function clamp(n: number, lo: number, hi: number): number {
@@ -433,23 +510,22 @@ export function buildStargazeBrief(
     riseMs = sunsetMs + 12 * 3600_000
   }
 
-  // Prefer solar-elevation astronomical dark when we have lat/lon
+  // Twilight bands from solar elevation
   let darkStartMs: number | null = null
   let darkEndMs: number | null = null
+  let civilDuskMs: number | null = null
+  let nauticalDuskMs: number | null = null
+  let civilDawnMs: number | null = null
+  let nauticalDawnMs: number | null = null
   if (sunsetMs != null && riseMs != null) {
-    // Scan from sunset toward midnight for sun < -18
-    for (let t = sunsetMs; t < riseMs; t += 10 * 60_000) {
-      if (isAstronomicalDark(lat, lon, t)) {
-        darkStartMs = t
-        break
-      }
-    }
-    for (let t = riseMs; t > (darkStartMs ?? sunsetMs); t -= 10 * 60_000) {
-      if (isAstronomicalDark(lat, lon, t)) {
-        darkEndMs = t
-        break
-      }
-    }
+    const spanStart = sunsetMs - 30 * 60_000
+    const spanEnd = riseMs + 30 * 60_000
+    civilDuskMs = findTwilightCrossing(lat, lon, spanStart, riseMs, -6, false)
+    nauticalDuskMs = findTwilightCrossing(lat, lon, spanStart, riseMs, -12, false)
+    darkStartMs = findTwilightCrossing(lat, lon, spanStart, riseMs, -18, false)
+    darkEndMs = findTwilightCrossing(lat, lon, sunsetMs, spanEnd, -18, true)
+    nauticalDawnMs = findTwilightCrossing(lat, lon, sunsetMs, spanEnd, -12, true)
+    civilDawnMs = findTwilightCrossing(lat, lon, sunsetMs, spanEnd, -6, true)
     if (darkStartMs == null) darkStartMs = sunsetMs + 80 * 60_000
     if (darkEndMs == null) darkEndMs = riseMs - 80 * 60_000
   }
@@ -482,6 +558,14 @@ export function buildStargazeBrief(
     if (ms > horizon) break
 
     const cloud = h.cloud_cover[i] ?? weather.current.cloud_cover ?? 50
+    const cloudLow = h.cloud_cover_low?.[i]
+    const cloudMid = h.cloud_cover_mid?.[i]
+    const cloudHigh = h.cloud_cover_high?.[i]
+    const hasCloudLayers =
+      cloudLow != null || cloudMid != null || cloudHigh != null
+    const cLow = cloudLow ?? cloud
+    const cMid = cloudMid ?? cloud * 0.6
+    const cHigh = cloudHigh ?? cloud * 0.4
     const humidity = h.relative_humidity_2m[i] ?? weather.current.relative_humidity_2m ?? 60
     const windKmh = h.wind_speed_10m[i] ?? weather.current.wind_speed_10m ?? 0
     const gust = h.wind_gusts_10m[i] ?? windKmh
@@ -493,17 +577,26 @@ export function buildStargazeBrief(
 
     const isNight = isNightSun(lat, lon, ms)
     const isDark = isNight && isAstronomicalDark(lat, lon, ms)
+    const twilight = twilightBand(lat, lon, ms)
     const seeing = estimateSeeing(windKmh, humidity, gust)
     const dewRisk = estimateDewRisk(temp, dew, humidity, windKmh)
+    const transparency = estimateTransparency({
+      humidity,
+      visibilityM,
+      cloudHigh: cHigh,
+      smokePenalty,
+    })
+    const moonIllum = moonPhase(new Date(ms)).illumination
 
-    const score = scoreSkyHour({
+    // Imaging: full moon penalty; visual: lighter moon penalty
+    const imagingHourScore = scoreSkyHour({
       cloud,
       humidity,
       windKmh,
       pop,
       precipMm,
       visibilityM,
-      moonIllum: moonPhase(new Date(ms)).illumination,
+      moonIllum,
       isNight,
       isDark,
       seeing,
@@ -511,14 +604,34 @@ export function buildStargazeBrief(
       bortleClass: bortle.class,
       smokePenalty,
     })
+    const visualHourScore = scoreSkyHour({
+      cloud,
+      humidity,
+      windKmh,
+      pop,
+      precipMm,
+      visibilityM,
+      moonIllum: moonIllum * 0.45,
+      isNight,
+      isDark,
+      seeing,
+      dewRisk,
+      bortleClass: Math.max(1, bortle.class - 1),
+      smokePenalty: smokePenalty * 0.7,
+    })
 
     hours.push({
       time: h.time[i],
       ms,
       label: hourLabel(ms, tz),
-      score,
-      grade: gradeFromScore(score, isNight),
+      score: imagingHourScore,
+      grade: gradeFromScore(imagingHourScore, isNight),
       cloud: Math.round(cloud),
+      cloudLow: Math.round(cLow),
+      cloudMid: Math.round(cMid),
+      cloudHigh: Math.round(cHigh),
+      hasCloudLayers,
+      transparency,
       humidity: Math.round(humidity),
       windKmh,
       pop: Math.round(pop),
@@ -526,8 +639,11 @@ export function buildStargazeBrief(
       visibilityM,
       isNight,
       isDark,
+      twilight,
       seeing,
       dewRisk,
+      visualScore: visualHourScore,
+      imagingHourScore,
     })
   }
 
@@ -553,6 +669,7 @@ export function buildStargazeBrief(
 
   const bestWindow = findBestWindow(hours.filter((x) => x.ms <= atMs + 36 * 3600_000))
   const nights = buildNights(hours, lat, lon, tz)
+  const bestNightsMonth = [...nights].sort((a, b) => b.score - a.score).slice(0, 3)
 
   const c = weather.current
   const seeingNow = estimateSeeing(
@@ -568,14 +685,24 @@ export function buildStargazeBrief(
   )
 
   const imagingScore = tonightScore
+  const visualScore =
+    tonightPool.length > 0
+      ? Math.round(tonightPool.reduce((s, x) => s + x.visualScore, 0) / tonightPool.length)
+      : nowH?.visualScore ?? tonightScore
   const go = goFromScore(imagingScore)
   const { label: goLabel, detail: goDetail } = goLabels(go)
+  const sqm = sqmFromBortle(bortle.class)
 
   const factors: StargazeBrief['factors'] = [
     {
       label: 'Clouds',
       value: `${Math.round(c.cloud_cover)}%`,
       tone: c.cloud_cover < 25 ? 'good' : c.cloud_cover < 55 ? 'ok' : 'bad',
+    },
+    {
+      label: 'Transparency',
+      value: `${nowH?.transparency ?? '—'}`,
+      tone: (nowH?.transparency ?? 0) >= 70 ? 'good' : (nowH?.transparency ?? 0) >= 45 ? 'ok' : 'bad',
     },
     {
       label: 'Seeing',
@@ -596,6 +723,11 @@ export function buildStargazeBrief(
       label: 'Bortle',
       value: `~${bortle.class}`,
       tone: bortle.tone,
+    },
+    {
+      label: 'SQM est.',
+      value: sqm.sqm.toFixed(1),
+      tone: sqm.sqm >= 21 ? 'good' : sqm.sqm >= 19.5 ? 'ok' : 'bad',
     },
     {
       label: 'Humidity',
@@ -650,11 +782,14 @@ export function buildStargazeBrief(
     tonightGrade: gradeFromScore(tonightScore, true),
     imagingScore,
     imagingGrade: gradeFromScore(imagingScore, true),
+    visualScore,
+    visualGrade: gradeFromScore(visualScore, true),
     go,
     goLabel,
     goDetail,
     moon,
     bortle,
+    sqm,
     seeingNow,
     seeingLabel: seeingLabel(seeingNow),
     dewRisk: dewNow,
@@ -668,9 +803,18 @@ export function buildStargazeBrief(
     darkEndMs,
     darkStartLabel: darkStartMs != null ? rangeLabel(darkStartMs, tz) : null,
     darkEndLabel: darkEndMs != null ? rangeLabel(darkEndMs, tz) : null,
+    civilDuskMs,
+    nauticalDuskMs,
+    civilDawnMs,
+    nauticalDawnMs,
+    civilDuskLabel: civilDuskMs != null ? rangeLabel(civilDuskMs, tz) : null,
+    nauticalDuskLabel: nauticalDuskMs != null ? rangeLabel(nauticalDuskMs, tz) : null,
+    civilDawnLabel: civilDawnMs != null ? rangeLabel(civilDawnMs, tz) : null,
+    nauticalDawnLabel: nauticalDawnMs != null ? rangeLabel(nauticalDawnMs, tz) : null,
     hours,
     bestWindow,
     nights,
+    bestNightsMonth,
     targets,
     tips: tipsOut,
     factors,
