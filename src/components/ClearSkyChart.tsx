@@ -23,21 +23,21 @@ const ROWS: { key: RowKey; label: string; title: string }[] = [
 ]
 
 function cellClass(key: RowKey, h: StargazeHour): string {
-  if (!h.isNight && key !== 'dark') return 'csc-day'
+  if (!h?.isNight && key !== 'dark') return 'csc-day'
   if (key === 'dark') {
     if (h.isDark) return 'csc-best'
-    if (h.isNight) return 'csc-ok'
+    if (h.isNight) return 'csc-good'
     return 'csc-day'
   }
   if (key === 'trans') {
-    const t = h.transparency
+    const t = h.transparency ?? 50
     if (t >= 75) return 'csc-best'
     if (t >= 55) return 'csc-good'
     if (t >= 35) return 'csc-fair'
     return 'csc-poor'
   }
   if (key === 'seeing') {
-    const s = h.seeing
+    const s = h.seeing ?? 50
     if (s >= 75) return 'csc-best'
     if (s >= 55) return 'csc-good'
     if (s >= 35) return 'csc-fair'
@@ -46,12 +46,12 @@ function cellClass(key: RowKey, h: StargazeHour): string {
   // cloud rows — lower cloud = better (more blue)
   const c =
     key === 'low'
-      ? h.cloudLow
+      ? (h.cloudLow ?? h.cloud ?? 50)
       : key === 'mid'
-        ? h.cloudMid
+        ? (h.cloudMid ?? h.cloud ?? 50)
         : key === 'high'
-          ? h.cloudHigh
-          : h.cloud
+          ? (h.cloudHigh ?? h.cloud ?? 50)
+          : (h.cloud ?? 50)
   if (c <= 15) return 'csc-best'
   if (c <= 35) return 'csc-good'
   if (c <= 60) return 'csc-fair'

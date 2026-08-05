@@ -57,17 +57,38 @@ export async function fetchKpIndex(): Promise<KpSnapshot | null> {
         }
       }
 
-      // SWPC product: array of [time, kp, a_running, station_count]
-      if (Array.isArray(data) && data.length > 1) {
+      // SWPC product formats:
+      // - legacy: [[time, kp, a_running, station_count], ...]
+      // - current: [{ time_tag, Kp, a_running, station_count }, ...]
+      if (Array.isArray(data) && data.length > 0) {
         const last = data[data.length - 1]
-        const kp = parseFloat(String(last[1]))
+        let kp = NaN
+        let at: string | undefined
+        if (last && typeof last === 'object' && !Array.isArray(last)) {
+          kp = parseFloat(String((last as { Kp?: number; kp?: number }).Kp ?? (last as { kp?: number }).kp))
+          at = String((last as { time_tag?: string }).time_tag || '')
+        } else if (Array.isArray(last)) {
+          kp = parseFloat(String(last[1]))
+          at = String(last[0] || '')
+        }
+        // Skip header row if present
+        if (!Number.isFinite(kp) && data.length > 1) {
+          const prev = data[data.length - 2]
+          if (prev && typeof prev === 'object' && !Array.isArray(prev)) {
+            kp = parseFloat(String((prev as { Kp?: number }).Kp))
+            at = String((prev as { time_tag?: string }).time_tag || '')
+          } else if (Array.isArray(prev)) {
+            kp = parseFloat(String(prev[1]))
+            at = String(prev[0] || '')
+          }
+        }
         if (!Number.isFinite(kp)) continue
         return {
           kp,
           label: kpLabel(kp),
           auroraLikely: kp >= 4,
           source: 'NOAA SWPC',
-          at: String(last[0] || ''),
+          at,
         }
       }
     } catch {

@@ -685,14 +685,47 @@ export default {
       // ── Stargaze: planetary Kp (aurora) ──
       if (path === '/api/sky/kp' && method === 'GET') {
         try {
-          const res = await fetch(
+          // Prefer 1-minute estimated Kp; fall back to planetary product
+          const urls = [
+            'https://services.swpc.noaa.gov/json/planetary_k_index_1m.json',
             'https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json',
-            { cf: { cacheTtl: 300, cacheEverything: true } },
-          )
-          if (!res.ok) return err('Kp upstream failed', 502)
-          const data = await res.json()
-          const last = Array.isArray(data) && data.length > 1 ? data[data.length - 1] : null
-          const kp = last ? parseFloat(String(last[1])) : NaN
+          ]
+          let kp = NaN
+          let at
+          let source = 'NOAA SWPC'
+          for (const u of urls) {
+            try {
+              const res = await fetch(u, { cf: { cacheTtl: 180, cacheEverything: true } })
+              if (!res.ok) continue
+              const data = await res.json()
+              if (!Array.isArray(data) || !data.length) continue
+              // 1m format: [{ time_tag, kp, ...}] or planetary objects with Kp
+              for (let i = data.length - 1; i >= 0; i--) {
+                const row = data[i]
+                if (!row) continue
+                if (typeof row === 'object' && !Array.isArray(row)) {
+                  const v = parseFloat(String(row.kp ?? row.Kp ?? row.estimated_kp))
+                  if (Number.isFinite(v)) {
+                    kp = v
+                    at = String(row.time_tag || row.time || '')
+                    source = u.includes('1m') ? 'NOAA SWPC 1-min' : 'NOAA SWPC'
+                    break
+                  }
+                } else if (Array.isArray(row) && row.length > 1) {
+                  // Skip header rows like ["time_tag","Kp",...]
+                  const v = parseFloat(String(row[1]))
+                  if (Number.isFinite(v)) {
+                    kp = v
+                    at = String(row[0] || '')
+                    break
+                  }
+                }
+              }
+              if (Number.isFinite(kp)) break
+            } catch {
+              /* try next URL */
+            }
+          }
           if (!Number.isFinite(kp)) return err('Kp parse failed', 502)
           const label =
             kp >= 7
@@ -708,8 +741,8 @@ export default {
             kp,
             label,
             auroraLikely: kp >= 4,
-            source: 'NOAA SWPC',
-            at: last ? String(last[0] || '') : undefined,
+            source,
+            at,
           })
         } catch (e) {
           return err(e?.message || 'Kp fetch failed', 502)

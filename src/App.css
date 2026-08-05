@@ -11092,6 +11092,14 @@ a.today-chip-link:hover {
   font-size: 0.8rem;
   text-align: center;
 }
+.sg-error {
+  border-color: rgba(248, 113, 113, 0.45) !important;
+  background: rgba(127, 29, 29, 0.25) !important;
+}
+.sg-error p {
+  margin: 0 0 0.65rem;
+  line-height: 1.4;
+}
 
 /* Clear sky chart */
 .csc-wrap {

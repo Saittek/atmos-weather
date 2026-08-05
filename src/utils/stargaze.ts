@@ -492,17 +492,43 @@ export function buildStargazeBrief(
     auroraKp?: number | null
   },
 ): StargazeBrief {
+  if (!weather?.current || !weather?.daily?.time?.length) {
+    throw new Error('Weather data incomplete for stargaze')
+  }
   const atMs = opts?.atMs ?? Date.now()
   const lat = opts?.lat ?? weather.latitude
   const lon = opts?.lon ?? weather.longitude
   const tz = weather.timezone
-  const ti = todayDailyIndex(weather)
+  const ti = Math.max(0, todayDailyIndex(weather))
   const moon = moonPhase(new Date(atMs))
   const bortle = estimateBortle(lat, lon)
-  const h = weather.hourly
-  const sunset = weather.daily.sunset[ti]
-  const sunriseToday = weather.daily.sunrise[ti]
-  const sunriseNext = weather.daily.sunrise[ti + 1] ?? sunriseToday
+  // Guard broken/partial payloads (offline or model merge)
+  const h = weather.hourly?.time?.length
+    ? weather.hourly
+    : {
+        time: [] as string[],
+        temperature_2m: [] as number[],
+        relative_humidity_2m: [] as number[],
+        dew_point_2m: [] as number[],
+        apparent_temperature: [] as number[],
+        precipitation_probability: [] as number[],
+        precipitation: [] as number[],
+        rain: [] as number[],
+        showers: [] as number[],
+        snowfall: [] as number[],
+        weather_code: [] as number[],
+        pressure_msl: [] as number[],
+        cloud_cover: [] as number[],
+        visibility: [] as number[],
+        wind_speed_10m: [] as number[],
+        wind_direction_10m: [] as number[],
+        wind_gusts_10m: [] as number[],
+        uv_index: [] as number[],
+        is_day: [] as number[],
+      }
+  const sunset = weather.daily.sunset?.[ti] ?? weather.daily.sunset?.[0]
+  const sunriseToday = weather.daily.sunrise?.[ti] ?? weather.daily.sunrise?.[0]
+  const sunriseNext = weather.daily.sunrise?.[ti + 1] ?? sunriseToday
 
   const sunsetMs = parseSunTime(sunset, tz)
   let riseMs = parseSunTime(sunriseNext, tz)

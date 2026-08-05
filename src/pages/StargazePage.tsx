@@ -87,6 +87,8 @@ export default function StargazePage() {
     units,
     loading,
     refreshing,
+    error,
+    clearError,
     loadForLocation,
     requestMyLocation,
     geoLoading,
@@ -147,14 +149,21 @@ export default function StargazePage() {
     }
   }, [location?.latitude, location?.longitude])
 
-  const brief = useMemo(() => {
-    if (!weather || !location) return null
-    return buildStargazeBrief(weather, {
-      lat: location.latitude,
-      lon: location.longitude,
-      air,
-      auroraKp: kp,
-    })
+  const { brief, briefError } = useMemo(() => {
+    if (!weather || !location) return { brief: null, briefError: null as string | null }
+    try {
+      const b = buildStargazeBrief(weather, {
+        lat: location.latitude,
+        lon: location.longitude,
+        air,
+        auroraKp: kp,
+      })
+      return { brief: b, briefError: null }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Could not build sky forecast'
+      console.error('[Stargaze] brief failed', e)
+      return { brief: null, briefError: msg }
+    }
   }, [weather, location, air, kp])
 
   useEffect(() => {
@@ -163,11 +172,40 @@ export default function StargazePage() {
     cacheStargazeBrief(key, brief)
   }, [brief, location])
 
-  // Offline fallback
+  // Offline fallback (normalize older cache shapes)
   const offlineBrief = useMemo(() => {
     if (brief || !location) return null
     const key = `${location.latitude.toFixed(3)},${location.longitude.toFixed(3)}`
-    return loadCachedStargazeBrief(key)
+    const raw = loadCachedStargazeBrief(key)
+    if (!raw) return null
+    return {
+      ...raw,
+      visualScore: raw.visualScore ?? raw.imagingScore ?? raw.tonightScore ?? 0,
+      visualGrade: raw.visualGrade ?? raw.imagingGrade ?? raw.tonightGrade ?? 'fair',
+      imagingScore: raw.imagingScore ?? raw.tonightScore ?? 0,
+      imagingGrade: raw.imagingGrade ?? raw.tonightGrade ?? 'fair',
+      sqm: raw.sqm ?? { sqm: 20, label: '—', mcd: 0 },
+      hours: Array.isArray(raw.hours) ? raw.hours : [],
+      nights: Array.isArray(raw.nights) ? raw.nights : [],
+      bestNightsMonth: Array.isArray(raw.bestNightsMonth) ? raw.bestNightsMonth : [],
+      targets: Array.isArray(raw.targets) ? raw.targets : [],
+      tips: Array.isArray(raw.tips) ? raw.tips : [],
+      factors: Array.isArray(raw.factors) ? raw.factors : [],
+      go: raw.go ?? 'maybe',
+      goLabel: raw.goLabel ?? 'Sky check',
+      goDetail: raw.goDetail ?? '',
+      summary: raw.summary ?? '',
+      bortle: raw.bortle ?? {
+        class: 5,
+        label: 'Bortle ~5',
+        sky: '',
+        tone: 'ok' as const,
+        detail: '',
+      },
+      seeingLabel: raw.seeingLabel ?? '—',
+      dewLabel: raw.dewLabel ?? '—',
+      moon: raw.moon ?? { phase: 0, name: 'Moon', emoji: '🌑', illumination: 0 },
+    }
   }, [brief, location])
 
   const shown = brief ?? offlineBrief
@@ -460,7 +498,41 @@ export default function StargazePage() {
       </header>
 
       <main className="sg-main">
-        {(loading || !weather) && !shown && (
+        {error && (
+          <div className="panel sg-error" role="alert">
+            <p>
+              <strong>Couldn’t load weather.</strong> {error}
+            </p>
+            <div className="sg-hero-actions">
+              <button
+                type="button"
+                className="primary-btn"
+                onClick={() => {
+                  clearError()
+                  refresh()
+                }}
+              >
+                Retry
+              </button>
+              <button type="button" className="chip-btn" onClick={() => void requestMyLocation()}>
+                Use my location
+              </button>
+            </div>
+          </div>
+        )}
+
+        {briefError && weather && (
+          <div className="panel sg-error" role="alert">
+            <p>
+              <strong>Sky planner hit a snag.</strong> {briefError}
+            </p>
+            <button type="button" className="chip-btn" onClick={() => refresh()}>
+              Reload weather
+            </button>
+          </div>
+        )}
+
+        {(loading || (!weather && !shown && !error)) && (
           <div className="sg-loading" role="status">
             <div className="spinner large" />
             <p>Loading sky forecast…</p>
@@ -519,7 +591,7 @@ export default function StargazePage() {
                         {moonGeo.upNow ? ' · up now' : ''}
                       </p>
                     )}
-                    <p className="sg-moon-illum">{shown.sqm.label}</p>
+                    <p className="sg-moon-illum">{shown.sqm?.label ?? '—'}</p>
                   </div>
                 </div>
               </div>
@@ -767,7 +839,7 @@ export default function StargazePage() {
               )}
             </section>
 
-            {weather && (
+            {shown.hours?.length > 0 && (
               <section className="panel sg-hours-panel" aria-label="Clear sky chart">
                 <div className="panel-header">
                   <h2>Clear sky chart</h2>
@@ -777,7 +849,7 @@ export default function StargazePage() {
               </section>
             )}
 
-            {weather && (
+            {shown.hours?.length > 0 && (
               <section className="panel sg-hours-panel" aria-label="Hourly sky">
                 <div className="panel-header">
                   <h2>Hourly score strip</h2>
@@ -787,13 +859,13 @@ export default function StargazePage() {
               </section>
             )}
 
-            {shown.bestNightsMonth.length > 0 && (
+            {(shown.bestNightsMonth?.length ?? 0) > 0 && (
               <section className="panel" aria-label="Best nights">
                 <div className="panel-header">
                   <h2>Best nights ahead</h2>
                 </div>
                 <ol className="sg-best-nights">
-                  {shown.bestNightsMonth.map((n, i) => (
+                  {(shown.bestNightsMonth ?? []).map((n, i) => (
                     <li key={n.dateKey}>
                       <span className="sg-bn-rank">#{i + 1}</span>
                       <strong>{n.label}</strong>
