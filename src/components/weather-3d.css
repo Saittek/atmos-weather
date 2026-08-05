@@ -487,221 +487,176 @@
   }
 }
 
-/* ========== RAIN / DRIZZLE ========== */
+/* ========== RAIN / DRIZZLE (motion-blur streaks, not neon bars) ========== */
 .w3d-precip {
   position: absolute;
-  left: 12%;
-  right: 10%;
-  top: 48%;
-  bottom: 4%;
+  left: 10%;
+  right: 8%;
+  top: 46%;
+  bottom: 3%;
   z-index: 5;
   overflow: hidden;
   pointer-events: none;
+  /* Soft curtain so individual streaks blend like real rain sheets */
+  mask-image: linear-gradient(180deg, transparent 0%, #000 12%, #000 88%, transparent 100%);
 }
 .w3d-precip span {
   position: absolute;
-  top: -35%;
-  width: 3.5px;
-  height: 34%;
-  border-radius: 99px;
-  /* Brighter core + cyan tail so drops read on dark clouds */
+  top: -28%;
+  width: var(--thick, 1.15px);
+  height: var(--len, 22%);
+  border-radius: 1px;
+  /* Soft silver streak — looks like motion-blurred water, not a cyan laser */
   background: linear-gradient(
     180deg,
     transparent 0%,
-    rgba(255, 255, 255, 0.95) 12%,
-    #e0f2fe 28%,
-    #38bdf8 62%,
-    #0284c7 100%
+    rgba(255, 255, 255, 0.05) 8%,
+    rgba(241, 245, 249, 0.55) 35%,
+    rgba(203, 213, 225, 0.42) 70%,
+    rgba(148, 163, 184, 0.15) 92%,
+    transparent 100%
   );
-  left: calc(3% + (var(--i) / var(--n, 10)) * 92%);
-  animation: w3d-fall 0.65s linear infinite;
-  /* default delay if not set inline — staggered mid-stream */
-  animation-delay: calc((var(--i) / var(--n, 10)) * -0.65s);
+  animation-name: w3d-fall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  animation-duration: 0.7s;
   opacity: 0;
   will-change: transform, opacity;
-  box-shadow:
-    0 0 5px rgba(125, 211, 252, 0.9),
-    0 0 10px rgba(56, 189, 248, 0.65),
-    0 1px 2px rgba(14, 165, 233, 0.5);
-  filter: saturate(1.15);
+  box-shadow: none;
+  filter: none;
+  transform-origin: 50% 0%;
 }
+/* Intensity: density/opacity via modifiers — still thin streaks */
 .w3d-precip.light span {
-  height: 24%;
-  width: 2.75px;
-  animation-duration: 0.95s;
+  /* shorter drizzle droplets */
+  height: calc(var(--len, 22%) * 0.55);
+  width: max(0.65px, calc(var(--thick, 1.15px) * 0.85));
   background: linear-gradient(
     180deg,
     transparent 0%,
-    rgba(255, 255, 255, 0.85) 18%,
-    #bae6fd 45%,
-    #38bdf8 100%
+    rgba(241, 245, 249, 0.4) 30%,
+    rgba(203, 213, 225, 0.35) 75%,
+    transparent 100%
   );
-  box-shadow:
-    0 0 4px rgba(125, 211, 252, 0.85),
-    0 0 8px rgba(56, 189, 248, 0.5);
 }
 .w3d-precip.med span {
-  height: 32%;
-  width: 3.5px;
-  animation-duration: 0.72s;
+  height: var(--len, 24%);
 }
 .w3d-precip.heavy span {
-  height: 42%;
-  width: 4.25px;
-  animation-duration: 0.48s;
+  height: calc(var(--len, 22%) * 1.15);
+  width: max(1px, calc(var(--thick, 1.15px) * 1.15));
   background: linear-gradient(
     180deg,
     transparent 0%,
-    #fff 10%,
-    #e0f2fe 25%,
-    #38bdf8 55%,
-    #0369a1 100%
+    rgba(255, 255, 255, 0.08) 6%,
+    rgba(248, 250, 252, 0.62) 32%,
+    rgba(203, 213, 225, 0.5) 72%,
+    rgba(148, 163, 184, 0.18) 92%,
+    transparent 100%
   );
-  box-shadow:
-    0 0 6px rgba(186, 230, 253, 1),
-    0 0 14px rgba(56, 189, 248, 0.85),
-    0 2px 4px rgba(14, 165, 233, 0.55);
 }
 .w3d-precip.shower span {
-  animation-duration: 0.58s;
-  width: 3.75px;
+  /* showery: slightly faster feel via shorter visible trails */
+  height: calc(var(--len, 22%) * 0.9);
 }
 .w3d-precip.icy span {
-  background: linear-gradient(180deg, transparent, #f0f9ff 15%, #e0f2fe 40%, #7dd3fc 70%, #a5f3fc);
-  box-shadow:
-    0 0 6px rgba(224, 242, 254, 0.95),
-    0 0 12px rgba(165, 243, 252, 0.75);
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(224, 242, 254, 0.5) 25%,
+    rgba(186, 230, 253, 0.45) 70%,
+    transparent 100%
+  );
 }
 
-/* Right now hero (lg/xl) — much more readable rain */
+/* Right now hero — denser curtain of thin streaks (still natural) */
 .w3d-lg .w3d-precip,
 .w3d-xl .w3d-precip {
-  left: 6%;
-  right: 6%;
-  top: 40%;
-  bottom: 2%;
+  left: 4%;
+  right: 4%;
+  top: 38%;
+  bottom: 1%;
   z-index: 8;
 }
 .w3d-lg .w3d-precip span,
 .w3d-xl .w3d-precip span {
-  width: 5px;
-  height: 42%;
-  top: -40%;
-  background: linear-gradient(
-    180deg,
-    transparent 0%,
-    #fff 8%,
-    #f0f9ff 18%,
-    #7dd3fc 40%,
-    #0ea5e9 72%,
-    #0369a1 100%
-  );
-  box-shadow:
-    0 0 6px rgba(255, 255, 255, 0.85),
-    0 0 12px rgba(125, 211, 252, 1),
-    0 0 20px rgba(56, 189, 248, 0.75),
-    0 2px 4px rgba(14, 165, 233, 0.6);
-  filter: saturate(1.35) brightness(1.12);
-  animation-duration: 0.55s;
+  /* Scale thickness with icon size without going cartoon-thick */
+  width: max(1px, calc(var(--thick, 1.15px) * 1.15));
+  height: calc(var(--len, 22%) * 1.05);
+  /* Tiny soft edge, not a glow halo */
+  box-shadow: 0 0 0.6px rgba(255, 255, 255, 0.25);
 }
 .w3d-xl .w3d-precip span {
-  width: 6px;
-  height: 48%;
-  box-shadow:
-    0 0 8px rgba(255, 255, 255, 0.9),
-    0 0 16px rgba(125, 211, 252, 1),
-    0 0 28px rgba(56, 189, 248, 0.8),
-    0 2px 6px rgba(14, 165, 233, 0.65);
+  width: max(1.1px, calc(var(--thick, 1.15px) * 1.35));
+  height: calc(var(--len, 22%) * 1.12);
 }
 .w3d-lg .w3d-precip.light span,
 .w3d-xl .w3d-precip.light span {
-  width: 4px;
-  height: 34%;
-  animation-duration: 0.78s;
-  filter: saturate(1.3) brightness(1.15);
-  box-shadow:
-    0 0 6px rgba(186, 230, 253, 0.95),
-    0 0 14px rgba(56, 189, 248, 0.7);
-}
-.w3d-lg .w3d-precip.med span,
-.w3d-xl .w3d-precip.med span {
-  width: 5.5px;
-  height: 44%;
-  animation-duration: 0.58s;
+  height: calc(var(--len, 22%) * 0.5);
+  width: max(0.8px, calc(var(--thick, 1.15px) * 0.9));
 }
 .w3d-lg .w3d-precip.heavy span,
 .w3d-xl .w3d-precip.heavy span {
-  width: 6.5px;
-  height: 52%;
-  animation-duration: 0.4s;
+  height: calc(var(--len, 22%) * 1.25);
+  width: max(1.2px, calc(var(--thick, 1.15px) * 1.4));
 }
-.w3d-xl .w3d-precip.heavy span {
-  width: 7.5px;
-  height: 56%;
+
+/* Seamless loop — soft fade in/out like real streaks entering the frame */
+@keyframes w3d-fall {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(var(--ang, 12deg));
+    opacity: 0;
+  }
+  6% {
+    opacity: var(--op, 0.55);
+  }
+  88% {
+    opacity: var(--op, 0.55);
+  }
+  100% {
+    transform: translate3d(var(--wind, -10px), 175%, 0) rotate(var(--ang, 12deg));
+    opacity: 0;
+  }
+}
+
+/* Soft ground mist — not a glowing cyan puddle */
+.w3d-splash {
+  position: absolute;
+  left: 14%;
+  right: 12%;
+  bottom: 4%;
+  height: 12%;
+  z-index: 4;
+  background: radial-gradient(
+    ellipse at 50% 70%,
+    rgba(226, 232, 240, 0.22),
+    rgba(148, 163, 184, 0.08) 45%,
+    transparent 70%
+  );
+  animation: w3d-splash 1.4s ease-in-out infinite;
+  filter: blur(1.5px);
 }
 .w3d-lg .w3d-splash,
 .w3d-xl .w3d-splash {
-  height: 18%;
-  bottom: 3%;
+  height: 14%;
+  bottom: 2%;
   background: radial-gradient(
-    ellipse,
-    rgba(186, 230, 253, 0.75),
-    rgba(56, 189, 248, 0.35) 40%,
+    ellipse at 50% 70%,
+    rgba(241, 245, 249, 0.28),
+    rgba(148, 163, 184, 0.1) 50%,
     transparent 72%
   );
-  filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.65));
-}
-.w3d-lg.w3d-force .w3d-precip span,
-.w3d-xl.w3d-force .w3d-precip span {
-  animation-duration: 0.5s;
-}
-.w3d-lg.w3d-force .w3d-precip.light span,
-.w3d-xl.w3d-force .w3d-precip.light span {
-  animation-duration: 0.72s;
-}
-.w3d-lg.w3d-force .w3d-precip.heavy span,
-.w3d-xl.w3d-force .w3d-precip.heavy span {
-  animation-duration: 0.36s;
-}
-
-/* Seamless loop: fully transparent at wrap so restart is invisible */
-@keyframes w3d-fall {
-  0% {
-    transform: translate3d(0, 0, 0) rotate(14deg);
-    opacity: 0;
-  }
-  4% {
-    opacity: 1;
-  }
-  90% {
-    opacity: 1;
-  }
-  100% {
-    transform: translate3d(-10px, 170%, 0) rotate(14deg);
-    opacity: 0;
-  }
-}
-
-.w3d-splash {
-  position: absolute;
-  left: 16%;
-  right: 12%;
-  bottom: 5%;
-  height: 14%;
-  z-index: 4;
-  background: radial-gradient(ellipse, rgba(125, 211, 252, 0.55), rgba(56, 189, 248, 0.2) 45%, transparent 72%);
-  animation: w3d-splash 0.85s ease-in-out infinite;
-  filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.45));
+  filter: blur(2px);
 }
 @keyframes w3d-splash {
   0%,
   100% {
-    opacity: 0.45;
-    transform: scaleX(0.88);
+    opacity: 0.35;
+    transform: scaleX(0.92);
   }
   50% {
-    opacity: 0.95;
-    transform: scaleX(1.18);
+    opacity: 0.7;
+    transform: scaleX(1.08);
   }
 }
 
@@ -899,19 +854,17 @@
   }
 }
 
-/* Intensity tweaks */
+/* Intensity: slight speed bias only — thickness stays from --thick vars */
 .w3d-i3 .w3d-precip.heavy span {
-  animation-duration: 0.4s;
-  width: 4.5px;
+  /* heavy rain falls a touch faster; per-drop duration still varies via inline */
+  animation-duration: calc(0.38s + (var(--i, 0) * 0.01s));
 }
-.w3d-i2 .w3d-precip.med span {
-  width: 3.75px;
-}
-/* Static list icons: still show a visible rain streak sample */
+/* Static list icons: thin frozen streaks (not fat bars) */
 .w3d-sm:not(.w3d-force) .w3d-precip span {
-  opacity: 0.95;
-  top: 8%;
-  height: 55%;
+  opacity: var(--op, 0.65);
+  top: 10%;
+  height: var(--len, 40%);
+  animation: none !important;
 }
 .w3d-i1 .w3d-snow span {
   animation-duration: 2.8s;
@@ -947,15 +900,7 @@
 .w3d-force .w3d-sun-svg {
   animation-duration: 2.6s;
 }
-.w3d-force .w3d-precip.light span {
-  animation-duration: 0.9s;
-}
-.w3d-force .w3d-precip.med span {
-  animation-duration: 0.65s;
-}
-.w3d-force .w3d-precip.heavy span {
-  animation-duration: 0.45s;
-}
+/* Per-drop animationDuration is set inline for natural variance — don't override */
 .w3d-force .w3d-snow span {
   animation-duration: 2.2s;
 }

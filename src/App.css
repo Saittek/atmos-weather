@@ -1854,17 +1854,7 @@ select:focus-visible {
   gap: 1rem;
 }
 
-/* Hero “Right now” icon — rain must punch through dark clouds */
-.current-3d-wrap .w3d-precip span {
-  opacity: 0;
-}
-.current-3d-wrap .w3d-lg .w3d-precip span,
-.current-3d-wrap .w3d-xl .w3d-precip span {
-  /* keyframes control mid-flight opacity; boost glow further in hero card */
-  filter: saturate(1.45) brightness(1.2) drop-shadow(0 0 3px rgba(125, 211, 252, 0.9));
-}
 .current-3d-wrap {
-
   transform: translateZ(28px);
   filter: drop-shadow(0 16px 28px rgba(0, 0, 0, 0.35));
 }

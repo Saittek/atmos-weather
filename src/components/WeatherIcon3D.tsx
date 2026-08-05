@@ -77,20 +77,50 @@ export function weatherKindFromCode(
   return { kind: isDay ? 'partly-day' : 'partly-night', intensity: 1 }
 }
 
+/** Stable 0–1 hash so each streak differs without layout flicker */
+function dropRand(i: number, salt: number): number {
+  const x = Math.sin(i * 12.9898 + salt * 78.233) * 43758.5453
+  return x - Math.floor(x)
+}
+
+/**
+ * Rain streaks with per-drop variance (position, length, speed, tilt, opacity)
+ * so motion reads like real rain instead of a neon grid.
+ */
 function Drops({ n, className }: { n: number; className?: string }) {
   return (
     <div className={className}>
-      {Array.from({ length: n }, (_, i) => (
-        <span
-          key={i}
-          style={{
-            ['--i' as string]: i,
-            ['--n' as string]: n,
-            // Negative delay = already mid-loop (seamless, no mass reset)
-            animationDelay: `${-((i / Math.max(n, 1)) * 0.9)}s`,
-          }}
-        />
-      ))}
+      {Array.from({ length: n }, (_, i) => {
+        const r1 = dropRand(i, 1)
+        const r2 = dropRand(i, 2)
+        const r3 = dropRand(i, 3)
+        const r4 = dropRand(i, 4)
+        const r5 = dropRand(i, 5)
+        const r6 = dropRand(i, 6)
+        const r7 = dropRand(i, 7)
+        const r8 = dropRand(i, 8)
+        // Slight horizontal clustering (wind sheets) instead of even spacing
+        const cluster = Math.floor(r1 * 5)
+        const left = cluster * 18 + r2 * 16 + r3 * 4
+        return (
+          <span
+            key={i}
+            style={{
+              ['--i' as string]: i,
+              ['--n' as string]: n,
+              left: `${Math.min(98, Math.max(1, left))}%`,
+              // Negative delay = already mid-loop (seamless)
+              animationDelay: `${-(r4 * 1.9)}s`,
+              animationDuration: `${0.52 + r5 * 0.55}s`,
+              ['--len' as string]: `${14 + r6 * 26}%`,
+              ['--thick' as string]: `${0.7 + r7 * 1.1}px`,
+              ['--ang' as string]: `${9 + r8 * 9}deg`,
+              ['--op' as string]: `${0.28 + r3 * 0.45}`,
+              ['--wind' as string]: `${-3 - r2 * 14}px`,
+            }}
+          />
+        )
+      })}
     </div>
   )
 }
@@ -365,19 +395,19 @@ export function WeatherIcon3D({
   const uid = useId().replace(/:/g, '')
   const boltGradId = `boltGrad-${uid}`
   const { kind, intensity } = weatherKindFromCode(code, isDay)
-  /* Hero (lg/xl + forceAnimate) gets denser rain so “Right now” reads clearly */
+  /* Hero: many thin streaks (lifelike density); list icons stay lighter */
   const hero = forceAnimate && (size === 'lg' || size === 'xl')
   const dropCount = hero
     ? intensity === 1
-      ? 14
+      ? 22
       : intensity === 2
-        ? 20
-        : 26
+        ? 34
+        : 48
     : intensity === 1
-      ? 9
+      ? 10
       : intensity === 2
-        ? 14
-        : 18
+        ? 16
+        : 22
   const flakeCount = intensity === 1 ? 7 : intensity === 2 ? 11 : 15
   // No periodic remount — remounting every few seconds caused a visible snap to frame 0
 
