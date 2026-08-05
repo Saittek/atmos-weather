@@ -33,11 +33,40 @@ function kpLabel(kp: number): string {
   return 'Quiet'
 }
 
+/** Parse one SWPC row (object or array). Handles kp:"0Z", estimated_kp, Kp. */
+function parseKpFromRow(row: unknown): { kp: number; at?: string } | null {
+  if (row == null) return null
+  if (Array.isArray(row)) {
+    const kp = parseFloat(String(row[1]))
+    if (!Number.isFinite(kp)) return null
+    return { kp, at: String(row[0] ?? '') }
+  }
+  if (typeof row === 'object') {
+    const o = row as Record<string, unknown>
+    const candidates = [o.Kp, o.estimated_kp, o.kp_index, o.kp]
+    for (const c of candidates) {
+      if (typeof c === 'number' && Number.isFinite(c)) {
+        return { kp: c, at: String(o.time_tag ?? o.time ?? '') }
+      }
+      if (typeof c === 'string') {
+        const m = c.match(/-?[\d.]+/)
+        if (m) {
+          const kp = parseFloat(m[0])
+          if (Number.isFinite(kp)) return { kp, at: String(o.time_tag ?? o.time ?? '') }
+        }
+      }
+    }
+  }
+  return null
+}
+
 export async function fetchKpIndex(): Promise<KpSnapshot | null> {
   const base = getApiBase()
+  // Prefer browser→SWPC (CORS open). Worker may be blocked by SWPC edge.
   const urls = [
-    base ? `${base}/api/sky/kp` : null,
+    'https://services.swpc.noaa.gov/json/planetary_k_index_1m.json',
     'https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json',
+    base ? `${base}/api/sky/kp` : null,
   ].filter(Boolean) as string[]
 
   for (const url of urls) {
@@ -47,7 +76,7 @@ export async function fetchKpIndex(): Promise<KpSnapshot | null> {
       const data = await res.json()
 
       // Our worker shape
-      if (data && typeof data.kp === 'number') {
+      if (data && typeof data.kp === 'number' && Number.isFinite(data.kp)) {
         return {
           kp: data.kp,
           label: data.label || kpLabel(data.kp),
@@ -57,38 +86,18 @@ export async function fetchKpIndex(): Promise<KpSnapshot | null> {
         }
       }
 
-      // SWPC product formats:
-      // - legacy: [[time, kp, a_running, station_count], ...]
-      // - current: [{ time_tag, Kp, a_running, station_count }, ...]
       if (Array.isArray(data) && data.length > 0) {
-        const last = data[data.length - 1]
-        let kp = NaN
-        let at: string | undefined
-        if (last && typeof last === 'object' && !Array.isArray(last)) {
-          kp = parseFloat(String((last as { Kp?: number; kp?: number }).Kp ?? (last as { kp?: number }).kp))
-          at = String((last as { time_tag?: string }).time_tag || '')
-        } else if (Array.isArray(last)) {
-          kp = parseFloat(String(last[1]))
-          at = String(last[0] || '')
-        }
-        // Skip header row if present
-        if (!Number.isFinite(kp) && data.length > 1) {
-          const prev = data[data.length - 2]
-          if (prev && typeof prev === 'object' && !Array.isArray(prev)) {
-            kp = parseFloat(String((prev as { Kp?: number }).Kp))
-            at = String((prev as { time_tag?: string }).time_tag || '')
-          } else if (Array.isArray(prev)) {
-            kp = parseFloat(String(prev[1]))
-            at = String(prev[0] || '')
+        for (let i = data.length - 1; i >= 0; i--) {
+          const parsed = parseKpFromRow(data[i])
+          if (parsed) {
+            return {
+              kp: parsed.kp,
+              label: kpLabel(parsed.kp),
+              auroraLikely: parsed.kp >= 4,
+              source: 'NOAA SWPC',
+              at: parsed.at,
+            }
           }
-        }
-        if (!Number.isFinite(kp)) continue
-        return {
-          kp,
-          label: kpLabel(kp),
-          auroraLikely: kp >= 4,
-          source: 'NOAA SWPC',
-          at,
         }
       }
     } catch {

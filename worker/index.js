@@ -704,7 +704,21 @@ export default {
                 const row = data[i]
                 if (!row) continue
                 if (typeof row === 'object' && !Array.isArray(row)) {
-                  const v = parseFloat(String(row.kp ?? row.Kp ?? row.estimated_kp))
+                  const candidates = [row.Kp, row.estimated_kp, row.kp_index, row.kp]
+                  let v = NaN
+                  for (const c of candidates) {
+                    if (typeof c === 'number' && Number.isFinite(c)) {
+                      v = c
+                      break
+                    }
+                    if (typeof c === 'string') {
+                      const m = String(c).match(/-?[\d.]+/)
+                      if (m) {
+                        v = parseFloat(m[0])
+                        if (Number.isFinite(v)) break
+                      }
+                    }
+                  }
                   if (Number.isFinite(v)) {
                     kp = v
                     at = String(row.time_tag || row.time || '')
