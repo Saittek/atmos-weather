@@ -10511,3 +10511,375 @@ a:focus:not(:focus-visible) {
     animation: none;
   }
 }
+
+/* ===== Stargaze / astrophotography page ===== */
+.sg-page {
+  min-height: 100dvh;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(99, 102, 241, 0.22), transparent 55%),
+    radial-gradient(ellipse 60% 40% at 90% 80%, rgba(14, 165, 233, 0.1), transparent 50%),
+    var(--bg, #070b14);
+}
+.sg-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  padding: 0.65rem 1rem 0.75rem;
+  background: rgba(7, 11, 20, 0.82);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+.sg-topbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  max-width: 720px;
+  margin: 0 auto;
+}
+.sg-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.sg-top-actions {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+.sg-search-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  max-width: 720px;
+  margin: 0.55rem auto 0;
+  align-items: center;
+}
+.sg-search-row .search-bar,
+.sg-search-row > div:first-child {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+.sg-main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0.85rem 1rem 3rem;
+  display: grid;
+  gap: 0.75rem;
+}
+.sg-loading,
+.sg-empty {
+  text-align: center;
+  padding: 2rem 1rem;
+}
+.sg-hero {
+  padding: 1rem 1.1rem 1.05rem;
+  border-radius: 18px;
+  border: 1px solid rgba(129, 140, 248, 0.28);
+  background: linear-gradient(155deg, rgba(49, 46, 129, 0.35), rgba(15, 23, 42, 0.55));
+}
+.sg-hero.sg-grade-excellent {
+  border-color: rgba(52, 211, 153, 0.45);
+  background: linear-gradient(155deg, rgba(6, 78, 59, 0.4), rgba(15, 23, 42, 0.55));
+}
+.sg-hero.sg-grade-good {
+  border-color: rgba(56, 189, 248, 0.4);
+}
+.sg-hero.sg-grade-fair {
+  border-color: rgba(251, 191, 36, 0.35);
+}
+.sg-hero.sg-grade-poor {
+  border-color: rgba(248, 113, 113, 0.35);
+}
+.sg-kicker {
+  margin: 0 0 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(226, 232, 240, 0.55);
+}
+.sg-hero-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem 1rem;
+  align-items: start;
+}
+@media (min-width: 520px) {
+  .sg-hero-grid {
+    grid-template-columns: 1.1fr 0.9fr 1.2fr;
+  }
+}
+.sg-score-label {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 650;
+  color: rgba(226, 232, 240, 0.6);
+}
+.sg-score-big {
+  margin: 0.1rem 0 0.25rem;
+  font-size: 2.75rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+.sg-score-mid {
+  margin: 0.1rem 0 0.25rem;
+  font-size: 1.85rem;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.sg-score-max {
+  font-size: 0.95rem;
+  font-weight: 650;
+  opacity: 0.55;
+  margin-left: 0.1rem;
+}
+.sg-grade-pill {
+  display: inline-block;
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 750;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(0, 0, 0, 0.25);
+}
+.sg-grade-pill.sg-grade-excellent {
+  color: #6ee7b7;
+  border-color: rgba(52, 211, 153, 0.4);
+}
+.sg-grade-pill.sg-grade-good {
+  color: #7dd3fc;
+  border-color: rgba(56, 189, 248, 0.4);
+}
+.sg-grade-pill.sg-grade-fair {
+  color: #fde68a;
+  border-color: rgba(251, 191, 36, 0.4);
+}
+.sg-grade-pill.sg-grade-poor {
+  color: #fca5a5;
+  border-color: rgba(248, 113, 113, 0.4);
+}
+.sg-grade-pill.sg-grade-daylight {
+  color: #cbd5e1;
+}
+.sg-moon-block {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding-top: 0.25rem;
+}
+@media (min-width: 520px) {
+  .sg-moon-block {
+    grid-column: auto;
+  }
+}
+.sg-moon-name {
+  margin: 0;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.sg-moon-illum {
+  margin: 0.15rem 0 0;
+  font-size: 0.8rem;
+  color: rgba(226, 232, 240, 0.65);
+}
+.sg-summary {
+  margin: 0.85rem 0 0.4rem;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+.sg-best-window {
+  margin: 0.35rem 0 0;
+  font-size: 0.85rem;
+  color: #a5b4fc;
+}
+.sg-best-score {
+  color: rgba(226, 232, 240, 0.65);
+}
+.sg-hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-top: 0.85rem;
+}
+.sg-share-msg {
+  font-size: 0.78rem;
+  color: #86efac;
+  font-weight: 650;
+}
+.sg-factor-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.45rem;
+}
+@media (min-width: 520px) {
+  .sg-factor-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+.sg-factor {
+  padding: 0.55rem 0.65rem;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(0, 0, 0, 0.18);
+}
+.sg-factor.tone-good {
+  border-color: rgba(52, 211, 153, 0.28);
+}
+.sg-factor.tone-bad {
+  border-color: rgba(248, 113, 113, 0.28);
+}
+.sg-factor-label {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 650;
+  color: rgba(226, 232, 240, 0.55);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.sg-factor-value {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 1rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+.sg-dark-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.65rem;
+}
+.sg-dark-grid .label {
+  display: block;
+  font-size: 0.7rem;
+  color: rgba(226, 232, 240, 0.55);
+  font-weight: 650;
+}
+.sg-dark-grid .value {
+  display: block;
+  margin-top: 0.15rem;
+  font-weight: 750;
+  font-size: 0.95rem;
+}
+.sg-hour-strip {
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem 0 0;
+  display: flex;
+  gap: 0.28rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  min-height: 9.5rem;
+  align-items: flex-end;
+}
+.sg-hour {
+  flex: 0 0 2.35rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  min-width: 0;
+}
+.sg-hour-when {
+  font-size: 0.58rem;
+  font-weight: 650;
+  color: rgba(226, 232, 240, 0.55);
+  white-space: nowrap;
+}
+.sg-hour-bar-wrap {
+  width: 100%;
+  height: 5.5rem;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  border-radius: 6px 6px 2px 2px;
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  overflow: hidden;
+}
+.sg-hour-bar {
+  width: 62%;
+  min-height: 4px;
+  border-radius: 4px 4px 1px 1px;
+  background: linear-gradient(180deg, #a5b4fc, #6366f1 55%, #312e81);
+  transition: height 0.25s ease;
+}
+.sg-hour.sg-grade-excellent .sg-hour-bar {
+  background: linear-gradient(180deg, #6ee7b7, #059669);
+}
+.sg-hour.sg-grade-good .sg-hour-bar {
+  background: linear-gradient(180deg, #7dd3fc, #0284c7);
+}
+.sg-hour.sg-grade-fair .sg-hour-bar {
+  background: linear-gradient(180deg, #fde68a, #d97706);
+}
+.sg-hour.sg-grade-poor .sg-hour-bar {
+  background: linear-gradient(180deg, #fca5a5, #b91c1c);
+}
+.sg-hour.sg-grade-daylight .sg-hour-bar {
+  background: rgba(148, 163, 184, 0.35);
+  min-height: 3px;
+}
+.sg-hour-score {
+  font-size: 0.65rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+.sg-hour-cloud {
+  font-size: 0.55rem;
+  color: rgba(226, 232, 240, 0.45);
+}
+.sg-tip-list {
+  margin: 0;
+  padding-left: 1.15rem;
+  display: grid;
+  gap: 0.45rem;
+  font-size: 0.88rem;
+  line-height: 1.4;
+  color: rgba(226, 232, 240, 0.88);
+}
+.sg-footnote {
+  margin: 0.85rem 0 0;
+  font-size: 0.72rem;
+}
+.sg-footer-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  justify-content: center;
+  padding: 0.5rem 0 1rem;
+}
+[data-theme='light'] .sg-page {
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(99, 102, 241, 0.12), transparent 55%),
+    #e8eef7;
+}
+[data-theme='light'] .sg-topbar {
+  background: rgba(232, 238, 247, 0.9);
+}
+[data-theme='light'] .sg-hero {
+  background: linear-gradient(155deg, rgba(224, 231, 255, 0.9), rgba(255, 255, 255, 0.85));
+}
+[data-theme='light'] .sg-kicker,
+[data-theme='light'] .sg-score-label,
+[data-theme='light'] .sg-factor-label,
+[data-theme='light'] .sg-dark-grid .label {
+  color: rgba(51, 65, 85, 0.7);
+}
+[data-theme='light'] .sg-summary,
+[data-theme='light'] .sg-tip-list {
+  color: #1e293b;
+}

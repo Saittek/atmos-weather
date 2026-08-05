@@ -588,6 +588,18 @@ export default function DashboardPage() {
               <Link
                 to={
                   location
+                    ? `/stargaze?lat=${location.latitude.toFixed(4)}&lon=${location.longitude.toFixed(4)}&name=${encodeURIComponent(location.name)}`
+                    : '/stargaze'
+                }
+                className="chip-btn icon-chip nav-chip"
+                title="Stargaze · night sky"
+                aria-label="Stargaze"
+              >
+                ✨
+              </Link>
+              <Link
+                to={
+                  location
                     ? `/chase?lat=${location.latitude.toFixed(4)}&lon=${location.longitude.toFixed(4)}&name=${encodeURIComponent(location.name)}`
                     : '/chase'
                 }

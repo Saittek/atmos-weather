@@ -67,6 +67,7 @@ function sanitizeMetricPath(raw) {
   if (p.startsWith('/radar')) return '/radar'
   if (p.startsWith('/globe') || p.startsWith('/earth')) return '/globe'
   if (p.startsWith('/chase') || p.startsWith('/storm')) return '/chase'
+  if (p.startsWith('/stargaze') || p.startsWith('/astro') || p.startsWith('/stars')) return '/stargaze'
   if (p.startsWith('/other')) return '/other'
   return '/other'
 }

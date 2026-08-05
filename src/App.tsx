@@ -12,6 +12,7 @@ const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const RadarPage = lazy(() => import('./pages/RadarPage'))
 const GlobePage = lazy(() => import('./pages/GlobePage'))
 const StormChaserPage = lazy(() => import('./pages/StormChaserPage'))
+const StargazePage = lazy(() => import('./pages/StargazePage'))
 
 function RouteFallback() {
   return (
@@ -79,6 +80,9 @@ export default function App() {
           <Route path="/earth" element={<GlobePage />} />
           <Route path="/chase" element={<StormChaserPage />} />
           <Route path="/storm" element={<StormChaserPage />} />
+          <Route path="/stargaze" element={<StargazePage />} />
+          <Route path="/astro" element={<StargazePage />} />
+          <Route path="/stars" element={<StargazePage />} />
           <Route path="/widget" element={<Navigate to="/" replace />} />
           <Route path="/w" element={<DashboardPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
