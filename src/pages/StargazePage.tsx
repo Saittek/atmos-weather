@@ -843,19 +843,9 @@ export default function StargazePage() {
               <section className="panel sg-hours-panel" aria-label="Clear sky chart">
                 <div className="panel-header">
                   <h2>Clear sky chart</h2>
-                  <span className="panel-hint">Cloud · transparency · seeing · dark</span>
+                  <span className="panel-hint">Tap an hour · blue is best</span>
                 </div>
                 <ClearSkyChart hours={shown.hours} />
-              </section>
-            )}
-
-            {shown.hours?.length > 0 && (
-              <section className="panel sg-hours-panel" aria-label="Hourly sky">
-                <div className="panel-header">
-                  <h2>Hourly score strip</h2>
-                  <span className="panel-hint">Higher = better</span>
-                </div>
-                <HourStrip hours={shown.hours} />
               </section>
             )}
 
