@@ -216,31 +216,43 @@
   position: absolute;
   left: -20%;
   width: 140%;
-  height: 28%;
+  height: 26%;
   border-radius: 50%;
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(226, 232, 240, 0.22) 30%,
-    rgba(241, 245, 249, 0.28) 50%,
-    rgba(226, 232, 240, 0.22) 70%,
+    rgba(226, 232, 240, 0.2) 30%,
+    rgba(241, 245, 249, 0.3) 50%,
+    rgba(226, 232, 240, 0.2) 70%,
     transparent
   );
-  filter: blur(20px);
-  animation: wx-fog 14s ease-in-out infinite;
+  filter: blur(22px);
+  animation: wx-fog 16s ease-in-out infinite;
 }
 .wx-atmo-fog span:nth-child(1) {
-  bottom: 10%;
+  bottom: 8%;
 }
 .wx-atmo-fog span:nth-child(2) {
-  bottom: 28%;
-  animation-delay: -4s;
-  opacity: 0.7;
+  bottom: 22%;
+  animation-delay: -3s;
+  opacity: 0.75;
 }
 .wx-atmo-fog span:nth-child(3) {
-  bottom: 48%;
-  animation-delay: -8s;
-  opacity: 0.5;
+  bottom: 38%;
+  animation-delay: -7s;
+  opacity: 0.55;
+}
+.wx-atmo-fog span:nth-child(4) {
+  bottom: 52%;
+  animation-delay: -11s;
+  opacity: 0.4;
+  height: 20%;
+}
+.wx-atmo-fog span:nth-child(5) {
+  bottom: 64%;
+  animation-delay: -14s;
+  opacity: 0.3;
+  height: 18%;
 }
 .wx-atmo-fog.smoke span {
   background: linear-gradient(
@@ -262,7 +274,7 @@
   }
 }
 
-/* --- Rain --- */
+/* --- Rain (thin silver streaks + wind lean) --- */
 .wx-atmo-rain {
   position: absolute;
   inset: 0;
@@ -270,44 +282,54 @@
 .wx-atmo-rain i {
   position: absolute;
   top: -8%;
-  width: 1.5px;
-  border-radius: 99px;
+  width: 1.15px;
+  border-radius: 1px;
   background: linear-gradient(
     180deg,
     transparent 0%,
-    rgba(255, 255, 255, 0.15) 15%,
-    rgba(186, 230, 253, 0.75) 45%,
-    rgba(56, 189, 248, 0.95) 80%,
+    rgba(255, 255, 255, 0.08) 10%,
+    rgba(241, 245, 249, 0.55) 40%,
+    rgba(203, 213, 225, 0.4) 78%,
     transparent 100%
   );
-  box-shadow: 0 0 4px rgba(125, 211, 252, 0.45);
+  box-shadow: none;
   animation: wx-rain-fall linear infinite;
-  transform: rotate(14deg);
   will-change: transform, opacity;
 }
 .wx-atmo-rain.light i {
-  width: 1px;
-  opacity: 0.55 !important;
+  width: 0.9px;
+}
+.wx-atmo-rain.med i {
+  width: 1.2px;
 }
 .wx-atmo-rain.heavy i {
-  width: 2px;
-  box-shadow:
-    0 0 5px rgba(125, 211, 252, 0.7),
-    0 0 10px rgba(56, 189, 248, 0.35);
+  width: 1.45px;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.12) 8%,
+    rgba(248, 250, 252, 0.62) 38%,
+    rgba(203, 213, 225, 0.48) 80%,
+    transparent 100%
+  );
+}
+.wx-atmo-i3 .wx-atmo-rain i {
+  opacity: 0.95;
 }
 @keyframes wx-rain-fall {
   0% {
-    transform: translate3d(0, -5vh, 0) rotate(14deg);
+    transform: translate3d(0, -5vh, 0) rotate(var(--ang, var(--w-ang, 12deg)));
     opacity: 0;
   }
   8% {
     opacity: 1;
   }
   92% {
-    opacity: 0.85;
+    opacity: 0.8;
   }
   100% {
-    transform: translate3d(var(--drift, -12px), 110vh, 0) rotate(14deg);
+    transform: translate3d(var(--drift, var(--w-drift, -12px)), 110vh, 0)
+      rotate(var(--ang, var(--w-ang, 12deg)));
     opacity: 0;
   }
 }
@@ -322,9 +344,12 @@
   top: -4%;
   border-radius: 50%;
   background: radial-gradient(circle at 35% 30%, #fff 0%, #e2e8f0 55%, #94a3b8 100%);
-  box-shadow: 0 0 6px rgba(255, 255, 255, 0.75);
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.45);
   animation: wx-snow-fall linear infinite;
   will-change: transform, opacity;
+}
+.wx-atmo-snow.i3 i {
+  box-shadow: 0 0 4px rgba(255, 255, 255, 0.55);
 }
 @keyframes wx-snow-fall {
   0% {
@@ -334,10 +359,26 @@
   10% {
     opacity: 1;
   }
+  55% {
+    transform: translate3d(calc(var(--drift, 20px) * 0.55), 55vh, 0);
+  }
   100% {
     transform: translate3d(var(--drift, 20px), 105vh, 0);
-    opacity: 0.15;
+    opacity: 0.12;
   }
+}
+
+/* Intensity wash tweaks */
+.wx-atmo-i3.wx-atmo-rain .wx-atmo-wash,
+.wx-atmo-i3.wx-atmo-storm .wx-atmo-wash {
+  opacity: 0.75;
+}
+.wx-atmo-i1.wx-atmo-rain .wx-atmo-wash,
+.wx-atmo-i1.wx-atmo-drizzle .wx-atmo-wash {
+  opacity: 0.4;
+}
+.wx-atmo.is-static .wx-atmo-wash {
+  opacity: 0.35;
 }
 
 /* --- Lightning --- */

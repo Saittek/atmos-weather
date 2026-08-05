@@ -454,6 +454,8 @@ export default function DashboardPage() {
           code={weather.current.weather_code}
           isDay={isDaytimeNow(weather)}
           mobile={isMobile}
+          windSpeed={weather.current.wind_speed_10m}
+          windDir={weather.current.wind_direction_10m}
         />
       )}
 

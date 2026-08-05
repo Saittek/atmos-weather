@@ -229,6 +229,8 @@ export function CurrentWeather({
             isDay={isDay}
             size={mobile ? 'lg' : 'xl'}
             forceAnimate
+            windSpeed={c.wind_speed_10m}
+            windDir={c.wind_direction_10m}
           />
         </div>
       </div>

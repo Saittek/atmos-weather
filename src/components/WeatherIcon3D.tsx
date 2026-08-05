@@ -1,5 +1,8 @@
-import { useId } from 'react'
+import { useId, type CSSProperties } from 'react'
+import { windVisual } from '../utils/windVisual'
 import './weather-3d.css'
+
+export { windVisual } from '../utils/windVisual'
 
 /** Distinct animated 3D scenes for all WMO weather groups */
 export type Weather3DKind =
@@ -33,6 +36,10 @@ interface Props {
   className?: string
   /** Force continuous animation even on sm */
   forceAnimate?: boolean
+  /** Wind m/s or km/h — Open-Meteo default is km/h for speed_10m */
+  windSpeed?: number | null
+  /** Wind FROM direction in degrees (meteorological) */
+  windDir?: number | null
 }
 
 export function weatherKindFromCode(
@@ -84,10 +91,19 @@ function dropRand(i: number, salt: number): number {
 }
 
 /**
- * Rain streaks with per-drop variance (position, length, speed, tilt, opacity)
- * so motion reads like real rain instead of a neon grid.
+ * Rain streaks with per-drop variance + optional wind lean.
  */
-function Drops({ n, className }: { n: number; className?: string }) {
+function Drops({
+  n,
+  className,
+  windAng = 12,
+  windDrift = -10,
+}: {
+  n: number
+  className?: string
+  windAng?: number
+  windDrift?: number
+}) {
   return (
     <div className={className}>
       {Array.from({ length: n }, (_, i) => {
@@ -99,9 +115,10 @@ function Drops({ n, className }: { n: number; className?: string }) {
         const r6 = dropRand(i, 6)
         const r7 = dropRand(i, 7)
         const r8 = dropRand(i, 8)
-        // Slight horizontal clustering (wind sheets) instead of even spacing
         const cluster = Math.floor(r1 * 5)
         const left = cluster * 18 + r2 * 16 + r3 * 4
+        const angJitter = (r8 - 0.5) * 6
+        const driftJitter = (r2 - 0.5) * 8
         return (
           <span
             key={i}
@@ -109,14 +126,13 @@ function Drops({ n, className }: { n: number; className?: string }) {
               ['--i' as string]: i,
               ['--n' as string]: n,
               left: `${Math.min(98, Math.max(1, left))}%`,
-              // Negative delay = already mid-loop (seamless)
               animationDelay: `${-(r4 * 1.9)}s`,
               animationDuration: `${0.52 + r5 * 0.55}s`,
               ['--len' as string]: `${14 + r6 * 26}%`,
               ['--thick' as string]: `${0.7 + r7 * 1.1}px`,
-              ['--ang' as string]: `${9 + r8 * 9}deg`,
+              ['--ang' as string]: `${windAng + angJitter}deg`,
               ['--op' as string]: `${0.28 + r3 * 0.45}`,
-              ['--wind' as string]: `${-3 - r2 * 14}px`,
+              ['--wind' as string]: `${windDrift + driftJitter}px`,
             }}
           />
         )
@@ -125,21 +141,113 @@ function Drops({ n, className }: { n: number; className?: string }) {
   )
 }
 
-function Flakes({ n, glyph = '❄' }: { n: number; glyph?: string }) {
+/** Soft snow flakes — varied size, drift, spin, opacity (not identical ❄ grid). */
+function Flakes({
+  n,
+  glyph = '❄',
+  windDrift = 8,
+  soft = false,
+}: {
+  n: number
+  glyph?: string
+  windDrift?: number
+  soft?: boolean
+}) {
   return (
-    <div className="w3d-snow">
-      {Array.from({ length: n }, (_, i) => (
-        <span
-          key={i}
-          style={{
-            ['--i' as string]: i,
-            ['--n' as string]: n,
-            animationDelay: `${-((i / Math.max(n, 1)) * 2)}s`,
-          }}
-        >
-          {glyph}
-        </span>
-      ))}
+    <div className={`w3d-snow${soft ? ' soft' : ''}`}>
+      {Array.from({ length: n }, (_, i) => {
+        const r1 = dropRand(i, 11)
+        const r2 = dropRand(i, 12)
+        const r3 = dropRand(i, 13)
+        const r4 = dropRand(i, 14)
+        const r5 = dropRand(i, 15)
+        const r6 = dropRand(i, 16)
+        const size = soft ? 0.35 + r1 * 0.55 : 0.55 + r1 * 0.9
+        const sway = windDrift * (0.4 + r2) + (r3 - 0.5) * 18
+        return (
+          <span
+            key={i}
+            style={{
+              ['--i' as string]: i,
+              ['--n' as string]: n,
+              left: `${2 + r4 * 96}%`,
+              animationDelay: `${-(r5 * 3.2)}s`,
+              animationDuration: `${2.2 + r6 * 2.8}s`,
+              ['--sz' as string]: `${size}`,
+              ['--op' as string]: `${0.45 + r2 * 0.5}`,
+              ['--sway' as string]: `${sway}px`,
+              ['--spin' as string]: `${120 + r3 * 280}deg`,
+            }}
+          >
+            {glyph === '❄' || glyph === '✦' ? (
+              <i className="w3d-flake-dot" aria-hidden />
+            ) : (
+              glyph
+            )}
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
+/** Layered fog / smoke bands with independent drift. */
+function FogLayers({
+  kind = 'fog',
+  layers = 5,
+}: {
+  kind?: 'fog' | 'smoke' | 'icy'
+  layers?: number
+}) {
+  return (
+    <div className={`w3d-fog w3d-fog-live ${kind === 'smoke' ? 'w3d-smoke' : ''} ${kind === 'icy' ? 'icy' : ''}`}>
+      {Array.from({ length: layers }, (_, i) => {
+        const r1 = dropRand(i, 21)
+        const r2 = dropRand(i, 22)
+        const r3 = dropRand(i, 23)
+        return (
+          <span
+            key={i}
+            style={{
+              bottom: `${6 + i * (70 / layers) + r1 * 4}%`,
+              height: `${10 + r2 * 10}%`,
+              width: `${78 + r3 * 22}%`,
+              marginLeft: `${r1 * 12}%`,
+              animationDelay: `${-(r2 * 4)}s`,
+              animationDuration: `${4.5 + r3 * 4}s`,
+              opacity: 0.35 + r1 * 0.4,
+              ['--fog-x' as string]: `${6 + r2 * 10}%`,
+            }}
+          />
+        )
+      })}
+    </div>
+  )
+}
+
+function Hail({ n = 10, windDrift = 0 }: { n?: number; windDrift?: number }) {
+  return (
+    <div className="w3d-hail">
+      {Array.from({ length: n }, (_, i) => {
+        const r1 = dropRand(i, 31)
+        const r2 = dropRand(i, 32)
+        const r3 = dropRand(i, 33)
+        const r4 = dropRand(i, 34)
+        return (
+          <span
+            key={i}
+            style={{
+              left: `${4 + r1 * 90}%`,
+              animationDelay: `${-(r2 * 1.1)}s`,
+              animationDuration: `${0.65 + r3 * 0.55}s`,
+              width: `${3.5 + r4 * 4}px`,
+              height: `${3.5 + r4 * 4}px`,
+              ['--hail-x' as string]: `${windDrift * 0.4 + (r1 - 0.5) * 12}px`,
+              ['--op' as string]: `${0.55 + r2 * 0.4}`,
+            }}
+          />
+        )
+      })}
     </div>
   )
 }
@@ -343,16 +451,27 @@ function Moon() {
   return <MoonFace />
 }
 
-function Bolt({ hail = false, gradId }: { hail?: boolean; gradId: string }) {
+function Bolt({
+  hail = false,
+  gradId,
+  hero = false,
+  windDrift = 0,
+}: {
+  hail?: boolean
+  gradId: string
+  hero?: boolean
+  windDrift?: number
+}) {
   return (
     <>
-      <div className="w3d-bolt">
+      <div className={`w3d-bolt${hero ? ' hero' : ''}`} style={{ left: `${36 + (windDrift > 0 ? 4 : -2)}%` }}>
         <svg viewBox="0 0 40 64" className="w3d-bolt-svg">
           <defs>
             <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#fef9c3" />
-              <stop offset="55%" stopColor="#fde047" />
-              <stop offset="100%" stopColor="#f59e0b" />
+              <stop offset="0%" stopColor="#fffef5" />
+              <stop offset="35%" stopColor="#fef08a" />
+              <stop offset="70%" stopColor="#facc15" />
+              <stop offset="100%" stopColor="#eab308" />
             </linearGradient>
           </defs>
           <path
@@ -363,19 +482,20 @@ function Bolt({ hail = false, gradId }: { hail?: boolean; gradId: string }) {
           />
         </svg>
       </div>
-      {hail && (
-        <div className="w3d-hail">
-          {Array.from({ length: 7 }, (_, i) => (
-            <span
-              key={i}
-              style={{
-                ['--i' as string]: i,
-                animationDelay: `${-((i / 7) * 0.8)}s`,
-              }}
+      {hero && (
+        <div className="w3d-bolt secondary" style={{ left: '58%' }}>
+          <svg viewBox="0 0 40 64" className="w3d-bolt-svg">
+            <path
+              d="M20 4 L10 30 H18 L12 56 L32 26 H20 Z"
+              fill={`url(#${gradId})`}
+              stroke="#fffbeb"
+              strokeWidth="1"
+              opacity="0.85"
             />
-          ))}
+          </svg>
         </div>
       )}
+      {hail && <Hail n={hero ? 14 : 8} windDrift={windDrift} />}
       <div className="w3d-flash" />
     </>
   )
@@ -391,11 +511,14 @@ export function WeatherIcon3D({
    * for CPU; set true only for hero / “now” cards.
    */
   forceAnimate = false,
+  windSpeed = null,
+  windDir = null,
 }: Props) {
   const uid = useId().replace(/:/g, '')
   const boltGradId = `boltGrad-${uid}`
   const { kind, intensity } = weatherKindFromCode(code, isDay)
-  /* Hero: many thin streaks (lifelike density); list icons stay lighter */
+  const wind = windVisual(windSpeed, windDir)
+  /* Hero: denser lifelike particles; list icons stay lighter */
   const hero = forceAnimate && (size === 'lg' || size === 'xl')
   const dropCount = hero
     ? intensity === 1
@@ -408,8 +531,22 @@ export function WeatherIcon3D({
       : intensity === 2
         ? 16
         : 22
-  const flakeCount = intensity === 1 ? 7 : intensity === 2 ? 11 : 15
-  // No periodic remount — remounting every few seconds caused a visible snap to frame 0
+  const flakeCount = hero
+    ? intensity === 1
+      ? 18
+      : intensity === 2
+        ? 28
+        : 40
+    : intensity === 1
+      ? 8
+      : intensity === 2
+        ? 12
+        : 16
+  const fogLayers = hero ? 7 : 5
+  const dropProps = {
+    windAng: wind.ang,
+    windDrift: wind.drift,
+  }
 
   const scene = (() => {
     switch (kind) {
@@ -455,43 +592,29 @@ export function WeatherIcon3D({
         return (
           <>
             <Clouds dark />
-            <div className="w3d-fog">
-              <span />
-              <span />
-              <span />
-              <span />
-            </div>
+            <FogLayers kind="fog" layers={fogLayers} />
           </>
         )
       case 'smoke':
         return (
           <>
             <Clouds dark />
-            <div className="w3d-fog w3d-smoke">
-              <span />
-              <span />
-              <span />
-              <span />
-            </div>
+            <FogLayers kind="smoke" layers={fogLayers} />
           </>
         )
       case 'rime':
         return (
           <>
             <Clouds dark />
-            <div className="w3d-fog icy">
-              <span />
-              <span />
-              <span />
-            </div>
-            <Flakes n={5} glyph="✦" />
+            <FogLayers kind="icy" layers={hero ? 6 : 4} />
+            <Flakes n={hero ? 10 : 5} glyph="✦" soft windDrift={wind.drift * 0.3} />
           </>
         )
       case 'drizzle':
         return (
           <>
             <Clouds />
-            <Drops n={dropCount} className="w3d-precip light" />
+            <Drops n={dropCount} className="w3d-precip light" {...dropProps} />
             {hero && <div className="w3d-splash" />}
           </>
         )
@@ -499,15 +622,19 @@ export function WeatherIcon3D({
         return (
           <>
             <Clouds dark />
-            <Drops n={dropCount} className="w3d-precip light icy" />
-            <Flakes n={4} glyph="·" />
+            <Drops n={dropCount} className="w3d-precip light icy" {...dropProps} />
+            <Flakes n={hero ? 8 : 4} glyph="·" soft windDrift={wind.drift * 0.4} />
           </>
         )
       case 'rain':
         return (
           <>
             <Clouds dark={intensity > 1} />
-            <Drops n={dropCount} className={`w3d-precip ${intensity > 2 ? 'heavy' : 'med'}`} />
+            <Drops
+              n={dropCount}
+              className={`w3d-precip ${intensity > 2 ? 'heavy' : 'med'}`}
+              {...dropProps}
+            />
             {(intensity > 1 || hero) && <div className="w3d-splash" />}
           </>
         )
@@ -515,7 +642,7 @@ export function WeatherIcon3D({
         return (
           <>
             <Clouds dark />
-            <Drops n={dropCount} className="w3d-precip med icy" />
+            <Drops n={dropCount} className="w3d-precip med icy" {...dropProps} />
             <div className="w3d-ice-glaze" />
             {hero && <div className="w3d-splash" />}
           </>
@@ -524,15 +651,15 @@ export function WeatherIcon3D({
         return (
           <>
             <Clouds dark={intensity > 1} />
-            <Flakes n={flakeCount} />
-            {intensity > 2 && <div className="w3d-snow-ground" />}
+            <Flakes n={flakeCount} windDrift={wind.drift * 0.7} />
+            {(intensity > 2 || hero) && <div className="w3d-snow-ground" />}
           </>
         )
       case 'grains':
         return (
           <>
             <Clouds dark />
-            <Flakes n={10} glyph="•" />
+            <Flakes n={hero ? 16 : 10} glyph="•" soft windDrift={wind.drift * 0.5} />
           </>
         )
       case 'showers':
@@ -540,7 +667,11 @@ export function WeatherIcon3D({
           <>
             <Sun small />
             <Clouds />
-            <Drops n={dropCount} className={`w3d-precip shower ${intensity > 2 ? 'heavy' : 'med'}`} />
+            <Drops
+              n={dropCount}
+              className={`w3d-precip shower ${intensity > 2 ? 'heavy' : 'med'}`}
+              {...dropProps}
+            />
             {(intensity > 1 || hero) && <div className="w3d-splash" />}
           </>
         )
@@ -549,25 +680,25 @@ export function WeatherIcon3D({
           <>
             <Sun small />
             <Clouds />
-            <Flakes n={flakeCount} />
+            <Flakes n={flakeCount} windDrift={wind.drift * 0.7} />
           </>
         )
       case 'thunder':
         return (
           <>
             <Clouds dark storm />
-            <Drops n={Math.max(dropCount, 14)} className="w3d-precip heavy" />
+            <Drops n={Math.max(dropCount, hero ? 36 : 16)} className="w3d-precip heavy" {...dropProps} />
             <div className="w3d-splash" />
-            <Bolt gradId={boltGradId} />
+            <Bolt gradId={boltGradId} hero={hero} windDrift={wind.drift} />
           </>
         )
       case 'thunder-hail':
         return (
           <>
             <Clouds dark storm />
-            <Drops n={Math.max(dropCount, 12)} className="w3d-precip heavy" />
+            <Drops n={Math.max(dropCount, hero ? 30 : 14)} className="w3d-precip heavy" {...dropProps} />
             <div className="w3d-splash" />
-            <Bolt hail gradId={boltGradId} />
+            <Bolt hail gradId={boltGradId} hero={hero} windDrift={wind.drift} />
           </>
         )
       default:
@@ -581,6 +712,12 @@ export function WeatherIcon3D({
       aria-hidden
       data-kind={kind}
       data-intensity={intensity}
+      style={
+        {
+          ['--w-ang']: `${wind.ang}deg`,
+          ['--w-drift']: `${wind.drift}px`,
+        } as CSSProperties
+      }
     >
       <div className="w3d-stage">
         <div className="w3d-orbit">{scene}</div>

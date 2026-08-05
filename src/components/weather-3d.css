@@ -411,79 +411,81 @@
   }
 }
 
-/* ========== FOG ========== */
+/* ========== FOG / SMOKE (layered volumetric bands) ========== */
 .w3d-fog {
   position: absolute;
-  left: 8%;
-  right: 8%;
-  bottom: 14%;
-  height: 46%;
+  left: 4%;
+  right: 4%;
+  bottom: 8%;
+  top: 38%;
   z-index: 5;
+  pointer-events: none;
+  overflow: hidden;
 }
 .w3d-fog span {
+  position: absolute;
+  left: 0;
   display: block;
   height: 14%;
-  margin: 7% 0;
-  border-radius: 99px;
+  border-radius: 50%;
   background: linear-gradient(
     90deg,
-    transparent,
-    rgba(241, 245, 249, 0.85) 25%,
-    rgba(226, 232, 240, 0.9) 50%,
-    rgba(241, 245, 249, 0.85) 75%,
-    transparent
+    transparent 0%,
+    rgba(241, 245, 249, 0.55) 22%,
+    rgba(226, 232, 240, 0.72) 50%,
+    rgba(241, 245, 249, 0.55) 78%,
+    transparent 100%
   );
-  animation: w3d-fog 3.6s ease-in-out infinite;
-  box-shadow: 0 2px 8px rgba(148, 163, 184, 0.25);
+  animation: w3d-fog 5.5s ease-in-out infinite;
+  filter: blur(3px);
+  box-shadow: none;
 }
 .w3d-fog.icy span {
   background: linear-gradient(
     90deg,
-    transparent,
-    rgba(186, 230, 253, 0.75) 30%,
-    rgba(224, 242, 254, 0.95) 50%,
-    rgba(186, 230, 253, 0.75) 70%,
-    transparent
+    transparent 0%,
+    rgba(186, 230, 253, 0.45) 25%,
+    rgba(224, 242, 254, 0.7) 50%,
+    rgba(186, 230, 253, 0.45) 75%,
+    transparent 100%
   );
 }
 /* Wildfire / particle smoke — warm brown, not gray-white fog */
 .w3d-fog.w3d-smoke span {
   background: linear-gradient(
     90deg,
-    transparent,
-    rgba(180, 120, 60, 0.55) 25%,
-    rgba(120, 80, 40, 0.75) 50%,
-    rgba(160, 100, 50, 0.55) 75%,
-    transparent
+    transparent 0%,
+    rgba(160, 100, 50, 0.35) 22%,
+    rgba(90, 55, 25, 0.55) 50%,
+    rgba(140, 90, 45, 0.38) 78%,
+    transparent 100%
   );
-  box-shadow: 0 2px 10px rgba(90, 50, 20, 0.35);
-  opacity: 0.9;
+  filter: blur(4px);
+  opacity: 0.85;
 }
-.w3d-fog span:nth-child(2) {
-  animation-delay: 0.4s;
-  width: 92%;
-  margin-left: 4%;
+.w3d-fog-live span {
+  /* positions set inline for organic layers */
+  margin: 0;
 }
-.w3d-fog span:nth-child(3) {
-  animation-delay: 0.9s;
-  width: 84%;
-  margin-left: 8%;
+.w3d-lg .w3d-fog span,
+.w3d-xl .w3d-fog span {
+  filter: blur(4.5px);
 }
-.w3d-fog span:nth-child(4) {
-  animation-delay: 1.3s;
-  width: 76%;
-  margin-left: 12%;
+.w3d-lg .w3d-fog.w3d-smoke span,
+.w3d-xl .w3d-fog.w3d-smoke span {
+  filter: blur(5.5px);
 }
 
 @keyframes w3d-fog {
   0%,
   100% {
-    transform: translateX(-8%) scaleX(0.96);
-    opacity: 0.45;
+    transform: translateX(calc(var(--fog-x, 8%) * -1)) scaleX(0.94) scaleY(1);
   }
-  50% {
-    transform: translateX(8%) scaleX(1.04);
-    opacity: 0.95;
+  40% {
+    transform: translateX(calc(var(--fog-x, 8%) * 0.4)) scaleX(1.05) scaleY(1.08);
+  }
+  70% {
+    transform: translateX(var(--fog-x, 8%)) scaleX(1.02) scaleY(0.96);
   }
 }
 
@@ -681,55 +683,89 @@
   }
 }
 
-/* ========== SNOW ========== */
+/* ========== SNOW (soft crystals + sway) ========== */
 .w3d-snow {
   position: absolute;
-  inset: 48% 12% 4% 12%;
+  inset: 44% 6% 2% 6%;
   z-index: 5;
   pointer-events: none;
+  overflow: hidden;
+  mask-image: linear-gradient(180deg, transparent 0%, #000 14%, #000 90%, transparent 100%);
 }
 .w3d-snow span {
   position: absolute;
-  left: calc((var(--i) / var(--n, 10)) * 92%);
-  top: -15%;
-  font-size: clamp(7px, 15%, 15px);
-  color: #f0f9ff;
-  text-shadow:
-    0 0 6px rgba(255, 255, 255, 0.95),
-    0 2px 4px rgba(56, 189, 248, 0.35);
-  animation: w3d-snow 2.4s linear infinite;
-  animation-delay: calc((var(--i) / var(--n, 10)) * -2.4s);
+  top: -12%;
+  display: grid;
+  place-items: center;
+  font-size: 0; /* prefer soft dots over emoji grid */
+  line-height: 0;
+  color: #f8fafc;
+  animation-name: w3d-snow;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  animation-duration: 2.8s;
   opacity: 0;
   will-change: transform, opacity;
+  transform: scale(var(--sz, 0.8));
+}
+.w3d-flake-dot {
+  display: block;
+  width: calc(5px * var(--sz, 1));
+  height: calc(5px * var(--sz, 1));
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 28%, #fff 0%, #e2e8f0 48%, rgba(148, 163, 184, 0.75) 100%);
+  box-shadow:
+    0 0 2px rgba(255, 255, 255, 0.55),
+    0 0 0.5px rgba(226, 232, 240, 0.8);
+}
+.w3d-snow.soft .w3d-flake-dot {
+  width: calc(3.5px * var(--sz, 1));
+  height: calc(3.5px * var(--sz, 1));
+  opacity: 0.9;
+}
+.w3d-lg .w3d-flake-dot,
+.w3d-xl .w3d-flake-dot {
+  width: calc(6.5px * var(--sz, 1));
+  height: calc(6.5px * var(--sz, 1));
+}
+.w3d-xl .w3d-flake-dot {
+  width: calc(7.5px * var(--sz, 1));
+  height: calc(7.5px * var(--sz, 1));
 }
 
 @keyframes w3d-snow {
   0% {
-    transform: translate3d(0, 0, 0) rotate(0deg);
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(var(--sz, 0.8));
     opacity: 0;
   }
   8% {
-    opacity: 1;
+    opacity: var(--op, 0.85);
   }
-  90% {
-    opacity: 1;
+  50% {
+    transform: translate3d(calc(var(--sway, 10px) * 0.55), 95%, 0)
+      rotate(calc(var(--spin, 200deg) * 0.5)) scale(var(--sz, 0.8));
+  }
+  92% {
+    opacity: var(--op, 0.85);
   }
   100% {
-    transform: translate3d(10px, 200%, 0) rotate(240deg);
+    transform: translate3d(var(--sway, 10px), 195%, 0) rotate(var(--spin, 200deg))
+      scale(calc(var(--sz, 0.8) * 0.85));
     opacity: 0;
   }
 }
 
 .w3d-snow-ground {
   position: absolute;
-  left: 18%;
-  right: 14%;
-  bottom: 6%;
-  height: 12%;
+  left: 16%;
+  right: 12%;
+  bottom: 4%;
+  height: 14%;
   border-radius: 50%;
-  background: radial-gradient(ellipse, rgba(248, 250, 252, 0.75), transparent 70%);
+  background: radial-gradient(ellipse, rgba(248, 250, 252, 0.55), transparent 72%);
   z-index: 3;
-  animation: w3d-glaze 3s ease-in-out infinite;
+  animation: w3d-glaze 3.5s ease-in-out infinite;
+  filter: blur(1px);
 }
 
 /* ========== THUNDER / HAIL ========== */
@@ -737,12 +773,28 @@
   position: absolute;
   left: 40%;
   top: 46%;
-  width: 30%;
+  width: 28%;
   height: 44%;
   z-index: 6;
-  filter: drop-shadow(0 0 12px rgba(250, 204, 21, 1))
-    drop-shadow(0 0 22px rgba(254, 249, 195, 0.75));
-  animation: w3d-flash 2.4s ease-in-out infinite;
+  filter: drop-shadow(0 0 8px rgba(254, 249, 195, 0.85))
+    drop-shadow(0 0 16px rgba(250, 204, 21, 0.55));
+  animation: w3d-flash 3.1s ease-in-out infinite;
+  pointer-events: none;
+}
+.w3d-bolt.hero {
+  width: 32%;
+  height: 48%;
+  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.75))
+    drop-shadow(0 0 18px rgba(250, 204, 21, 0.7));
+}
+.w3d-bolt.secondary {
+  top: 50%;
+  width: 18%;
+  height: 32%;
+  opacity: 0.75;
+  animation-duration: 3.8s;
+  animation-delay: -1.4s;
+  filter: drop-shadow(0 0 6px rgba(254, 243, 199, 0.7));
 }
 .w3d-bolt-svg {
   width: 100%;
@@ -754,31 +806,35 @@
   inset: 0;
   z-index: 4;
   border-radius: 20%;
-  background: radial-gradient(circle at 50% 40%, rgba(254, 249, 195, 0.65), rgba(186, 230, 253, 0.2) 45%, transparent 60%);
-  animation: w3d-sky-flash 2.4s ease-in-out infinite;
+  background: radial-gradient(
+    circle at 48% 38%,
+    rgba(254, 249, 195, 0.55),
+    rgba(226, 232, 240, 0.12) 42%,
+    transparent 62%
+  );
+  animation: w3d-sky-flash 3.1s ease-in-out infinite;
   pointer-events: none;
 }
 
 .w3d-hail {
   position: absolute;
-  left: 22%;
-  right: 18%;
-  top: 56%;
-  bottom: 8%;
+  left: 10%;
+  right: 10%;
+  top: 50%;
+  bottom: 4%;
   z-index: 5;
   overflow: hidden;
+  pointer-events: none;
 }
 .w3d-hail span {
   position: absolute;
-  top: -15%;
-  left: calc(8% + var(--i) * 12%);
-  width: 7px;
-  height: 7px;
+  top: -12%;
   border-radius: 50%;
-  background: radial-gradient(circle at 30% 30%, #fff 0%, #e2e8f0 50%, #94a3b8 100%);
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.35);
-  animation: w3d-hail 0.9s linear infinite;
-  animation-delay: calc(var(--i) * -0.12s);
+  background: radial-gradient(circle at 30% 28%, #fff 0%, #e2e8f0 42%, #94a3b8 100%);
+  box-shadow:
+    inset 0 -1px 1px rgba(15, 23, 42, 0.25),
+    0 1px 2px rgba(15, 23, 42, 0.2);
+  animation: w3d-hail 0.85s linear infinite;
   opacity: 0;
   will-change: transform, opacity;
 }
@@ -842,14 +898,17 @@
     transform: translate3d(0, 0, 0) scale(1);
     opacity: 0;
   }
-  10% {
-    opacity: 1;
+  8% {
+    opacity: var(--op, 0.85);
   }
-  88% {
-    opacity: 1;
+  70% {
+    transform: translate3d(calc(var(--hail-x, 0px) * 0.6), 120%, 0) scale(0.95);
+  }
+  90% {
+    opacity: var(--op, 0.85);
   }
   100% {
-    transform: translate3d(0, 180%, 0) scale(0.75);
+    transform: translate3d(var(--hail-x, 0px), 190%, 0) scale(0.7);
     opacity: 0;
   }
 }
