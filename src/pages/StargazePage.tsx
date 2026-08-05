@@ -19,7 +19,6 @@ import {
   loadCachedStargazeBrief,
   type GoNoGo,
   type StargazeGrade,
-  type StargazeHour,
 } from '../utils/stargaze'
 import { moonGeometry } from '../utils/moonTimes'
 import { brightPlanetsTonight } from '../utils/planetVisibility'
@@ -41,33 +40,6 @@ function gradeClass(g: StargazeGrade): string {
 
 function goClass(g: GoNoGo): string {
   return `sg-go-${g}`
-}
-
-function HourStrip({ hours }: { hours: StargazeHour[] }) {
-  const night = hours.filter((h) => h.isNight)
-  const show = (night.length >= 4 ? night : hours).filter(
-    (h) => h.ms < Date.now() + 36 * 3600_000,
-  )
-  if (!show.length) return <p className="muted-center">No hourly sky data yet.</p>
-  return (
-    <ol className="sg-hour-strip" aria-label="Sky quality by hour">
-      {show.map((h) => (
-        <li key={h.time} className={`sg-hour ${gradeClass(h.grade)}`}>
-          <span className="sg-hour-when">{h.label}</span>
-          <div className="sg-hour-bar-wrap" aria-hidden>
-            <div
-              className="sg-hour-bar"
-              style={{ height: `${Math.max(8, h.isNight ? h.score : 4)}%` }}
-            />
-          </div>
-          <span className="sg-hour-score">{h.isNight ? h.score : '—'}</span>
-          <span className="sg-hour-cloud" title="Cloud cover">
-            {h.isNight ? `${h.cloud}%` : 'day'}
-          </span>
-        </li>
-      ))}
-    </ol>
-  )
 }
 
 function loadRed(): boolean {
