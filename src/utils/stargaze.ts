@@ -4,6 +4,7 @@
  */
 import type { AirQualityData, WeatherData } from '../api/types'
 import { estimateBortle, bortleScorePenalty, type BortleEstimate } from './bortleEstimate'
+import { bortleClassMeta } from './bortleLookup'
 import { parseSunTime } from './daylight'
 import { fireSmokeRisk } from './fireRisk'
 import { parseWeatherLocal } from './format'
@@ -490,6 +491,9 @@ export function buildStargazeBrief(
     lon?: number
     air?: AirQualityData | null
     auroraKp?: number | null
+    /** Override Bortle class (e.g. from VIIRS grid) */
+    bortleClass?: number | null
+    bortleSource?: 'viirs' | 'estimate'
   },
 ): StargazeBrief {
   if (!weather?.current || !weather?.daily?.time?.length) {
@@ -501,7 +505,23 @@ export function buildStargazeBrief(
   const tz = weather.timezone
   const ti = Math.max(0, todayDailyIndex(weather))
   const moon = moonPhase(new Date(atMs))
-  const bortle = estimateBortle(lat, lon)
+  const estimated = estimateBortle(lat, lon)
+  const bortle: BortleEstimate =
+    opts?.bortleClass != null && Number.isFinite(opts.bortleClass)
+      ? (() => {
+          const meta = bortleClassMeta(opts.bortleClass)
+          return {
+            class: meta.class,
+            label: meta.label + (opts.bortleSource === 'viirs' ? ' · VIIRS' : ''),
+            sky: meta.sky,
+            tone: meta.tone,
+            detail:
+              opts.bortleSource === 'viirs'
+                ? 'From NASA VIIRS light-pollution grid (0.5°).'
+                : estimated.detail,
+          }
+        })()
+      : estimated
   // Guard broken/partial payloads (offline or model merge)
   const h = weather.hourly?.time?.length
     ? weather.hourly

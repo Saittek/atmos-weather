@@ -130,26 +130,23 @@ function cardinal(az) {
   return dirs[Math.round(az / 45) % 8]
 }
 
-export async function computeIssPasses(lat, lon) {
-  const tleRes = await fetch(
-    'https://celestrak.org/NORAD/elements/gp.php?CATNR=25544&FORMAT=TLE',
-    { cf: { cacheTtl: 1800, cacheEverything: true } },
-  )
-  if (!tleRes.ok) throw new Error('TLE fetch failed')
-  const tleText = await tleRes.text()
-  const elems = parseTleMeanMotion(tleText)
+const SATS = [
+  { catnr: 25544, name: 'ISS' },
+  { catnr: 20580, name: 'Hubble' },
+  { catnr: 48274, name: 'CSS (Tiangong)' },
+]
 
+function passesForElems(elems, lat, lon, name) {
   const now = Date.now()
-  const step = 30 * 1000
+  const step = 45 * 1000
   const end = now + 36 * 3600 * 1000
-  const minEl = 20
+  const minEl = 18
   const samples = []
   for (let t = now; t <= end; t += step) {
     const p = satLatLon(elems, t)
     const { el, az } = elevationAzimuth(lat, lon, p.lat, p.lon, p.altKm)
     samples.push({ t, el, az })
   }
-
   const passes = []
   let inPass = false
   let rise = null
@@ -171,9 +168,9 @@ export async function computeIssPasses(lat, lon) {
       }
     } else if (inPass) {
       inPass = false
-      // Only night-ish rough: skip if sun would be high — client can filter
       if (rise && maxT && maxEl >= minEl) {
         passes.push({
+          name,
           riseMs: rise,
           maxMs: maxT,
           setMs: s.t,
@@ -185,5 +182,25 @@ export async function computeIssPasses(lat, lon) {
       maxEl = -99
     }
   }
-  return passes.slice(0, 6)
+  return passes
+}
+
+export async function computeIssPasses(lat, lon) {
+  const all = []
+  for (const sat of SATS) {
+    try {
+      const tleRes = await fetch(
+        `https://celestrak.org/NORAD/elements/gp.php?CATNR=${sat.catnr}&FORMAT=TLE`,
+        { cf: { cacheTtl: 1800, cacheEverything: true } },
+      )
+      if (!tleRes.ok) continue
+      const tleText = await tleRes.text()
+      const elems = parseTleMeanMotion(tleText)
+      all.push(...passesForElems(elems, lat, lon, sat.name))
+    } catch {
+      /* skip sat */
+    }
+  }
+  all.sort((a, b) => a.riseMs - b.riseMs)
+  return all.slice(0, 10)
 }

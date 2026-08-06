@@ -13,6 +13,7 @@ export interface KpSnapshot {
 }
 
 export interface IssPass {
+  name?: string
   riseMs: number
   maxMs: number
   setMs: number
@@ -122,12 +123,14 @@ export async function fetchIssPasses(
     return {
       passes: data.passes.map(
         (p: {
+          name?: string
           riseMs: number
           maxMs: number
           setMs: number
           maxEl: number
           direction?: string
         }) => ({
+          name: p.name || 'ISS',
           riseMs: p.riseMs,
           maxMs: p.maxMs,
           setMs: p.setMs,
@@ -135,7 +138,7 @@ export async function fetchIssPasses(
           direction: p.direction || '',
         }),
       ),
-      note: data.note || 'Visible ISS passes (approx, elev ≥ 20°).',
+      note: data.note || 'Visible satellite passes (approx).',
     }
   } catch {
     return null

@@ -2,7 +2,7 @@
  * Stargazing / astrophotography desk — full planner.
  * Route: /stargaze?lat=&lon=&name=
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useWeather, sameExactPlace } from '../hooks/useWeather'
 import { SearchBar } from '../components/SearchBar'
@@ -11,6 +11,10 @@ import { MoonPhaseIcon } from '../components/MoonPhaseIcon'
 import { ClearSkyChart } from '../components/ClearSkyChart'
 import type { LocationResult } from '../api/types'
 import { fetchIssPasses, fetchKpIndex, type IssSnapshot } from '../api/skyExtras'
+import {
+  fetchCloudModelAgreement,
+  type CloudAgreement,
+} from '../api/cloudModels'
 import { formatSpeed, formatTime } from '../utils/format'
 import {
   buildStargazeBrief,
@@ -20,9 +24,11 @@ import {
   type GoNoGo,
   type StargazeGrade,
 } from '../utils/stargaze'
+import { lookupBortleAt, preloadBortleGrid } from '../utils/bortleLookup'
 import { moonGeometry } from '../utils/moonTimes'
 import { brightPlanetsTonight } from '../utils/planetVisibility'
 import { upcomingSkyEvents } from '../utils/skyEvents'
+import { targetAltitudes } from '../utils/targetAltitude'
 import {
   addDarkSite,
   distanceKm,
@@ -31,6 +37,10 @@ import {
   removeDarkSite,
   type DarkSite,
 } from '../utils/darkSites'
+
+const StargazeCloudMap = lazy(() =>
+  import('../components/StargazeCloudMap').then((m) => ({ default: m.StargazeCloudMap })),
+)
 
 const RED_KEY = 'solara-stargaze-red-v1'
 
@@ -78,10 +88,17 @@ export default function StargazePage() {
   const [homeWeatherScore, setHomeWeatherScore] = useState<number | null>(null)
   const [notifyMsg, setNotifyMsg] = useState<string | null>(null)
   const [sites, setSites] = useState<DarkSite[]>(() => loadDarkSites())
+  const [bortleClass, setBortleClass] = useState<number | null>(null)
+  const [bortleSource, setBortleSource] = useState<'viirs' | 'estimate'>('estimate')
+  const [cloudAgree, setCloudAgree] = useState<CloudAgreement | null>(null)
 
   const qLat = parseFloat(params.get('lat') ?? '')
   const qLon = parseFloat(params.get('lon') ?? '')
   const qName = params.get('name') || ''
+
+  useEffect(() => {
+    preloadBortleGrid()
+  }, [])
 
   useEffect(() => {
     if (Number.isNaN(qLat) || Number.isNaN(qLon)) return
@@ -116,6 +133,14 @@ export default function StargazePage() {
     void fetchIssPasses(location.latitude, location.longitude).then((p) => {
       if (!cancelled) setIss(p)
     })
+    void lookupBortleAt(location.latitude, location.longitude).then((c) => {
+      if (cancelled) return
+      setBortleClass(c)
+      setBortleSource('viirs')
+    })
+    void fetchCloudModelAgreement(location.latitude, location.longitude).then((a) => {
+      if (!cancelled) setCloudAgree(a)
+    })
     return () => {
       cancelled = true
     }
@@ -129,6 +154,8 @@ export default function StargazePage() {
         lon: location.longitude,
         air,
         auroraKp: kp,
+        bortleClass,
+        bortleSource,
       })
       return { brief: b, briefError: null }
     } catch (e) {
@@ -136,7 +163,7 @@ export default function StargazePage() {
       console.error('[Stargaze] brief failed', e)
       return { brief: null, briefError: msg }
     }
-  }, [weather, location, air, kp])
+  }, [weather, location, air, kp, bortleClass, bortleSource])
 
   useEffect(() => {
     if (!brief || !location) return
@@ -374,6 +401,11 @@ export default function StargazePage() {
   const planets = useMemo(() => {
     if (!location) return []
     return brightPlanetsTonight(location.latitude, location.longitude)
+  }, [location?.latitude, location?.longitude])
+
+  const altitudes = useMemo(() => {
+    if (!location) return []
+    return targetAltitudes(location.latitude, location.longitude)
   }, [location?.latitude, location?.longitude])
 
   const events = useMemo(() => upcomingSkyEvents(new Date(), 5), [])
@@ -617,7 +649,48 @@ export default function StargazePage() {
                   {shown.auroraLikely ? ' · aurora watch' : ''}
                 </p>
               )}
+              {cloudAgree && (
+                <div className="sg-model-agree">
+                  <strong>{cloudAgree.label}</strong>
+                  <p>{cloudAgree.detail}</p>
+                  <ul className="sg-model-list">
+                    {cloudAgree.models.map((m) => (
+                      <li key={m.id}>
+                        {m.label}:{' '}
+                        {m.meanCloud != null ? `${m.meanCloud}% cloud` : m.error || '—'}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </section>
+
+            {location && (
+              <section className="panel" aria-label="Live clouds">
+                <div className="panel-header">
+                  <h2>Live clouds / radar</h2>
+                  <span className="panel-hint">Is the hole real right now?</span>
+                </div>
+                <Suspense fallback={<p className="muted-center">Loading map…</p>}>
+                  <StargazeCloudMap
+                    lat={location.latitude}
+                    lon={location.longitude}
+                    placeName={location.name}
+                  />
+                </Suspense>
+                <div className="sg-bortle-map-wrap">
+                  <img
+                    src="/data/bortle-map.webp"
+                    alt="Global light pollution map"
+                    className="sg-bortle-map"
+                    loading="lazy"
+                  />
+                  <p className="sg-footnote muted-center">
+                    Light-pollution context map · pin Bortle from VIIRS grid above
+                  </p>
+                </div>
+              </section>
+            )}
 
             {/* 7-night strip */}
             {shown.nights.length > 0 && (
@@ -860,11 +933,33 @@ export default function StargazePage() {
               </ul>
             </section>
 
-            {/* ISS */}
-            <section className="panel" aria-label="ISS passes">
+            {altitudes.length > 0 && (
+              <section className="panel" aria-label="Target altitude">
+                <div className="panel-header">
+                  <h2>Object altitude</h2>
+                  <span className="panel-hint">When it climbs high enough</span>
+                </div>
+                <ul className="sg-alt-list">
+                  {altitudes.map((t) => (
+                    <li key={t.id} className={t.visible ? 'up' : 'down'}>
+                      <span>
+                        {t.emoji} {t.name}
+                      </span>
+                      <span className="sg-alt-bars" aria-hidden>
+                        <i style={{ height: `${Math.max(4, Math.min(100, t.altNow + 10))}%` }} />
+                      </span>
+                      <span>{t.note}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {/* Satellites */}
+            <section className="panel" aria-label="Satellite passes">
               <div className="panel-header">
-                <h2>ISS flyovers</h2>
-                <span className="panel-hint">Approx · elev ≥ 20°</span>
+                <h2>Satellite flyovers</h2>
+                <span className="panel-hint">ISS · Hubble · Tiangong</span>
               </div>
               {!iss && <p className="muted-center">Loading pass predictions…</p>}
               {iss && iss.passes.length === 0 && (
@@ -873,8 +968,9 @@ export default function StargazePage() {
               {iss && iss.passes.length > 0 && (
                 <ul className="sg-iss-list">
                   {iss.passes.map((p) => (
-                    <li key={p.maxMs}>
+                    <li key={`${p.name}-${p.maxMs}`}>
                       <strong>
+                        {p.name || 'ISS'} ·{' '}
                         {new Date(p.riseMs).toLocaleString(undefined, {
                           weekday: 'short',
                           hour: 'numeric',

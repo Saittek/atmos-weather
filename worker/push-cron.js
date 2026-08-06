@@ -44,6 +44,37 @@ function shouldSkipForQuiet(data, severity) {
 }
 
 /**
+ * Lightweight clear-sky night check via Open-Meteo (cloud + precip, next ~12h night).
+ * @returns {{ good: boolean, cloud: number, dayKey: string } | null}
+ */
+async function checkClearSkyNight(lat, lon) {
+  const url = new URL('https://api.open-meteo.com/v1/forecast')
+  url.searchParams.set('latitude', String(lat))
+  url.searchParams.set('longitude', String(lon))
+  url.searchParams.set('hourly', 'cloud_cover,precipitation_probability,is_day')
+  url.searchParams.set('forecast_hours', '18')
+  url.searchParams.set('timezone', 'auto')
+  const res = await fetch(url.toString())
+  if (!res.ok) return null
+  const data = await res.json()
+  const clouds = data.hourly?.cloud_cover ?? []
+  const pop = data.hourly?.precipitation_probability ?? []
+  const isDay = data.hourly?.is_day ?? []
+  const nightCloud = []
+  let maxPop = 0
+  for (let i = 0; i < clouds.length; i++) {
+    if (isDay[i] === 1) continue
+    nightCloud.push(clouds[i] ?? 100)
+    maxPop = Math.max(maxPop, pop[i] ?? 0)
+  }
+  if (nightCloud.length < 3) return null
+  const mean = nightCloud.reduce((a, b) => a + b, 0) / nightCloud.length
+  const good = mean <= 40 && maxPop <= 35
+  const dayKey = new Date().toISOString().slice(0, 10)
+  return { good, cloud: Math.round(mean), dayKey }
+}
+
+/**
  * @param {import('@cloudflare/workers-types').D1Database} db
  * @param {any} env
  */
@@ -100,8 +131,69 @@ export async function runAlertPushCron(env) {
   let alertsChecked = 0
   let pushes = 0
   let errors = 0
+  let clearSkyPushes = 0
 
   for (const place of placeList) {
+    // Clear-sky night ping (stargazing) — once per local evening window key
+    try {
+      const clear = await checkClearSkyNight(place.lat, place.lon)
+      if (clear?.good) {
+        for (const userId of place.userIds) {
+          const meta = userMeta.get(userId)
+          if (!meta?.data?.notifyAlerts) continue
+          if (shouldSkipForQuiet(meta.data, 'Minor')) continue
+          const dayKey = `clearsky:${placeKey(place.lat, place.lon)}:${clear.dayKey}`
+          const already = await db
+            .prepare('SELECT 1 FROM push_sent WHERE user_id = ? AND alert_key = ?')
+            .bind(userId, dayKey)
+            .first()
+          if (already) continue
+
+          const payload = {
+            title: 'Solara · clear-ish night',
+            body: `${place.name}: clouds ~${clear.cloud}% tonight — good for stargazing?`,
+            url: `/stargaze?lat=${place.lat.toFixed(4)}&lon=${place.lon.toFixed(4)}&name=${encodeURIComponent(place.name)}`,
+            tag: dayKey,
+            urgency: 'normal',
+            topic: 'solara-stargaze',
+          }
+
+          const subs = await db
+            .prepare(
+              'SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?',
+            )
+            .bind(userId)
+            .all()
+          let anyOk = false
+          for (const sub of subs.results || []) {
+            try {
+              const result = await sendWebPush(env, sub, payload)
+              if (result.status === 404 || result.status === 410) {
+                await db.prepare('DELETE FROM push_subscriptions WHERE id = ?').bind(sub.id).run()
+              } else if (result.ok) {
+                anyOk = true
+                pushes++
+                clearSkyPushes++
+              }
+            } catch {
+              errors++
+            }
+          }
+          if (anyOk) {
+            await db
+              .prepare(
+                'INSERT OR REPLACE INTO push_sent (user_id, alert_key, sent_at) VALUES (?, ?, ?)',
+              )
+              .bind(userId, dayKey, new Date().toISOString())
+              .run()
+          }
+        }
+      }
+    } catch (e) {
+      errors++
+      console.error('clear-sky check fail', e)
+    }
+
     const alerts = await fetchAlertsForPoint(place.lat, place.lon)
     alertsChecked += alerts.length
 
@@ -213,6 +305,7 @@ export async function runAlertPushCron(env) {
     places: placeList.length,
     alertsChecked,
     pushes,
+    clearSkyPushes,
     errors,
     apnsConfigured: isApnsConfigured(env),
   }

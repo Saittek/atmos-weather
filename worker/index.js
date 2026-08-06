@@ -774,7 +774,7 @@ export default {
           const passes = await computeIssPasses(lat, lon)
           return json({
             passes,
-            note: 'Approx ISS passes (elev ≥ 20°). Confirm with NASA Spot the Station.',
+            note: 'Approx passes for ISS, Hubble, Tiangong (elev ≥ 18°). Confirm with NASA Spot the Station.',
           })
         } catch (e) {
           return err(e?.message || 'ISS pass calc failed', 502)

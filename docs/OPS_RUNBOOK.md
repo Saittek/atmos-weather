@@ -7,6 +7,13 @@ https://solaraweather.com/api/health
 Expect `ok: true` and secrets flags (jwt / cron / vapidPrivate).  
 `apns: true` only after APNs secrets are set (native closed-app push).
 
+### Stargaze extras
+```
+GET /api/sky/kp          # geomagnetic Kp (browser may also hit SWPC directly)
+GET /api/sky/iss?lat=&lon=  # ISS / Hubble / Tiangong pass approx
+```
+Cron (`*/10`) also sends **clear-sky night** web push when clouds look low for a saved place (once per day key).
+
 ## Worker deploy
 ```bash
 cd weather-app
