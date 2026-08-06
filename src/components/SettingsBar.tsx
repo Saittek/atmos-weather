@@ -1,11 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { Link } from 'react-router-dom'
 import type { DensityMode, ThemeMode } from '../api/types'
 import type { Units } from '../utils/format'
 import { UnitToggle } from './UnitToggle'
 import { AccountMenu } from './AccountMenu'
 import { getEntitlements } from '../lib/entitlements'
 import { isAnalyticsOptedOut, setAnalyticsOptOut } from '../lib/analytics'
+
+/** Deep links for full-page modes (mobile top bar hides quick-nav). */
+export interface ExplorePaths {
+  stargaze: string
+  radar: string
+  earth: string
+  chase: string
+}
 
 interface Props {
   units: Units
@@ -49,6 +58,8 @@ interface Props {
   /** Full-page rain/snow/lightning wash behind UI */
   atmosphereEnabled?: boolean
   onAtmosphereEnabled?: (v: boolean) => void
+  /** Stargaze / radar / Earth / chase — shown in More on all viewports */
+  explorePaths?: ExplorePaths
 }
 
 export function SettingsBar({
@@ -88,6 +99,7 @@ export function SettingsBar({
   refreshing,
   atmosphereEnabled = true,
   onAtmosphereEnabled,
+  explorePaths,
 }: Props) {
   const [moreOpen, setMoreOpen] = useState(false)
   const moreRef = useRef<HTMLDivElement>(null)
@@ -131,6 +143,46 @@ export function SettingsBar({
             : 'Core weather, radar, Earth, alerts, and chat stay free. Pro unlocks later — no payment yet.'}
         </p>
       </div>
+
+      {explorePaths && (
+        <div className="settings-more-section">
+          <span className="settings-more-label">Explore</span>
+          <div className="settings-explore-links">
+            <Link
+              to={explorePaths.stargaze}
+              className="chip-btn settings-more-action"
+              role="menuitem"
+              onClick={() => setMoreOpen(false)}
+            >
+              ✨ Stargaze · night sky &amp; astro
+            </Link>
+            <Link
+              to={explorePaths.radar}
+              className="chip-btn settings-more-action"
+              role="menuitem"
+              onClick={() => setMoreOpen(false)}
+            >
+              📡 Full-page radar
+            </Link>
+            <Link
+              to={explorePaths.earth}
+              className="chip-btn settings-more-action"
+              role="menuitem"
+              onClick={() => setMoreOpen(false)}
+            >
+              🌍 3D Earth · global radar
+            </Link>
+            <Link
+              to={explorePaths.chase}
+              className="chip-btn settings-more-action"
+              role="menuitem"
+              onClick={() => setMoreOpen(false)}
+            >
+              🌪 Storm chasers desk
+            </Link>
+          </div>
+        </div>
+      )}
 
       <div className="settings-more-section">
         <span className="settings-more-label">Units</span>

@@ -98,7 +98,7 @@ export function FirstRunCoach({
     },
     {
       title: 'Stargaze ✨',
-      body: 'Plan the night: sky score, moon, Bortle, ISS passes, and “pack the scope” — open Stargaze from the top bar.',
+      body: 'Plan the night: sky score, moon, Bortle, ISS passes, and “pack the scope”. On phone: tap ✨ on Today at a glance, the modes row, or ⚙ Settings → Explore → Stargaze.',
     },
   ]
 

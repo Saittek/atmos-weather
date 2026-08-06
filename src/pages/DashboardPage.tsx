@@ -324,6 +324,18 @@ export default function DashboardPage() {
   const radarPath = location
     ? `/radar?lat=${location.latitude.toFixed(4)}&lon=${location.longitude.toFixed(4)}&name=${encodeURIComponent(location.name)}`
     : '/radar'
+  const stargazePath = location
+    ? `/stargaze?lat=${location.latitude.toFixed(4)}&lon=${location.longitude.toFixed(4)}&name=${encodeURIComponent(location.name)}`
+    : '/stargaze'
+  const chasePath = location
+    ? `/chase?lat=${location.latitude.toFixed(4)}&lon=${location.longitude.toFixed(4)}&name=${encodeURIComponent(location.name)}`
+    : '/chase'
+  const explorePaths = {
+    stargaze: stargazePath,
+    radar: radarPath,
+    earth: '/globe',
+    chase: chasePath,
+  }
 
   const jumpRadar = () => {
     document.getElementById('radar-map')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -416,6 +428,9 @@ export default function DashboardPage() {
           <div className="radar-jump-row">
             <Link to={radarPath} className="primary-btn radar-open-btn">
               📡 Full-page radar
+            </Link>
+            <Link to={stargazePath} className="chip-btn">
+              ✨ Stargaze
             </Link>
             {isMobile && wantRadar && !stormMode && (
               <button
@@ -586,11 +601,7 @@ export default function DashboardPage() {
                 📡
               </Link>
               <Link
-                to={
-                  location
-                    ? `/stargaze?lat=${location.latitude.toFixed(4)}&lon=${location.longitude.toFixed(4)}&name=${encodeURIComponent(location.name)}`
-                    : '/stargaze'
-                }
+                to={stargazePath}
                 className="chip-btn icon-chip nav-chip"
                 title="Stargaze · night sky"
                 aria-label="Stargaze"
@@ -598,11 +609,7 @@ export default function DashboardPage() {
                 ✨
               </Link>
               <Link
-                to={
-                  location
-                    ? `/chase?lat=${location.latitude.toFixed(4)}&lon=${location.longitude.toFixed(4)}&name=${encodeURIComponent(location.name)}`
-                    : '/chase'
-                }
+                to={chasePath}
                 className="chip-btn icon-chip nav-chip hide-sm"
                 title="Storm chasers"
                 aria-label="Storm chasers"
@@ -662,6 +669,7 @@ export default function DashboardPage() {
               refreshing={refreshing}
               atmosphereEnabled={atmosphereOn}
               onAtmosphereEnabled={setAtmosphereEnabled}
+              explorePaths={explorePaths}
             />
           </div>
       </header>
@@ -753,6 +761,9 @@ export default function DashboardPage() {
               <Link to="/radar" className="chip-btn empty-secondary">
                 Open radar
               </Link>
+              <Link to="/stargaze" className="chip-btn empty-secondary">
+                ✨ Stargaze
+              </Link>
             </div>
           </div>
         )}
@@ -806,6 +817,22 @@ export default function DashboardPage() {
                   }
                   air={air}
                 />
+
+                {/* Phone/iOS: top-bar quick-nav is CSS-hidden — keep modes one tap away */}
+                <nav className="mobile-modes-row" aria-label="App modes">
+                  <Link to={radarPath} className="chip-btn mobile-mode-chip">
+                    📡 Radar
+                  </Link>
+                  <Link to={stargazePath} className="chip-btn mobile-mode-chip mobile-mode-stargaze">
+                    ✨ Stargaze
+                  </Link>
+                  <Link to="/globe" className="chip-btn mobile-mode-chip">
+                    🌍 Earth
+                  </Link>
+                  <Link to={chasePath} className="chip-btn mobile-mode-chip">
+                    🌪 Chase
+                  </Link>
+                </nav>
 
                 <WhatChanged
                   location={location}

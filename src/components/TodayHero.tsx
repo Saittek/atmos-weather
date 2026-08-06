@@ -193,15 +193,16 @@ export function TodayHero({ weather, units, placeName, air = null, sourceLine }:
             ↑ {formatTime(sunrise, tz)} · ↓ {formatTime(sunset, tz)}
           </span>
         )}
-        {stargaze && stargaze.imagingScore >= 45 && (
-          <Link
-            to={`/stargaze?lat=${weather.latitude.toFixed(4)}&lon=${weather.longitude.toFixed(4)}&name=${encodeURIComponent(placeName)}`}
-            className="today-chip today-chip-link"
-            title="Open Stargaze planner"
-          >
-            ✨ Tonight {stargaze.imagingScore} · {gradeLabel(stargaze.imagingGrade)}
-          </Link>
-        )}
+        {/* Always offer Stargaze on phone (top-bar ✨ is hidden under 720px) */}
+        <Link
+          to={`/stargaze?lat=${weather.latitude.toFixed(4)}&lon=${weather.longitude.toFixed(4)}&name=${encodeURIComponent(placeName)}`}
+          className="today-chip today-chip-link today-chip-stargaze"
+          title="Open Stargaze · night sky & astrophotography planner"
+        >
+          {stargaze
+            ? `✨ Tonight ${stargaze.imagingScore} · ${gradeLabel(stargaze.imagingGrade)}`
+            : '✨ Stargaze · plan night sky'}
+        </Link>
       </div>
 
       <div className="today-conditions">

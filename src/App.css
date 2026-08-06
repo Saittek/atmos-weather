@@ -3431,9 +3431,31 @@ select:focus-visible {
   .search-input {
     font-size: 16px; /* avoid iOS zoom on focus */
   }
-  /* Drop radar/widget chips â€” available in page body + more menu flow */
+  /* Drop radar/stargaze chips from top bar — body modes row + Settings → Explore */
   .quick-nav {
     display: none !important;
+  }
+  .mobile-modes-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    align-items: center;
+    margin: 0.15rem 0 0.55rem;
+  }
+  .mobile-mode-chip {
+    text-decoration: none;
+    font-weight: 650;
+    font-size: 0.82rem;
+    padding: 0.45rem 0.7rem;
+    min-height: 2.4rem;
+  }
+  .mobile-mode-stargaze {
+    border-color: rgba(167, 139, 250, 0.45);
+    background: linear-gradient(
+      135deg,
+      rgba(99, 102, 241, 0.22),
+      rgba(167, 139, 250, 0.14)
+    );
   }
   /* Slim action strip: Account + â˜… + Refresh + âš™ */
   .topbar-desktop-only {
@@ -5429,6 +5451,25 @@ html.mobile-perf[data-theme='light'] .topbar {
 }
 .radar-jump-mobile {
   display: none;
+}
+/* Desktop: modes live in top bar — hide the phone strip */
+.mobile-modes-row {
+  display: none;
+}
+.settings-explore-links {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.settings-explore-links .settings-more-action {
+  text-decoration: none;
+  justify-content: flex-start;
+  text-align: left;
+  width: 100%;
+}
+.today-chip-stargaze {
+  text-decoration: none;
+  font-weight: 650;
 }
 .quick-nav {
   display: flex;
