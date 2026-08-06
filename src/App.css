@@ -11405,14 +11405,50 @@ a.today-chip-link:hover {
   opacity: 0.7;
   text-align: center;
 }
-.sg-bortle-map-wrap {
-  margin-top: 0.75rem;
+.sg-bortle-map-interactive {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.2);
 }
-.sg-bortle-map {
+.sg-bortle-map-leaflet {
+  height: min(52vh, 360px);
   width: 100%;
-  border-radius: 10px;
-  display: block;
-  opacity: 0.92;
+  z-index: 0;
+  background: #0a0a12;
+  touch-action: pan-x pan-y;
+}
+.sg-bortle-controls {
+  position: absolute;
+  top: 0.55rem;
+  left: 0.55rem;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.sg-bortle-controls .chip-btn {
+  min-width: 2.25rem;
+  font-weight: 800;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.4rem 0.5rem;
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(8px);
+}
+/* Leaflet zoom bottom-right above caption */
+.sg-bortle-map-interactive .leaflet-control-zoom {
+  border: none !important;
+  margin-right: 0.55rem !important;
+  margin-bottom: 0.55rem !important;
+}
+.sg-bortle-map-interactive .leaflet-control-zoom a {
+  background: rgba(15, 23, 42, 0.88) !important;
+  color: #e2e8f0 !important;
+  border: 1px solid rgba(148, 163, 184, 0.25) !important;
+  width: 2rem !important;
+  height: 2rem !important;
+  line-height: 2rem !important;
 }
 .sg-model-agree {
   margin-top: 0.75rem;

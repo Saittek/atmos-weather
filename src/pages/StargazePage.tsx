@@ -41,6 +41,9 @@ import {
 const StargazeCloudMap = lazy(() =>
   import('../components/StargazeCloudMap').then((m) => ({ default: m.StargazeCloudMap })),
 )
+const StargazeBortleMap = lazy(() =>
+  import('../components/StargazeBortleMap').then((m) => ({ default: m.StargazeBortleMap })),
+)
 
 const RED_KEY = 'solara-stargaze-red-v1'
 
@@ -678,17 +681,23 @@ export default function StargazePage() {
                     placeName={location.name}
                   />
                 </Suspense>
-                <div className="sg-bortle-map-wrap">
-                  <img
-                    src="/data/bortle-map.webp"
-                    alt="Global light pollution map"
-                    className="sg-bortle-map"
-                    loading="lazy"
-                  />
-                  <p className="sg-footnote muted-center">
-                    Light-pollution context map · pin Bortle from VIIRS grid above
-                  </p>
+              </section>
+            )}
+
+            {location && (
+              <section className="panel" aria-label="Light pollution map">
+                <div className="panel-header">
+                  <h2>Light pollution map</h2>
+                  <span className="panel-hint">Zoom &amp; pan · yellow pin</span>
                 </div>
+                <Suspense fallback={<p className="muted-center">Loading pollution map…</p>}>
+                  <StargazeBortleMap
+                    lat={location.latitude}
+                    lon={location.longitude}
+                    placeName={location.name}
+                    bortleClass={shown.bortle?.class ?? bortleClass}
+                  />
+                </Suspense>
               </section>
             )}
 
