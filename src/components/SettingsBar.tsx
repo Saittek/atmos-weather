@@ -382,17 +382,6 @@ export function SettingsBar({
     <div className="settings-bar">
       <AccountMenu onCloudSync={onCloudSync} synced={cloudSynced} />
 
-      {/* Always show star so favorites stay one tap away on mobile */}
-      <button
-        type="button"
-        className={`chip-btn icon-chip ${isFavorite ? 'active' : ''}`}
-        onClick={onToggleFavorite}
-        title={isFavorite ? 'Remove favorite' : 'Save favorite'}
-        aria-label={isFavorite ? 'Remove favorite' : 'Save favorite'}
-      >
-        {isFavorite ? '★' : '☆'}
-      </button>
-
       <button
         type="button"
         className={`chip-btn icon-chip storm-chip topbar-desktop-only ${stormMode ? 'active storm-on' : ''}`}
