@@ -11410,21 +11410,20 @@ a.today-chip-link:hover {
   border-radius: 12px;
   overflow: hidden;
   border: 1px solid rgba(148, 163, 184, 0.2);
+  background: #050508;
 }
-.sg-bortle-map-leaflet {
-  height: min(52vh, 360px);
-  width: 100%;
-  z-index: 0;
-  background: #0a0a12;
-  touch-action: pan-x pan-y;
+.sg-bortle-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  padding: 0.45rem 0.5rem;
+  background: rgba(15, 23, 42, 0.92);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
 }
 .sg-bortle-controls {
-  position: absolute;
-  top: 0.55rem;
-  left: 0.55rem;
-  z-index: 1000;
   display: flex;
-  flex-direction: column;
   gap: 0.3rem;
 }
 .sg-bortle-controls .chip-btn {
@@ -11433,22 +11432,39 @@ a.today-chip-link:hover {
   font-size: 1rem;
   line-height: 1;
   padding: 0.4rem 0.5rem;
-  background: rgba(15, 23, 42, 0.88);
-  backdrop-filter: blur(8px);
 }
-/* Leaflet zoom bottom-right above caption */
-.sg-bortle-map-interactive .leaflet-control-zoom {
-  border: none !important;
-  margin-right: 0.55rem !important;
-  margin-bottom: 0.55rem !important;
+.sg-bortle-open {
+  font-size: 0.78rem !important;
+  font-weight: 650 !important;
+  text-decoration: none;
 }
-.sg-bortle-map-interactive .leaflet-control-zoom a {
-  background: rgba(15, 23, 42, 0.88) !important;
-  color: #e2e8f0 !important;
-  border: 1px solid rgba(148, 163, 184, 0.25) !important;
-  width: 2rem !important;
-  height: 2rem !important;
-  line-height: 2rem !important;
+.sg-bortle-iframe-wrap {
+  position: relative;
+  height: min(58vh, 420px);
+  width: 100%;
+  background: #000;
+}
+.sg-bortle-iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #000;
+}
+.sg-bortle-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  background: rgba(5, 5, 8, 0.85);
+  font-size: 0.85rem;
+  color: rgba(226, 232, 240, 0.75);
+  pointer-events: none;
+}
+.sg-bortle-attr {
+  font-size: 0.62rem;
+  opacity: 0.65;
 }
 .sg-model-agree {
   margin-top: 0.75rem;
