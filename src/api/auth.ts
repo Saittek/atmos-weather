@@ -213,6 +213,17 @@ export async function fetchMe(): Promise<{ user: AuthUser; data: CloudPrefs } | 
   }
 }
 
+/** Signed-in password change (email “forgot password” needs a mailer — see support). */
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> {
+  await request<{ ok: boolean }>('/api/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify({ currentPassword, newPassword }),
+  })
+}
+
 export async function saveUserData(data: CloudPrefs): Promise<CloudPrefs> {
   const res = await request<{ data: CloudPrefs }>('/api/user/data', {
     method: 'PUT',

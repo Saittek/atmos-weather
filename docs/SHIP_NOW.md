@@ -64,9 +64,11 @@ If Codemagic archive fails with *profile doesn't include Push / aps-environment*
 - [ ] Set **Home** (and optional **Work**)
 - [ ] Home Screen → Add Widget → **Solara Weather**
 - [ ] Pull-to-refresh from top
-- [ ] Radar + Earth open
+- [ ] **Modes row**: Radar · Stargaze · Earth · Chase
+- [ ] Precip timing sentence on Right now
+- [ ] Radar + Earth + Stargaze open
 - [ ] Settings → **Notify** → **Send test notification**
-- [ ] Sign in → cloud favorites sync
+- [ ] Sign in → cloud favorites sync · Account → Change password works
 
 ---
 

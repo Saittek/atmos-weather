@@ -8,6 +8,7 @@ import {
   findUserById,
   publicUser,
   updateUserData,
+  updateUserPassword,
   defaultUserData,
 } from './db.js'
 import {
@@ -223,6 +224,30 @@ app.get('/api/auth/me', authMiddleware, (req, res) => {
     user: publicUser(req.user),
     data: req.user.data ?? defaultUserData(),
   })
+})
+
+app.post('/api/auth/change-password', authMiddleware, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body ?? {}
+    if (typeof currentPassword !== 'string' || typeof newPassword !== 'string' || newPassword.length < 8) {
+      return res
+        .status(400)
+        .json({ error: 'Current password and a new password (8+ characters) are required' })
+    }
+    if (currentPassword === newPassword) {
+      return res.status(400).json({ error: 'New password must be different from the current one' })
+    }
+    const user = findUserById(req.user.id)
+    if (!user) return res.status(404).json({ error: 'Account not found' })
+    const ok = await bcrypt.compare(currentPassword, user.passwordHash)
+    if (!ok) return res.status(401).json({ error: 'Current password is incorrect' })
+    const passwordHash = await bcrypt.hash(newPassword, 10)
+    updateUserPassword(req.user.id, passwordHash)
+    res.json({ ok: true, message: 'Password updated' })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ error: 'Could not change password' })
+  }
 })
 
 app.get('/api/user/data', authMiddleware, (req, res) => {

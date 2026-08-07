@@ -648,10 +648,11 @@ export default {
         return json({
           ok: true,
           service: 'solara-api',
-          version: '1.0.0',
+          version: '1.1.0',
           time: new Date().toISOString(),
           features: [
             'auth',
+            'auth-change-password',
             'chat',
             'fires',
             'push',
@@ -678,6 +679,9 @@ export default {
           ship: {
             pushEntitlementNote:
               'Native aps-environment may be off until App ID has Push; web push uses VAPID',
+            monitoring:
+              'Poll /api/health every 5m; alert if ok=false or secrets.jwt/cron/vapidPrivate flip false',
+            routes: ['/', '/radar', '/globe', '/chase', '/stargaze'],
           },
         })
       }
@@ -1140,6 +1144,34 @@ export default {
           user: publicUser(auth.user),
           data: parseUserData(auth.user.data),
         })
+      }
+
+      // ── change password (signed-in only; no email reset without a mailer) ──
+      if (path === '/api/auth/change-password' && method === 'POST') {
+        const limited = rateLimitAuth(request, 'change-password', 8, 60 * 60 * 1000)
+        if (limited) return limited
+        const auth = await requireUser(request, env)
+        if (auth.error) return auth.error
+        const body = await request.json().catch(() => ({}))
+        const currentPassword = body?.currentPassword
+        const newPassword = body?.newPassword
+        if (typeof currentPassword !== 'string' || !validatePassword(newPassword)) {
+          return err('Current password and a new password (8+ characters) are required')
+        }
+        if (currentPassword === newPassword) {
+          return err('New password must be different from the current one')
+        }
+        const row = await env.DB.prepare('SELECT id, password_hash FROM users WHERE id = ?')
+          .bind(auth.user.id)
+          .first()
+        if (!row) return err('Account not found', 404)
+        const ok = await verifyPassword(currentPassword, row.password_hash)
+        if (!ok) return err('Current password is incorrect', 401)
+        const passwordHash = await hashPassword(newPassword)
+        await env.DB.prepare('UPDATE users SET password_hash = ? WHERE id = ?')
+          .bind(passwordHash, auth.user.id)
+          .run()
+        return json({ ok: true, message: 'Password updated' })
       }
 
       // ── user data ──

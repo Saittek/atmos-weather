@@ -21,6 +21,9 @@
     "cf:dev": "npm run build && wrangler dev",
     "test:smoke": "node scripts/smoke.mjs",
     "test:smoke:local": "node scripts/smoke.mjs",
+    "test:core": "node scripts/test-core.mjs",
+    "test:stargaze": "node scripts/test-stargaze.mjs",
+    "test:all": "node scripts/smoke.mjs && node scripts/test-core.mjs",
     "ship:preflight": "node scripts/ship-preflight.mjs",
     "ship:ios": "node scripts/ship-preflight.mjs && node -e \"console.log('\\n→ Codemagic: start workflow ios-testflight on main\\n→ Guide: docs/SHIP_NOW.md\\n→ After install: docs/DEVICE_QA.md\\n')\""
   },

@@ -9,6 +9,7 @@ import {
 import { isDaytimeNow } from './daylight'
 import type { AirQualityData } from '../api/types'
 import { willIGetWet } from './wetSummary'
+import { precipTimingShort } from './precipTiming'
 
 /** Index of "today" in daily arrays when past_days may prepend history */
 export function todayDailyIndex(weather: WeatherData): number {
@@ -90,6 +91,8 @@ export function weatherStory(
 }
 
 export function nextPrecipLabel(weather: WeatherData): string | null {
+  const short = precipTimingShort(weather)
+  if (short) return short
   const h = weather.hourly
   const tz = weather.timezone
   const now = Date.now()

@@ -24,6 +24,8 @@ import { aqiLabel, uvLabel, windDirection } from '../utils/weatherCodes'
 import { todayDailyIndex, weatherStory } from '../utils/weatherStory'
 import { willIGetWet } from '../utils/wetSummary'
 import { resolvePrecipKind } from '../utils/precipKind'
+import { precipTiming } from '../utils/precipTiming'
+import { formatWeatherSource } from '../utils/weatherSource'
 
 interface Props {
   weather: WeatherData
@@ -80,6 +82,9 @@ export function TodayHero({ weather, units, placeName, air = null, sourceLine }:
       return null
     }
   }, [weather, air])
+
+  const timing = useMemo(() => precipTiming(weather, units), [weather, units])
+  const sourceLineResolved = sourceLine || formatWeatherSource(weather)
 
   const conditionCards = [
     {
@@ -161,11 +166,12 @@ export function TodayHero({ weather, units, placeName, air = null, sourceLine }:
       </div>
 
       <p className="today-hero-story">{story}</p>
+      <p className={`today-hero-precip-timing wet-${timing.level}`}>{timing.sentence}</p>
       <p className="today-hero-wet">{wet.detail}</p>
 
       <div className="today-hero-chips" aria-label="Key stats">
-        <span className="today-chip">
-          H {Math.round(convertTemp(high, units))}° · L {Math.round(convertTemp(low, units))}°
+        <span className="today-chip" title="Today’s calendar high & low">
+          Today H {Math.round(convertTemp(high, units))}° · L {Math.round(convertTemp(low, units))}°
         </span>
         <span className="today-chip">
           💨 {formatSpeed(c.wind_speed_10m, units)} {windDirection(c.wind_direction_10m)}
@@ -230,10 +236,7 @@ export function TodayHero({ weather, units, placeName, air = null, sourceLine }:
       </div>
 
       <p className="today-hero-source">
-        {sourceLine ||
-          (weather.solara_source?.strategy
-            ? `Sources · Solara blend (${weather.solara_source.strategy}) · Open-Meteo`
-            : 'Sources · Open-Meteo forecast · RainViewer radar')}
+        {sourceLineResolved}
         {weather.current?.time
           ? ` · model time ${formatTime(weather.current.time, tz)}`
           : ''}

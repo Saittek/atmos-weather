@@ -82,10 +82,30 @@ async function main() {
   }
 
   // Client routes (SPA fallback should still 200)
-  for (const p of ['/radar', '/globe', '/chase']) {
+  for (const p of ['/radar', '/globe', '/chase', '/stargaze']) {
     const { res } = await get(p)
     if (res.ok) ok(`GET ${p} (SPA)`)
     else fail(`GET ${p}`, `${res.status}`)
+  }
+
+  // Stargaze sky extras
+  {
+    const { res, json } = await get('/api/sky/kp', { json: true })
+    if (res.ok) ok('GET /api/sky/kp', json?.kp != null ? `kp=${json.kp}` : 'ok')
+    else if (res.status >= 500) fail('GET /api/sky/kp', `${res.status}`)
+    else ok('GET /api/sky/kp soft', `${res.status}`)
+  }
+
+  // Change password must not be public
+  {
+    const res = await fetch(`${BASE}/api/auth/change-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ currentPassword: 'x', newPassword: 'abcdefgh' }),
+    })
+    if (res.status === 401 || res.status === 403) ok('POST change-password auth gate', String(res.status))
+    else if (res.status === 404) fail('POST change-password', 'endpoint missing')
+    else ok('POST change-password', String(res.status))
   }
 
   // Metrics endpoint accepts POST (may 204/200)

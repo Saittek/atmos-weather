@@ -64,18 +64,24 @@ export function FirstRunCoach({
       title: 'You’re set',
       body: hasHome
         ? 'Home is pinned. Solara will keep this place ready on open and on the widget.'
-        : 'Set Home with the 🏠 button so alerts, rain watch, and the widget use your pin.',
+        : 'Set Home with the 🏠 on the place card so alerts, rain watch, and the widget use your pin.',
+    },
+    {
+      title: 'Modes on your phone',
+      body: nativeIos
+        ? 'Under Today at a glance you’ll see Radar · Stargaze · Earth · Chase. Or open ⚙ Settings → Explore. (Top-bar icons hide on small screens.)'
+        : 'Use the modes row under Today, or ⚙ Settings → Explore for Radar, Stargaze, Earth, and Storm desk.',
     },
     {
       title: 'Home & Work',
       body: hasWork
-        ? 'Work is saved too — use the Work chip in the top bar for one-tap commute weather.'
-        : 'Optional: open your office/school and save Work (briefcase chip) for commute checks.',
+        ? 'Work is saved too — jump there from Settings when you need commute weather.'
+        : 'Optional: open your office/school and use Settings → Work pin for commute rain watch.',
     },
     {
       title: 'Alerts when closed',
       body: notifyOn
-        ? 'Notifications are on. Sign in so server push works when the tab is closed.'
+        ? 'Notifications are on. Sign in so server push works when the app is closed.'
         : 'Turn on Notify for rain watch and severe alerts — works best when signed in.',
       action: !notifyOn
         ? {
@@ -89,16 +95,12 @@ export function FirstRunCoach({
     {
       title: nativeIos ? 'Home Screen widget' : 'Install Solara',
       body: nativeIos
-        ? 'Long-press Home Screen → Add Widget → Solara Weather for temp, rain %, UV, and a day tip.'
+        ? 'Long-press Home Screen → Add Widget → Solara Weather for temp, rain timing, UV, and a day tip. Open the app once so the tile fills in.'
         : 'Install to your home screen for one-tap weather (PWA). On iPhone Safari: Share → Add to Home Screen.',
     },
     {
-      title: 'Share the day',
-      body: 'Tap ↗ on Right now to copy a link, or enable Share card in Settings → Show on home.',
-    },
-    {
       title: 'Stargaze ✨',
-      body: 'Plan the night: sky score, moon, Bortle, ISS passes, and “pack the scope”. On phone: tap ✨ on Today at a glance, the modes row, or ⚙ Settings → Explore → Stargaze.',
+      body: 'Plan the night: sky score, moon, Bortle, ISS, and clear-sky timing. Tap ✨ Stargaze on the modes row or in Settings → Explore.',
     },
   ]
 
@@ -112,7 +114,7 @@ export function FirstRunCoach({
         </p>
         <h2>{s.title}</h2>
         <p>{s.body}</p>
-        {step === 2 && !nativeIos && (
+        {step === 4 && !nativeIos && (
           <div className="first-run-install">
             <InstallPrompt compact />
           </div>

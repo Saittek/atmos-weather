@@ -7,6 +7,15 @@ https://solaraweather.com/api/health
 Expect `ok: true` and secrets flags (jwt / cron / vapidPrivate).  
 `apns: true` only after APNs secrets are set (native closed-app push).
 
+### Monitoring (recommended)
+- Poll `GET /api/health` every **5 minutes** (UptimeRobot, Better Stack, Cloudflare, etc.).
+- Alert if:
+  - HTTP not 200, or `ok !== true`
+  - `secrets.jwt`, `secrets.cron`, or `secrets.vapidPrivate` flip to `false`
+  - Worker logs show repeated `alert-push-cron failed`
+- Optional: hit `/api/sky/kp` daily; 5xx means stargaze aurora may degrade (client also tries SWPC directly).
+- After each deploy: `npm run test:all` (smoke + core).
+
 ### Stargaze extras
 ```
 GET /api/sky/kp          # geomagnetic Kp (browser may also hit SWPC directly)

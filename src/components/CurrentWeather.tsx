@@ -21,6 +21,8 @@ import { nextPrecipLabel, todayDailyIndex } from '../utils/weatherStory'
 import { vsNormalLine } from '../utils/severeTimeline'
 import { formatUpdatedAgo, isWeatherStale } from '../utils/relativeTime'
 import { isMobileViewport } from '../utils/device'
+import { precipTiming } from '../utils/precipTiming'
+import { formatWeatherSource, todayRangeHint } from '../utils/weatherSource'
 import { WeatherIcon3D } from './WeatherIcon3D'
 
 interface Props {
@@ -73,7 +75,11 @@ export function CurrentWeather({
     lowRaw != null && Number.isFinite(lowRaw)
       ? Math.min(lowRaw, c.temperature_2m)
       : c.temperature_2m
-  const rainLabel = nextPrecipLabel(weather)
+  const timing = precipTiming(weather, units)
+  const rainLabel = timing.level === 'dry' && timing.next3hMm < 0.15
+    ? nextPrecipLabel(weather)
+    : timing.short
+  const precipSentence = timing.sentence
   const h = weather.hourly
   const now = Date.now()
   const hIdx = Math.max(
@@ -122,14 +128,7 @@ export function CurrentWeather({
     updatedAt != null ? formatUpdatedAgo(updatedAt, nowTick) : null
   const stale = isWeatherStale(updatedAt, nowTick)
 
-  const sourceLine = (() => {
-    const s = weather.solara_source
-    if (s?.strategy) {
-      const short = s.shortModel ? ` · ${s.shortModel}` : ''
-      return `Sources · Solara blend (${s.strategy}${short}) · Open-Meteo`
-    }
-    return 'Sources · Open-Meteo'
-  })()
+  const sourceLine = formatWeatherSource(weather)
 
   const onMove = (e: MouseEvent<HTMLElement>) => {
     if (mobile) return
@@ -226,11 +225,18 @@ export function CurrentWeather({
               </span>
             )}
           </p>
-          <p className="current-source-line">
+          <p className="current-source-line" title={todayRangeHint()}>
             {sourceLine}
             {updatedLabel ? ` · ${refreshing ? 'refreshing' : updatedLabel}` : ''}
           </p>
-          {rainLabel && (
+          <p
+            className={`current-precip-timing wet-${timing.level}`}
+            role="status"
+            title="Near-term precip from 15‑min / hourly forecast"
+          >
+            {precipSentence}
+          </p>
+          {rainLabel && rainLabel !== precipSentence && (
             <p className="current-next-precip" role="status">
               {rainLabel}
             </p>
@@ -258,18 +264,29 @@ export function CurrentWeather({
               Feels like {formatTemp(c.apparent_temperature, units)}
               {feelNote ? ` · ${feelNote}` : ''}
             </span>
-            <span className="hi-lo">
-              H {formatTemp(high, units)} · L {formatTemp(low, units)}
+            <span className="hi-lo" title={todayRangeHint()}>
+              Today H {formatTemp(high, units)} · L {formatTemp(low, units)}
             </span>
             {vsNormal && <span className="vs-normal-line">{vsNormal}</span>}
           </div>
         </div>
 
+        {(offline || (stale && !refreshing)) && (
+          <div
+            className={`current-freshness-banner ${offline ? 'is-offline' : 'is-stale'}`}
+            role="status"
+          >
+            {offline
+              ? 'You’re offline — showing the last saved forecast. Reconnect and pull down to refresh.'
+              : `Forecast last updated ${updatedLabel || 'a while ago'} — may be outdated. Pull down from the top to refresh.`}
+          </div>
+        )}
+
         <div className="current-chips" aria-label="Quick stats">
           {offline && <span className="current-chip offline">Offline · last saved</span>}
           {stale && !offline && (
             <span className="current-chip stale" title="Pull down to refresh">
-              Data aging
+              May be outdated · pull to refresh
             </span>
           )}
           {alertCount > 0 && (

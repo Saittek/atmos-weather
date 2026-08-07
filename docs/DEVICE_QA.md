@@ -10,10 +10,11 @@ Run after every TestFlight install. Mark fails and file as bugs.
 
 ## Right now trust
 - [ ] Temp matches local conditions within reason
-- [ ] High ≥ current temp; Low ≤ current temp
-- [ ] Source line shows blend or Open-Meteo
-- [ ] Airplane mode → offline chip + last weather
-- [ ] Stale data (>45m) shows a soft “may be outdated” hint
+- [ ] High ≥ current temp; Low ≤ current temp (“Today H / L”)
+- [ ] Source line shows blend / ECCC / Open-Meteo clearly
+- [ ] Precip timing sentence present (dry or “starts ~time · amount”)
+- [ ] Airplane mode → offline banner + last weather
+- [ ] Stale data (>45m) shows freshness banner + “pull to refresh”
 
 ## Alerts
 - [ ] Active alerts sit **below** the top bar (not covered)
@@ -25,8 +26,10 @@ Run after every TestFlight install. Mark fails and file as bugs.
 - [ ] Set **Work** → Work chip jumps there
 - [ ] Saved places minimize/expand persists
 
-## Maps
-- [ ] Radar opens (mobile: opt-in button)
+## Maps & modes
+- [ ] Phone: modes row shows Radar · Stargaze · Earth · Chase
+- [ ] Settings → Explore → Stargaze opens planner
+- [ ] Radar opens (mobile: opt-in / full-page link)
 - [ ] Earth globe loads once
 - [ ] Storm mode focuses radar
 

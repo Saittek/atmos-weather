@@ -88,6 +88,15 @@ export function updateUserData(userId, data) {
   return db.users[idx]
 }
 
+export function updateUserPassword(userId, passwordHash) {
+  const db = readDb()
+  const idx = db.users.findIndex((u) => u.id === userId)
+  if (idx < 0) return null
+  db.users[idx].passwordHash = passwordHash
+  writeDb(db)
+  return db.users[idx]
+}
+
 export function publicUser(user) {
   return {
     id: user.id,

@@ -94,9 +94,14 @@ Store checklist: **[docs/APP_STORE.md](docs/APP_STORE.md)** · CI file: `codemag
 |------|---------|
 | `/` | Full dashboard |
 | `/radar` | Full-page live radar (`?lat=&lon=&name=`) |
+| `/globe` · `/earth` | 3D Earth global radar + tropical tracks |
+| `/chase` | Storm Chasers desk |
+| `/stargaze` | Night sky / astrophotography planner |
 | `/widget` | Compact rain widget (PWA shortcut) |
 
-Install the PWA for home-screen shortcuts: **Live Radar**, **Rain Widget**, **Dashboard**.
+**Phone / iOS:** top-bar mode chips are hidden under 720px. Use the **modes row** under Today at a glance, or **Settings → Explore** (Radar, Stargaze, Earth, Chase).
+
+Install the PWA for home-screen shortcuts: **Live Radar**, **Storm Chasers**, **Dashboard**.
 
 ### Accounts
 
@@ -111,7 +116,7 @@ Saved to your account (cloud on the local server):
 
 **Local:** passwords bcrypt-hashed; data in `server/data/users.json` (gitignored).  
 **Production (Cloudflare):** PBKDF2-hashed passwords + JWT in D1 (`atmos-db`).  
-JWT sessions last 30 days.
+JWT sessions last 30 days. Signed-in users can **Change password** from Account menu (no email reset yet).
 
 ## Features
 
@@ -125,15 +130,17 @@ JWT sessions last 30 days.
 
 ### Forecasts & data
 - Current conditions + adaptive sky gradients
-- Next ~2 hours (15-min precip when available)
+- **Precip timing sentence** (15-min + hourly: when it starts, how much)
+- Clear source line (ECCC City Page blend in Canada, multi-model elsewhere)
 - 48-hour hourly + 24h graphs (temp / pop / precip)
 - 14-day outlook with expandable details
 - Weekend plain-English outlook + clothing / activity tips
 - Multi-model compare (Best match, GFS, ECMWF, ICON)
 - Atmospheric pressure-level profile
 - Air quality (US AQI + pollutants)
-- NWS severe alerts (US) + optional browser notifications
+- NWS severe alerts (US) + Environment Canada alerts
 - Tropical cyclone list (NHC / NWS fallback)
+- **Stargaze** — night score, moon, Bortle, clear-sky chart, ISS
 
 ### App UX
 - Search any city + geolocation

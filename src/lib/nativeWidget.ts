@@ -8,6 +8,7 @@ import type { Units } from '../utils/format'
 import { getWeatherInfo } from '../utils/weatherCodes'
 import { todayDailyIndex, nextPrecipLabel } from '../utils/weatherStory'
 import { willIGetWet } from '../utils/wetSummary'
+import { precipTimingShort } from '../utils/precipTiming'
 import { buildStargazeBrief, gradeLabel } from '../utils/stargaze'
 import { isIOS, isNativeApp } from './native'
 
@@ -48,21 +49,39 @@ function buildDayHint(opts: {
   precipMm?: number
   highC?: number
   nextPrecip?: string | null
+  precipShort?: string | null
   wetTitle?: string | null
   stargazeScore?: number
   stargazeLabel?: string
 }): string | undefined {
-  const { code, pop, uvMax, windKmh, precipMm, highC, nextPrecip, wetTitle, stargazeScore, stargazeLabel } =
-    opts
-  if (stargazeScore != null && stargazeScore >= 68 && stargazeLabel) {
+  const {
+    code,
+    pop,
+    uvMax,
+    windKmh,
+    precipMm,
+    highC,
+    nextPrecip,
+    precipShort,
+    wetTitle,
+    stargazeScore,
+    stargazeLabel,
+  } = opts
+  // Daytime: lead with precip timing. Night: allow stargaze when strong.
+  const hour = new Date().getHours()
+  const nightish = hour >= 19 || hour < 6
+  if (nightish && stargazeScore != null && stargazeScore >= 62 && stargazeLabel) {
     return `✨ Tonight ${stargazeScore} · ${stargazeLabel} for stars`
   }
-  // Prefer hyperlocal next precip when available
-  if (nextPrecip && /rain|snow|shower|precip|wet|umbrella/i.test(nextPrecip)) {
-    return nextPrecip.length > 48 ? `${nextPrecip.slice(0, 45)}…` : nextPrecip
+  const precipLine = precipShort || nextPrecip
+  if (precipLine && /rain|snow|shower|precip|wet|umbrella|wintry|starts|falling/i.test(precipLine)) {
+    return precipLine.length > 48 ? `${precipLine.slice(0, 45)}…` : precipLine
   }
   if (wetTitle && /wet|umbrella|rain|snow/i.test(wetTitle) && !/dry/i.test(wetTitle)) {
     return wetTitle.length > 48 ? `${wetTitle.slice(0, 45)}…` : wetTitle
+  }
+  if (!nightish && stargazeScore != null && stargazeScore >= 72 && stargazeLabel) {
+    return `✨ Tonight ${stargazeScore} · ${stargazeLabel}`
   }
   if (code >= 95) return 'Thunderstorm risk today'
   if (code >= 71 && code <= 77) return 'Snow in the forecast'
@@ -115,6 +134,12 @@ export function buildWidgetSnapshot(
   const windN = windKmh != null && Number.isFinite(windKmh) ? Number(windKmh) : undefined
   const precipN = precipMm != null && Number.isFinite(precipMm) ? Number(precipMm) : undefined
   const nextPrecip = nextPrecipLabel(weather)
+  let precipShort: string | null = null
+  try {
+    precipShort = precipTimingShort(weather, units)
+  } catch {
+    precipShort = null
+  }
   const wet = willIGetWet(weather)
   let stargazeScore: number | undefined
   let stargazeLabel: string | undefined
@@ -164,6 +189,7 @@ export function buildWidgetSnapshot(
       precipMm: precipN,
       highC: highN,
       nextPrecip,
+      precipShort,
       wetTitle: wet.title,
       stargazeScore,
       stargazeLabel,

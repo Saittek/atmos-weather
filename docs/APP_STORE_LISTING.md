@@ -19,10 +19,11 @@ Solara is a weather command center for the US and Canada.
 
 • Live animated radar with smooth loops
 • 3D Earth with global radar and NHC hurricane tracks
-• Storm Chasers desk — CAPE, threats, one-tap chase packs
-• Next-hour precip and “what matters now” alert strip
-• Push notifications with optional quiet hours
-• Area chat near you (rate-limited, sign-in to post)
+• Clear “when does the rain start?” timing and will-I-get-wet guidance
+• Stargaze — night sky score, moon, light pollution, ISS passes
+• Storm Chasers desk — threats, radar, one-tap chase packs
+• “What matters now” alert strip with quiet hours
+• Home Screen widget (iOS) for temp, rain %, and day tips
 • Air quality, pollen, models, and multi-city trip planning
 
 Solara is decision support only. Always follow official NWS, ECCC, and SPC products for life-safety decisions.
@@ -48,10 +49,10 @@ weather,radar,hurricane,forecast,alerts,storm,rain,tropical,NWS,Canada
 
 | # | Capture | Caption |
 |---|---------|---------|
-| 1 | Dashboard: now + next-hour hero + glance | **Next hour, clearly** |
+| 1 | Dashboard: Right now + precip timing + Today glance | **When rain starts, clearly** |
 | 2 | Full-page **radar** playing | **Live radar when it matters** |
 | 3 | **Earth** with storm + radar | **Hurricanes on a real globe** |
-| 4 | Storm Chasers + share pack | **Chase desk in your pocket** |
+| 4 | **Stargaze** night score + clear sky chart | **Plan the night sky** |
 | 5 | Alerts / What matters now | **Severity, timing, action** |
 | 6 | Light theme dashboard (optional) | **Dark or light** |
 
@@ -59,7 +60,7 @@ weather,radar,hurricane,forecast,alerts,storm,rain,tropical,NWS,Canada
 
 1. Earth spin + active storm  
 2. Tap **Play** on radar  
-3. Jump to dashboard next-hour strip  
+3. Dashboard precip timing + open Stargaze  
 
 Record with Simulator or device screen recording; export H.264.
 

@@ -79,6 +79,16 @@ export function AuthModal({ open, onClose, onSuccess }: Props) {
         </div>
         <p className="auth-sub">
           Sync home pin, favorites, last place, units, and theme across desktop and phone.
+          {mode === 'login' && (
+            <>
+              {' '}
+              Forgot password? Sign in is required to change it — if you’re locked out, see{' '}
+              <a href="/support.html" target="_blank" rel="noreferrer">
+                support
+              </a>
+              .
+            </>
+          )}
         </p>
 
         <div className="auth-tabs">
