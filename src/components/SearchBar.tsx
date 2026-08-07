@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { formatLocationLabel, searchLocations } from '../api/weather'
 import type { LocationResult } from '../api/types'
 import { loadRecentPlaces, pushRecentPlace } from '../utils/recentPlaces'
+import { useI18n } from '../i18n/I18nProvider'
 
 interface Props {
   onSelect: (loc: LocationResult) => void
@@ -19,6 +20,7 @@ export function SearchBar({
   home,
   onGoHome,
 }: Props) {
+  const { t } = useI18n()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<LocationResult[]>([])
   const [recent, setRecent] = useState<LocationResult[]>(() => loadRecentPlaces())
@@ -112,8 +114,7 @@ export function SearchBar({
         <input
           type="search"
           className="search-input"
-          placeholder="Search city or place…"
-          data-placeholder-long="Search city, region, or place…"
+          placeholder={t('search.placeholder')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => {
@@ -121,7 +122,7 @@ export function SearchBar({
             setRecent(loadRecentPlaces())
           }}
           onKeyDown={onKeyDown}
-          aria-label="Search location"
+          aria-label={t('search.placeholder')}
           aria-autocomplete="list"
           aria-expanded={open}
           aria-controls="search-results-list"
@@ -133,8 +134,8 @@ export function SearchBar({
             type="button"
             className="geo-btn home-geo-btn"
             onClick={onGoHome}
-            title={`Go home · ${home.name || 'Home'}`}
-            aria-label={`Go to home: ${home.name || 'Home'}`}
+            title={`${t('nav.home')} · ${home.name || t('search.home')}`}
+            aria-label={`${t('nav.home')}: ${home.name || t('search.home')}`}
           >
             🏠
           </button>
@@ -144,8 +145,8 @@ export function SearchBar({
           className="geo-btn"
           onClick={onUseLocation}
           disabled={geoLoading}
-          title="Use my location"
-          aria-label="Use my location"
+          title={t('search.myLocation')}
+          aria-label={t('search.myLocation')}
         >
           {geoLoading ? '…' : '◎'}
         </button>
@@ -153,7 +154,7 @@ export function SearchBar({
       {showRecent && (
         <ul className="search-results search-recent" role="listbox" id="search-results-list">
           <li className="search-section-label" role="presentation">
-            Recent
+            {t('search.recent')}
           </li>
           {recent.map((r, i) => (
             <li key={`recent-${r.latitude}-${r.longitude}-${r.name}`}>
@@ -195,7 +196,7 @@ export function SearchBar({
           ))}
           {!searching && !results.length && (
             <li className="search-empty">
-              {failed ? 'Search failed — try again' : 'No places found'}
+              {failed ? t('search.failed') : t('search.noResults')}
             </li>
           )}
         </ul>

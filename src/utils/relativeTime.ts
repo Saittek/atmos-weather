@@ -1,6 +1,18 @@
+import { detectLocale, type LocaleId } from '../i18n/messages'
+
 /** Short relative time for “Updated …” labels */
-export function formatUpdatedAgo(ts: number, now = Date.now()): string {
+export function formatUpdatedAgo(
+  ts: number,
+  now = Date.now(),
+  locale: LocaleId = detectLocale(),
+): string {
   const sec = Math.max(0, Math.round((now - ts) / 1000))
+  if (locale === 'fr') {
+    if (sec < 40) return 'à l’instant'
+    if (sec < 3600) return `il y a ${Math.floor(sec / 60)} min`
+    if (sec < 86400) return `il y a ${Math.floor(sec / 3600)} h`
+    return `il y a ${Math.floor(sec / 86400)} j`
+  }
   if (sec < 40) return 'just now'
   if (sec < 3600) return `${Math.floor(sec / 60)}m ago`
   if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`

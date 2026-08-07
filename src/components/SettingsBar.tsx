@@ -153,7 +153,9 @@ export function SettingsBar({
         <span className="settings-more-label">{t('settings.plan')}</span>
         <div className="settings-plan-row">
           <strong>{plan.plan === 'pro' ? t('settings.planPro') : t('settings.planFree')}</strong>
-          <span className="settings-plan-badge">{plan.plan === 'pro' ? 'Pro' : 'Free'}</span>
+          <span className="settings-plan-badge">
+            {plan.plan === 'pro' ? t('pro.badge') : t('pro.free')}
+          </span>
         </div>
         <p className="settings-plan-hint">
           {plan.plan === 'pro' ? t('settings.planHintPro') : t('settings.planHintFree')}
@@ -243,31 +245,39 @@ export function SettingsBar({
 
       <div className="settings-more-section">
         <span className="settings-more-label">{t('settings.theme')}</span>
-        <div className="unit-toggle theme-toggle settings-theme-all" role="group" aria-label="Theme">
-          {(['dark', 'light', 'auto'] as ThemeMode[]).map((t) => (
+        <div
+          className="unit-toggle theme-toggle settings-theme-all"
+          role="group"
+          aria-label={t('settings.theme')}
+        >
+          {(['dark', 'light', 'auto'] as ThemeMode[]).map((mode) => (
             <button
-              key={t}
+              key={mode}
               type="button"
-              className={theme === t ? 'active' : ''}
-              onClick={() => onTheme(t)}
-              aria-pressed={theme === t}
+              className={theme === mode ? 'active' : ''}
+              onClick={() => onTheme(mode)}
+              aria-pressed={theme === mode}
             >
-              {t === 'dark' ? '☾ Dark' : t === 'light' ? '☀ Light' : 'A Auto'}
+              {mode === 'dark'
+                ? t('settings.themeDark')
+                : mode === 'light'
+                  ? t('settings.themeLight')
+                  : t('settings.themeAuto')}
             </button>
           ))}
         </div>
       </div>
 
       <div className="settings-more-section">
-        <span className="settings-more-label">Density</span>
-        <div className="unit-toggle density-toggle" role="group" aria-label="Density">
+        <span className="settings-more-label">{t('settings.density')}</span>
+        <div className="unit-toggle density-toggle" role="group" aria-label={t('settings.density')}>
           <button
             type="button"
             className={density === 'comfortable' ? 'active' : ''}
             onClick={() => onDensity('comfortable')}
             aria-pressed={density === 'comfortable'}
           >
-            Comfortable
+            {t('settings.comfortable')}
           </button>
           <button
             type="button"
@@ -275,7 +285,7 @@ export function SettingsBar({
             onClick={() => onDensity('compact')}
             aria-pressed={density === 'compact'}
           >
-            Compact
+            {t('settings.compact')}
           </button>
         </div>
       </div>
@@ -289,8 +299,8 @@ export function SettingsBar({
               onChange={(e) => onAtmosphereEnabled(e.target.checked)}
             />
             <span>
-              <strong>Weather atmosphere</strong>
-              <em>Rain, snow &amp; lightning wash behind the app</em>
+              <strong>{t('settings.atmosphere')}</strong>
+              <em>{t('settings.atmosphereHint')}</em>
             </span>
           </label>
         )}
@@ -301,8 +311,8 @@ export function SettingsBar({
             onChange={(e) => onStormMode(e.target.checked)}
           />
           <span>
-            <strong>Storm mode</strong>
-            <em>Radar-first layout</em>
+            <strong>{t('settings.stormMode')}</strong>
+            <em>{t('settings.stormModeHint')}</em>
           </span>
         </label>
         <label className="settings-more-row">
@@ -312,8 +322,8 @@ export function SettingsBar({
             onChange={(e) => onSevereMode(e.target.checked)}
           />
           <span>
-            <strong>Alerts UI</strong>
-            <em>Highlight severe weather</em>
+            <strong>{t('settings.alertsUi')}</strong>
+            <em>{t('settings.alertsUiHint')}</em>
           </span>
         </label>
         <label className="settings-more-row">
@@ -323,14 +333,14 @@ export function SettingsBar({
             onChange={(e) => void onNotify(e.target.checked)}
           />
           <span>
-            <strong>Notify</strong>
-            <em>Rain watch &amp; alerts when closed (sign in for server push)</em>
+            <strong>{t('settings.notify')}</strong>
+            <em>{t('settings.notifyHint')}</em>
           </span>
         </label>
         {notifyAlerts && onTestNotify && (
           <div className="settings-push-test">
             <button type="button" className="chip-btn" onClick={() => void onTestNotify()}>
-              Send test notification
+              {t('settings.testNotify')}
             </button>
             {pushStatusLabel && <p className="settings-push-status">{pushStatusLabel}</p>}
           </div>
@@ -338,23 +348,23 @@ export function SettingsBar({
         {onSetWork && (
           <div className="settings-more-row settings-more-action">
             <span>
-              <strong>Work pin</strong>
+              <strong>{t('settings.workPin')}</strong>
               <em>
                 {isWork
-                  ? 'This place is Work — rain watch includes it'
+                  ? t('settings.workIs')
                   : hasWork
-                    ? 'Replace work with this place'
-                    : 'Second pin for commute rain watch'}
+                    ? t('settings.workReplace')
+                    : t('settings.workSet')}
               </em>
             </span>
             <button type="button" className="chip-btn" onClick={() => onSetWork()}>
-              {isWork ? 'Clear work' : 'Set work'}
+              {isWork ? t('settings.clearWork') : t('settings.setWork')}
             </button>
           </div>
         )}
         {hasWork && onGoWork && !isWork && (
           <button type="button" className="chip-btn settings-go-work" onClick={onGoWork}>
-            Go to work
+            {t('settings.goWork')}
           </button>
         )}
         <label className="settings-more-row">
@@ -368,8 +378,8 @@ export function SettingsBar({
             }}
           />
           <span>
-            <strong>Privacy analytics off</strong>
-            <em>Don&apos;t send anonymous page usage (no location stored)</em>
+            <strong>{t('settings.analyticsOff')}</strong>
+            <em>{t('settings.analyticsHint')}</em>
           </span>
         </label>
         {notifyAlerts && onQuietHours && (
@@ -383,14 +393,14 @@ export function SettingsBar({
                 }
               />
               <span>
-                <strong>Quiet hours</strong>
-                <em>Mute non-Extreme alerts overnight</em>
+                <strong>{t('settings.quietHours')}</strong>
+                <em>{t('settings.quietHint')}</em>
               </span>
             </label>
             {quietHoursEnabled && (
               <div className="settings-quiet-hours">
                 <label>
-                  From
+                  {t('settings.from')}
                   <input
                     type="time"
                     value={quietStart}
@@ -398,7 +408,7 @@ export function SettingsBar({
                   />
                 </label>
                 <label>
-                  To
+                  {t('settings.to')}
                   <input
                     type="time"
                     value={quietEnd}
@@ -412,7 +422,7 @@ export function SettingsBar({
       </div>
 
       <div className="settings-more-section">
-        <span className="settings-more-label">Home</span>
+        <span className="settings-more-label">{t('settings.home')}</span>
         <div className="settings-home-actions">
           {hasHome && onGoHome && (
             <button
@@ -424,7 +434,7 @@ export function SettingsBar({
                 setMoreOpen(false)
               }}
             >
-              🏠 Go to home
+              {t('settings.goHome')}
             </button>
           )}
           {onSetHome && (
@@ -437,11 +447,11 @@ export function SettingsBar({
                 setMoreOpen(false)
               }}
             >
-              {isHome ? '🏡 Clear home for this place' : '🏠 Set this place as home'}
+              {isHome ? t('settings.clearHome') : t('settings.setHome')}
             </button>
           )}
           {!hasHome && !onSetHome && (
-            <p className="settings-home-hint">Set home from the 🏠 Home panel or place card.</p>
+            <p className="settings-home-hint">{t('settings.homeHint')}</p>
           )}
         </div>
       </div>
@@ -454,7 +464,7 @@ export function SettingsBar({
           onToggleFavorite()
         }}
       >
-        {isFavorite ? '★ Remove this place from favorites' : '☆ Save this place to favorites'}
+        {isFavorite ? t('settings.removeFav') : t('settings.saveFav')}
       </button>
 
       <button
@@ -465,7 +475,7 @@ export function SettingsBar({
           onCloudSync()
         }}
       >
-        {cloudSynced ? '☁ Sync account (up to date)' : '☁ Sync account now'}
+        {cloudSynced ? t('settings.synced') : t('settings.sync')}
       </button>
 
       <button
@@ -477,7 +487,7 @@ export function SettingsBar({
           setMoreOpen(false)
         }}
       >
-        ↗ Copy share link
+        {t('settings.share')}
       </button>
     </>
   )
@@ -517,7 +527,7 @@ export function SettingsBar({
           type="button"
           className={`chip-btn icon-chip settings-open-btn ${moreOpen ? 'active' : ''}`}
           onClick={() => setMoreOpen((o) => !o)}
-          title={t('settings.open')}
+          title={t('settings.title')}
           aria-label={t('settings.open')}
           aria-expanded={moreOpen}
           aria-haspopup="dialog"

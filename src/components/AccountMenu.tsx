@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { changePassword } from '../api/auth'
 import { useAuth } from '../hooks/useAuth'
+import { useI18n } from '../i18n/I18nProvider'
 import { AuthModal } from './AuthModal'
 
 interface Props {
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export function AccountMenu({ onCloudSync, synced }: Props) {
+  const { t } = useI18n()
   const { user, logout, loading } = useAuth()
   const [open, setOpen] = useState(false)
   const [authOpen, setAuthOpen] = useState(false)
@@ -27,8 +29,8 @@ export function AccountMenu({ onCloudSync, synced }: Props) {
         type="button"
         className="chip-btn icon-chip account-btn"
         disabled
-        title="Signing you in…"
-        aria-label="Signing you in"
+        title={t('account.signingIn')}
+        aria-label={t('account.signingIn')}
       >
         …
       </button>
@@ -42,8 +44,8 @@ export function AccountMenu({ onCloudSync, synced }: Props) {
           type="button"
           className="chip-btn icon-chip account-btn account-signin"
           onClick={() => setAuthOpen(true)}
-          title="Account"
-          aria-label="Account"
+          title={t('auth.signIn')}
+          aria-label={t('auth.signIn')}
         >
           <span className="account-signin-icon" aria-hidden>
             👤
@@ -104,11 +106,9 @@ export function AccountMenu({ onCloudSync, synced }: Props) {
               <div className="account-popover-head">
                 <strong>{user.name}</strong>
                 <span>{user.email}</span>
-                {synced && <em className="sync-badge">☁ Synced</em>}
+                {synced && <em className="sync-badge">{t('account.synced')}</em>}
               </div>
-              <p className="account-popover-note">
-                Favorites, last place, units & theme save to your account automatically.
-              </p>
+              <p className="account-popover-note">{t('account.note')}</p>
               <button
                 type="button"
                 className="chip-btn"
@@ -117,7 +117,7 @@ export function AccountMenu({ onCloudSync, synced }: Props) {
                   setOpen(false)
                 }}
               >
-                Sync now
+                {t('account.sync')}
               </button>
               <button
                 type="button"
@@ -129,7 +129,7 @@ export function AccountMenu({ onCloudSync, synced }: Props) {
                   setPwMsg(null)
                 }}
               >
-                Change password
+                {t('account.changePassword')}
               </button>
               <button
                 type="button"
@@ -139,7 +139,7 @@ export function AccountMenu({ onCloudSync, synced }: Props) {
                   setOpen(false)
                 }}
               >
-                Sign out
+                {t('account.signOut')}
               </button>
             </div>
           </>,
@@ -157,7 +157,7 @@ export function AccountMenu({ onCloudSync, synced }: Props) {
             />
             <div className="auth-modal">
               <div className="auth-header">
-                <h2 id="pw-title">Change password</h2>
+                <h2 id="pw-title">{t('account.changePassword')}</h2>
                 <button
                   type="button"
                   className="auth-close"
@@ -167,13 +167,10 @@ export function AccountMenu({ onCloudSync, synced }: Props) {
                   ×
                 </button>
               </div>
-              <p className="auth-sub">
-                You must know your current password. Lost access? Email support from{' '}
-                <a href="/support.html">support</a> — self-serve email reset is not available yet.
-              </p>
+              <p className="auth-sub">{t('account.pwHelp')}</p>
               <form className="auth-form" onSubmit={(e) => void submitPw(e)}>
                 <label>
-                  Current password
+                  {t('auth.currentPassword')}
                   <input
                     type="password"
                     autoComplete="current-password"
@@ -183,7 +180,7 @@ export function AccountMenu({ onCloudSync, synced }: Props) {
                   />
                 </label>
                 <label>
-                  New password
+                  {t('auth.newPassword')}
                   <input
                     type="password"
                     autoComplete="new-password"
@@ -191,7 +188,6 @@ export function AccountMenu({ onCloudSync, synced }: Props) {
                     onChange={(e) => setNewPw(e.target.value)}
                     minLength={8}
                     required
-                    placeholder="At least 8 characters"
                   />
                 </label>
                 {pwErr && (
@@ -205,7 +201,7 @@ export function AccountMenu({ onCloudSync, synced }: Props) {
                   </p>
                 )}
                 <button type="submit" className="primary-btn" disabled={pwBusy}>
-                  {pwBusy ? 'Saving…' : 'Update password'}
+                  {pwBusy ? t('auth.wait') : t('auth.updatePassword')}
                 </button>
               </form>
             </div>

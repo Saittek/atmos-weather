@@ -15,6 +15,8 @@ import {
 } from '../utils/format'
 import { isSunUpAt } from '../utils/daylight'
 import { getWeatherInfo } from '../utils/weatherCodes'
+import { useI18n } from '../i18n/I18nProvider'
+import { localeTag, trWeatherLabel } from '../i18n/messages'
 import { WeatherIcon3D } from './WeatherIcon3D'
 
 interface Props {
@@ -22,11 +24,17 @@ interface Props {
   units: Units
 }
 
-function hourLabel(iso: string, timezone: string, isNow: boolean): string {
-  if (isNow) return 'Now'
+function hourLabel(
+  iso: string,
+  timezone: string,
+  isNow: boolean,
+  nowLabel: string,
+  locTag: string,
+): string {
+  if (isNow) return nowLabel
   const ms = parseWeatherLocal(iso, timezone)
   try {
-    return new Date(ms).toLocaleTimeString(undefined, {
+    return new Date(ms).toLocaleTimeString(locTag, {
       hour: 'numeric',
       timeZone: timezone,
     })
@@ -42,10 +50,12 @@ function hourPrecipLabel(mm: number, units: Units): string {
 }
 
 export function HourlyForecast({ weather, units }: Props) {
+  const { t, locale } = useI18n()
+  const locTag = localeTag(locale)
   const { hourly, timezone } = weather
   const now = Date.now()
   const start = hourly.time.findIndex(
-    (t) => parseWeatherLocal(t, timezone) >= now - 30 * 60 * 1000,
+    (tm) => parseWeatherLocal(tm, timezone) >= now - 30 * 60 * 1000,
   )
   const idx = start < 0 ? 0 : start
   const mobile =
@@ -62,41 +72,46 @@ export function HourlyForecast({ weather, units }: Props) {
 
   const endIso = items.length ? hourly.time[items[items.length - 1]] : null
   const unit = precipUnit(units)
+  const nowLbl = t('panel.now')
 
   return (
     <section className="panel hourly-panel">
       <div className="panel-header">
-        <h2>Hourly</h2>
+        <h2>{t('panel.hourly')}</h2>
         <span className="panel-hint">
           {endIso
-            ? `${hourLabel(hourly.time[idx], timezone, true)} → ${hourLabel(endIso, timezone, false)} · rain in ${unit}`
-            : `Scroll → · rain in ${unit}`}
+            ? `${hourLabel(hourly.time[idx], timezone, true, nowLbl, locTag)} → ${hourLabel(endIso, timezone, false, nowLbl, locTag)} · ${unit}`
+            : `→ · ${unit}`}
         </span>
       </div>
       <div className="hourly-scroll" role="list">
         {items.map((i) => {
-          const t = hourly.temperature_2m[i]
+          const temp = hourly.temperature_2m[i]
           const code = hourly.weather_code[i]
           const hourMs = parseWeatherLocal(hourly.time[i], timezone)
           const isDay = isSunUpAt(weather, hourMs)
-          const info = getWeatherInfo(code, isDay)
+          const infoRaw = getWeatherInfo(code, isDay)
+          const info = {
+            ...infoRaw,
+            label: trWeatherLabel(locale, infoRaw.label),
+            description: trWeatherLabel(locale, infoRaw.description),
+          }
           const pop = hourly.precipitation_probability[i] ?? 0
           const precip = hourly.precipitation[i] ?? 0
           const gust = hourly.wind_gusts_10m[i] ?? 0
-          const feel = hourly.apparent_temperature[i]
           const precipH = hasPrecipMm(precip)
             ? Math.max(6, Math.round((precip / maxPrecip) * 36))
             : 0
           const wet = pop >= 30 || hasPrecipMm(precip)
           const rainLabel = hourPrecipLabel(precip, units)
-          const timeLbl = hourLabel(hourly.time[i], timezone, i === idx)
+          const timeLbl = hourLabel(hourly.time[i], timezone, i === idx, nowLbl, locTag)
 
           return (
             <div
               className={`hourly-card ${wet ? 'is-wet' : ''} ${i === idx ? 'is-now' : ''}`}
               key={hourly.time[i]}
               role="listitem"
-              title={`${timeLbl}: ${formatTemp(t, units)} (feels ${formatTemp(feel, units)}) · ${info.label} · rain ${rainLabel}${pop ? ` · ${Math.round(pop)}% chance` : ''}${gust >= 40 ? ` · gusts ${formatSpeed(gust, units)}` : ''}`}
+              title={`${timeLbl}: ${formatTemp(temp, units)} · ${info.label} · ${rainLabel}`}
             >
               <span className="h-time">{timeLbl}</span>
               <span className="h-icon" title={info.description}>
@@ -107,7 +122,7 @@ export function HourlyForecast({ weather, units }: Props) {
                   forceAnimate={i === idx}
                 />
               </span>
-              <span className="h-temp">{formatTemp(t, units)}</span>
+              <span className="h-temp">{formatTemp(temp, units)}</span>
               {/* Single blue bar = expected rain amount for this hour */}
               <div className="h-precip-col" aria-hidden>
                 {precipH > 0 ? (

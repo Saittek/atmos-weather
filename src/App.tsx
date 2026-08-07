@@ -4,6 +4,7 @@ import './App.css'
 import './theme-light.css'
 import { applyTheme, bootstrapTheme, readStoredTheme } from './lib/theme'
 import { trackPageView } from './lib/analytics'
+import { detectLocale, t as translate } from './i18n/messages'
 
 // Apply before first paint of lazy routes (dashboard is not the only entry)
 bootstrapTheme()
@@ -16,10 +17,11 @@ const StargazePage = lazy(() => import('./pages/StargazePage'))
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'))
 
 function RouteFallback() {
+  const msg = translate(detectLocale(), 'app.loading')
   return (
     <div className="route-fallback" role="status" aria-live="polite">
       <div className="spinner large" />
-      <p>Loading Solara…</p>
+      <p>{msg}</p>
     </div>
   )
 }

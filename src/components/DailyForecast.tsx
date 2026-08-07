@@ -11,6 +11,8 @@ import {
 } from '../utils/format'
 import { getWeatherInfo, windDirection } from '../utils/weatherCodes'
 import { todayDailyIndex } from '../utils/weatherStory'
+import { useI18n } from '../i18n/I18nProvider'
+import { trWeatherLabel } from '../i18n/messages'
 import { WeatherIcon3D } from './WeatherIcon3D'
 
 const COLLAPSED_DAYS = 7
@@ -22,6 +24,7 @@ interface Props {
 }
 
 export function DailyForecast({ weather, units }: Props) {
+  const { t, locale } = useI18n()
   const d = weather.daily
   const todayIdx = todayDailyIndex(weather)
   const [open, setOpen] = useState<number | null>(todayIdx)
@@ -52,7 +55,7 @@ export function DailyForecast({ weather, units }: Props) {
   const maxAll = temps.length ? Math.max(...temps) : 1
   const span = Math.max(maxAll - minAll, 1)
 
-  const title = expanded ? '14-Day Outlook' : '7-Day Outlook'
+  const title = expanded ? t('panel.daily') : t('panel.daily7')
 
   return (
     <section className="panel daily-panel">
@@ -65,14 +68,21 @@ export function DailyForecast({ weather, units }: Props) {
             onClick={() => setExpanded((v) => !v)}
             aria-expanded={expanded}
           >
-            {expanded ? 'Show 7 days' : `Show full 14 days${hiddenCount ? ` (+${hiddenCount})` : ''}`}
+            {expanded
+              ? t('panel.showLess')
+              : `${t('panel.showMore')}${hiddenCount ? ` (+${hiddenCount})` : ''}`}
           </button>
         )}
       </div>
       <ul className="daily-list">
         {visibleIndices.map((i) => {
           const day = d.time[i]
-          const info = getWeatherInfo(d.weather_code[i], true)
+          const infoRaw = getWeatherInfo(d.weather_code[i], true)
+          const info = {
+            ...infoRaw,
+            label: trWeatherLabel(locale, infoRaw.label),
+            description: trWeatherLabel(locale, infoRaw.description),
+          }
           const lo = convertTemp(d.temperature_2m_min[i], units)
           const hi = convertTemp(d.temperature_2m_max[i], units)
           const left = ((lo - minAll) / span) * 100
@@ -83,11 +93,15 @@ export function DailyForecast({ weather, units }: Props) {
           const weekday = formatWeekday(day, weather.timezone)
           const relLabel =
             i === todayIdx
-              ? 'Today'
+              ? t('panel.today')
               : i === todayIdx + 1
-                ? 'Tomorrow'
+                ? locale === 'fr'
+                  ? 'Demain'
+                  : 'Tomorrow'
                 : i === todayIdx - 1
-                  ? 'Yesterday'
+                  ? locale === 'fr'
+                    ? 'Hier'
+                    : 'Yesterday'
                   : null
 
           return (

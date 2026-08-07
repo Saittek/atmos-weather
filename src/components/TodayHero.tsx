@@ -26,6 +26,8 @@ import { willIGetWet } from '../utils/wetSummary'
 import { resolvePrecipKind } from '../utils/precipKind'
 import { precipTiming } from '../utils/precipTiming'
 import { formatWeatherSource } from '../utils/weatherSource'
+import { useI18n } from '../i18n/I18nProvider'
+import { trAqi, trUv } from '../i18n/messages'
 
 interface Props {
   weather: WeatherData
@@ -36,6 +38,7 @@ interface Props {
 }
 
 export function TodayHero({ weather, units, placeName, air = null, sourceLine }: Props) {
+  const { t, locale } = useI18n()
   const story = useMemo(
     () => weatherStory(weather, units, placeName, air),
     [weather, units, placeName, air],
@@ -51,11 +54,15 @@ export function TodayHero({ weather, units, placeName, air = null, sourceLine }:
     h.time.findIndex((t) => parseWeatherLocal(t, tz) >= now - 30 * 60_000),
   )
   const uv = h.uv_index[idx] ?? weather.daily.uv_index_max[ti] ?? 0
-  const uvInfo = uvLabel(uv)
+  const uvInfoRaw = uvLabel(uv)
+  const uvInfo = { ...uvInfoRaw, label: trUv(locale, uvInfoRaw.label) }
   const popMax = weather.daily.precipitation_probability_max[ti] ?? 0
   const precipSum = weather.daily.precipitation_sum[ti] ?? 0
   const aqi = air?.current?.us_aqi ?? air?.current?.european_aqi ?? null
-  const aqiInfo = aqi != null ? aqiLabel(aqi) : null
+  const aqiInfoRaw = aqi != null ? aqiLabel(aqi) : null
+  const aqiInfo = aqiInfoRaw
+    ? { ...aqiInfoRaw, label: trAqi(locale, aqiInfoRaw.label) }
+    : null
   const sunrise = weather.daily.sunrise[ti]
   const sunset = weather.daily.sunset[ti]
   const kind = resolvePrecipKind(c.temperature_2m, c.weather_code, wet.level !== 'dry')
@@ -88,9 +95,9 @@ export function TodayHero({ weather, units, placeName, air = null, sourceLine }:
 
   const conditionCards = [
     {
-      title: 'Wind',
+      title: t('cond.wind'),
       value: formatSpeed(c.wind_speed_10m, units),
-      sub: `${windDirection(c.wind_direction_10m)} · Gusts ${formatSpeed(c.wind_gusts_10m, units)}`,
+      sub: `${windDirection(c.wind_direction_10m)} · ${t('cond.gusts', { speed: formatSpeed(c.wind_gusts_10m, units) })}`,
       icon: '💨',
       extra: (
         <div
@@ -103,60 +110,74 @@ export function TodayHero({ weather, units, placeName, air = null, sourceLine }:
       ),
     },
     {
-      title: 'Humidity',
+      title: t('cond.humidity'),
       value: `${c.relative_humidity_2m}%`,
-      sub: `Dew point ${formatTemp(dew, units)}`,
+      sub: t('cond.dew', { temp: formatTemp(dew, units) }),
       icon: '💧',
     },
     {
-      title: 'Pressure',
+      title: t('cond.pressure'),
       value: formatPressure(c.pressure_msl, units),
-      sub: 'Mean sea level',
+      sub: t('cond.msl'),
       icon: '⏱️',
     },
     {
-      title: 'UV Index',
+      title: t('cond.uv'),
       value: uv < 0.5 ? '0' : uv.toFixed(1),
       sub: uvInfo.label,
       icon: '☀️',
       accent: uvInfo.color,
     },
     {
-      title: 'Visibility',
+      title: t('cond.visibility'),
       value: formatDistance(vis, units),
-      sub: vis > 10000 ? 'Clear' : vis > 5000 ? 'Moderate' : 'Reduced',
+      sub:
+        vis > 10000
+          ? t('cond.clear')
+          : vis > 5000
+            ? t('cond.moderate')
+            : t('cond.reduced'),
       icon: '👁️',
     },
     {
-      title: 'Cloud cover',
+      title: t('cond.clouds'),
       value: `${c.cloud_cover}%`,
-      sub: c.cloud_cover < 25 ? 'Mostly clear' : c.cloud_cover < 60 ? 'Partly cloudy' : 'Cloudy',
+      sub:
+        c.cloud_cover < 25
+          ? t('cond.mostlyClear')
+          : c.cloud_cover < 60
+            ? t('cond.partlyCloudy')
+            : t('cond.cloudy'),
       icon: '☁️',
     },
     {
-      title: 'Precipitation',
+      title: t('cond.precip'),
       value: formatPrecip(c.precipitation, units),
       sub:
         c.snowfall > 0
-          ? `Snow ${formatPrecip(c.snowfall * 10, units)}`
+          ? t('cond.snow', { amount: formatPrecip(c.snowfall * 10, units) })
           : c.rain + c.showers > 0
-            ? 'Falling now'
-            : `Today ${hasPrecipMm(precipSum) ? `${formatPrecipAmount(precipSum, units)} ${precipUnit(units)}` : 'dry'}`,
+            ? t('cond.falling')
+            : hasPrecipMm(precipSum)
+              ? t('cond.todayPrecip', {
+                  amount: `${formatPrecipAmount(precipSum, units)} ${precipUnit(units)}`,
+                })
+              : t('cond.todayDry'),
       icon: '🌧️',
     },
     {
-      title: 'Feels like',
+      title: t('cond.feels'),
       value: formatTemp(c.apparent_temperature, units),
-      sub: `Actual ${formatTemp(c.temperature_2m, units)}`,
+      sub: t('cond.actual', { temp: formatTemp(c.temperature_2m, units) }),
       icon: '🌡️',
     },
   ]
 
   return (
-    <section className={`panel today-hero wet-${wet.level}`} aria-label="Today at a glance">
+    <section className={`panel today-hero wet-${wet.level}`} aria-label={t('hero.today')}>
       <div className="today-hero-head">
         <div>
-          <p className="today-hero-kicker">Today at a glance</p>
+          <p className="today-hero-kicker">{t('hero.today')}</p>
           <h2 className="today-hero-title">{placeName}</h2>
         </div>
         <span className={`summary-wet-pill wet-${wet.level}`}>
@@ -170,8 +191,11 @@ export function TodayHero({ weather, units, placeName, air = null, sourceLine }:
       <p className="today-hero-wet">{wet.detail}</p>
 
       <div className="today-hero-chips" aria-label="Key stats">
-        <span className="today-chip" title="Today’s calendar high & low">
-          Today H {Math.round(convertTemp(high, units))}° · L {Math.round(convertTemp(low, units))}°
+        <span className="today-chip" title={t('hero.todayHL', { h: '…', l: '…' })}>
+          {t('hero.todayHL', {
+            h: `${Math.round(convertTemp(high, units))}°`,
+            l: `${Math.round(convertTemp(low, units))}°`,
+          })}
         </span>
         <span className="today-chip">
           💨 {formatSpeed(c.wind_speed_10m, units)} {windDirection(c.wind_direction_10m)}
@@ -212,7 +236,7 @@ export function TodayHero({ weather, units, placeName, air = null, sourceLine }:
       </div>
 
       <div className="today-conditions">
-        <h3 className="today-conditions-title">Conditions</h3>
+        <h3 className="today-conditions-title">{t('hero.conditions')}</h3>
         <div className="detail-cards today-conditions-grid">
           {conditionCards.map((card) => (
             <article className="detail-card" key={card.title}>

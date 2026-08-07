@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { LocationResult } from '../api/types'
 import { formatLocationLabel, locationKey } from '../api/weather'
 import { favoritesCap } from '../lib/entitlements'
+import { useI18n } from '../i18n/I18nProvider'
 import { HomeLocationPanel } from './HomeLocationPanel'
 
 const MINI_KEY = 'solara-favorites-minimized'
@@ -49,6 +50,7 @@ export function Favorites({
   onSetHome,
   onGoHome,
 }: Props) {
+  const { t } = useI18n()
   const cur = current ? locationKey(current) : ''
   const showHome = Boolean(onSetHome && onGoHome)
   const [minimized, setMinimized] = useState(loadMinimized)
@@ -65,11 +67,11 @@ export function Favorites({
       className={`panel favorites-panel favorites-with-home ${minimized ? 'is-minimized' : ''}`}
     >
       <div className="panel-header favorites-header-row">
-        <h2>★ Saved places</h2>
+        <h2>{t('fav.title')}</h2>
         <div className="favorites-header-actions">
           <span className="panel-hint">
             {favorites.length}/{favoritesCap()}
-            {accountSynced ? ' · ☁' : signedIn ? '' : ' · local'}
+            {accountSynced ? ' · ☁' : signedIn ? '' : ` · ${t('fav.local')}`}
           </span>
           <button
             type="button"
@@ -122,10 +124,8 @@ export function Favorites({
 
           {!favorites.length ? (
             <p className="muted-center favorites-empty-msg">
-              {showHome
-                ? 'Star any location to pin work, trips, or other spots under home.'
-                : 'Star any location to pin home, work, or trip spots here.'}
-              {!signedIn && ' Create an account to keep them across devices.'}
+              {showHome ? t('fav.emptyHome') : t('fav.emptyNoHome')}
+              {!signedIn && t('fav.accountHint')}
             </p>
           ) : (
             <ul className="favorites-list">

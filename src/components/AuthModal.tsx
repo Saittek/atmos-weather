@@ -127,30 +127,28 @@ export function AuthModal({ open, onClose, onSuccess }: Props) {
         <form className="auth-form" onSubmit={(e) => void submit(e)}>
           {mode === 'register' && (
             <label>
-              Name
+              {t('auth.name')}
               <input
                 type="text"
                 autoComplete="name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Your name"
               />
             </label>
           )}
           <label>
-            Email
+            {t('auth.email')}
             <input
               type="email"
               autoComplete="email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
             />
           </label>
           {mode !== 'forgot' && (
             <label>
-              Password
+              {t('auth.password')}
               <input
                 type="password"
                 autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
@@ -158,7 +156,6 @@ export function AuthModal({ open, onClose, onSuccess }: Props) {
                 minLength={8}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="At least 8 characters"
               />
             </label>
           )}
@@ -176,7 +173,7 @@ export function AuthModal({ open, onClose, onSuccess }: Props) {
 
           <button type="submit" className="primary-btn auth-submit" disabled={busy}>
             {busy
-              ? 'Please wait…'
+              ? t('auth.wait')
               : mode === 'login'
                 ? t('auth.signIn')
                 : mode === 'forgot'
@@ -200,7 +197,7 @@ export function AuthModal({ open, onClose, onSuccess }: Props) {
             </button>
             {' · '}
             <Link to="/reset-password" onClick={onClose}>
-              Full reset page
+              {t('auth.fullReset')}
             </Link>
           </p>
         )}
@@ -215,16 +212,11 @@ export function AuthModal({ open, onClose, onSuccess }: Props) {
                 setInfo(null)
               }}
             >
-              ← Back to sign in
+              {t('auth.backSignIn')}
             </button>
           </p>
         )}
-        {mode === 'register' && (
-          <p className="auth-foot">
-            Accounts are stored on your Solara server. Passwords are hashed — never stored plain
-            text.
-          </p>
-        )}
+        {mode === 'register' && <p className="auth-foot">{t('auth.hashed')}</p>}
       </div>
     </div>,
     document.body,

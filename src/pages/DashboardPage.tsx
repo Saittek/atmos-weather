@@ -429,10 +429,10 @@ export default function DashboardPage() {
         <>
           <div className="radar-jump-row">
             <Link to={radarPath} className="primary-btn radar-open-btn">
-              📡 Full-page radar
+              📡 {tNav('nav.fullRadar')}
             </Link>
             <Link to={stargazePath} className="chip-btn">
-              ✨ Stargaze
+              ✨ {tNav('nav.stargaze')}
             </Link>
             {isMobile && wantRadar && !stormMode && (
               <button
@@ -443,12 +443,12 @@ export default function DashboardPage() {
                   setRadarOpen(false)
                 }}
               >
-                Hide radar
+                {tNav('nav.hideRadar')}
               </button>
             )}
             {!stormMode && (
               <button type="button" className="chip-btn" onClick={() => setStormMode(true)}>
-                🌩 Storm mode
+                {tNav('nav.stormModeOn')}
               </button>
             )}
           </div>
@@ -513,10 +513,10 @@ export default function DashboardPage() {
           <span className="ptr-spinner" aria-hidden />
           <span>
             {pull.refreshing
-              ? 'Updating…'
+              ? tNav('app.updating')
               : pull.progress >= 1
-                ? 'Release to refresh'
-                : 'Pull to refresh'}
+                ? tNav('app.releaseRefresh')
+                : tNav('app.pullRefresh')}
           </span>
         </div>
       )}
@@ -680,11 +680,11 @@ export default function DashboardPage() {
         {stormMode && (
           <div className="storm-mode-banner" role="status">
             <div>
-              <strong>🌩 Storm mode on</strong>
-              <span>Radar first · intense map · severe highlighting</span>
+              <strong>🌩 {tNav('app.stormMode')}</strong>
+              <span>{tNav('app.stormBanner')}</span>
             </div>
             <button type="button" className="chip-btn" onClick={() => setStormMode(false)}>
-              Exit
+              {tNav('app.stormExit')}
             </button>
           </div>
         )}
@@ -752,19 +752,17 @@ export default function DashboardPage() {
             <div className="empty-icon" aria-hidden>
               <img src="/icons/solara-logo.png" alt="" width={72} height={72} decoding="async" />
             </div>
-            <h1>Where should we look?</h1>
-            <p className="empty-lead">
-              Search a city or use your location for forecasts, radar, and alerts.
-            </p>
+            <h1>{tNav('empty.title')}</h1>
+            <p className="empty-lead">{tNav('empty.lead')}</p>
             <div className="empty-actions">
               <button type="button" className="primary-btn" onClick={requestMyLocation}>
-                Use my location
+                {tNav('empty.location')}
               </button>
               <Link to="/radar" className="chip-btn empty-secondary">
-                Open radar
+                {tNav('empty.radar')}
               </Link>
               <Link to="/stargaze" className="chip-btn empty-secondary">
-                ✨ Stargaze
+                {tNav('empty.stargaze')}
               </Link>
             </div>
           </div>

@@ -23,6 +23,8 @@ import { formatUpdatedAgo, isWeatherStale } from '../utils/relativeTime'
 import { isMobileViewport } from '../utils/device'
 import { precipTiming } from '../utils/precipTiming'
 import { formatWeatherSource, todayRangeHint } from '../utils/weatherSource'
+import { useI18n } from '../i18n/I18nProvider'
+import { trAqi, trUv, trWeatherLabel } from '../i18n/messages'
 import { WeatherIcon3D } from './WeatherIcon3D'
 
 interface Props {
@@ -56,12 +58,18 @@ export function CurrentWeather({
   air = null,
   onShare,
 }: Props) {
+  const { t, locale } = useI18n()
   const c = weather.current
   const condOpts = displayOptsFromWeather(weather, air)
   const displayCode = effectiveWeatherCode(c.weather_code, condOpts)
   // Sunrise/sunset at this location — never trust API is_day alone
   const isDay = isDaytimeNow(weather)
-  const info = getWeatherInfo(displayCode, isDay)
+  const infoRaw = getWeatherInfo(displayCode, isDay)
+  const info = {
+    ...infoRaw,
+    label: trWeatherLabel(locale, infoRaw.label),
+    description: trWeatherLabel(locale, infoRaw.description),
+  }
   const ti = todayDailyIndex(weather)
   const today = weather.daily
   // If actual now exceeds the forecast max (or a mis-aligned daily slot), show a sensible high
@@ -89,17 +97,21 @@ export function CurrentWeather({
     ),
   )
   const uv = h.uv_index[hIdx] ?? today.uv_index_max[ti] ?? 0
-  const uvInfo = uvLabel(uv)
+  const uvInfoRaw = uvLabel(uv)
+  const uvInfo = { ...uvInfoRaw, label: trUv(locale, uvInfoRaw.label) }
   const aqi = air?.current?.us_aqi ?? air?.current?.european_aqi
-  const aqiInfo = aqi != null ? aqiLabel(aqi) : null
+  const aqiInfoRaw = aqi != null ? aqiLabel(aqi) : null
+  const aqiInfo = aqiInfoRaw
+    ? { ...aqiInfoRaw, label: trAqi(locale, aqiInfoRaw.label) }
+    : null
   const sunrise = today.sunrise[ti]
   const sunset = today.sunset[ti]
   const feelDiff = c.apparent_temperature - c.temperature_2m
   const feelNote =
     Math.abs(feelDiff) >= 2
       ? feelDiff > 0
-        ? 'warmer than air'
-        : 'cooler than air'
+        ? t('hero.warmer')
+        : t('hero.cooler')
       : null
   const cardRef = useRef<HTMLElement>(null)
   const [vsNormal, setVsNormal] = useState<string | null>(null)
@@ -125,7 +137,7 @@ export function CurrentWeather({
   }, [updatedAt])
 
   const updatedLabel =
-    updatedAt != null ? formatUpdatedAgo(updatedAt, nowTick) : null
+    updatedAt != null ? formatUpdatedAgo(updatedAt, nowTick, locale) : null
   const stale = isWeatherStale(updatedAt, nowTick)
 
   const sourceLine = formatWeatherSource(weather)
@@ -164,7 +176,7 @@ export function CurrentWeather({
 
       <div className="current-top">
         <div className="current-place">
-          <p className="hero-kicker">Right now</p>
+          <p className="hero-kicker">{t('hero.rightNow')}</p>
           <div className="place-row">
             <h1 className="place-name">
               {isHome ? '🏠 ' : ''}
@@ -175,12 +187,8 @@ export function CurrentWeather({
                 type="button"
                 className={`fav-inline home-inline ${isHome ? 'on' : ''}`}
                 onClick={onSetHome}
-                title={
-                  isHome
-                    ? 'This is your exact home pin'
-                    : 'Set this place as exact home'
-                }
-                aria-label={isHome ? 'Home location' : 'Set as home'}
+                title={isHome ? t('hero.isHome') : t('hero.setHome')}
+                aria-label={isHome ? t('hero.isHome') : t('hero.setHome')}
               >
                 {isHome ? '🏡' : '🏠'}
               </button>
@@ -190,8 +198,8 @@ export function CurrentWeather({
                 type="button"
                 className={`fav-inline ${isFavorite ? 'on' : ''}`}
                 onClick={onToggleFavorite}
-                title={isFavorite ? 'Remove from favorites' : 'Save to favorites'}
-                aria-label={isFavorite ? 'Remove from favorites' : 'Save to favorites'}
+                title={isFavorite ? t('hero.removeFav') : t('hero.saveFav')}
+                aria-label={isFavorite ? t('hero.removeFav') : t('hero.saveFav')}
               >
                 {isFavorite ? '★' : '☆'}
               </button>
@@ -201,8 +209,8 @@ export function CurrentWeather({
                 type="button"
                 className="fav-inline share-inline"
                 onClick={onShare}
-                title="Copy share link"
-                aria-label="Share this place"
+                title={t('hero.copyLink')}
+                aria-label={t('hero.share')}
               >
                 ↗
               </button>
@@ -214,20 +222,22 @@ export function CurrentWeather({
             {` · ${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}`}
           </p>
           <p className="local-time">
-            Local {formatTime(c.time, weather.timezone)}
+            {t('app.local')} {formatTime(c.time, weather.timezone)}
             {weather.timezone_abbreviation ? ` · ${weather.timezone_abbreviation}` : ''}
             {updatedLabel && (
               <span className={`updated-at${stale ? ' is-stale' : ''}`}>
                 {' '}
-                · {refreshing ? 'Refreshing…' : `Updated ${updatedLabel}`}
-                {offline ? ' · offline' : ''}
-                {stale && !refreshing ? ' · may be outdated' : ''}
+                ·{' '}
+                {refreshing
+                  ? t('app.refreshing')
+                  : t('app.updated', { ago: updatedLabel })}
+                {offline ? ` · ${t('app.offline')}` : ''}
               </span>
             )}
           </p>
           <p className="current-source-line" title={todayRangeHint()}>
             {sourceLine}
-            {updatedLabel ? ` · ${refreshing ? 'refreshing' : updatedLabel}` : ''}
+            {updatedLabel ? ` · ${refreshing ? t('app.refreshing') : updatedLabel}` : ''}
           </p>
           <p
             className={`current-precip-timing wet-${timing.level}`}
@@ -261,11 +271,14 @@ export function CurrentWeather({
           <div className="temp-side">
             <span className="condition">{info.label}</span>
             <span className="feels">
-              Feels like {formatTemp(c.apparent_temperature, units)}
+              {t('hero.feelsLike', { temp: formatTemp(c.apparent_temperature, units) })}
               {feelNote ? ` · ${feelNote}` : ''}
             </span>
             <span className="hi-lo" title={todayRangeHint()}>
-              Today H {formatTemp(high, units)} · L {formatTemp(low, units)}
+              {t('hero.todayHL', {
+                h: formatTemp(high, units),
+                l: formatTemp(low, units),
+              })}
             </span>
             {vsNormal && <span className="vs-normal-line">{vsNormal}</span>}
           </div>
@@ -277,21 +290,23 @@ export function CurrentWeather({
             role="status"
           >
             {offline
-              ? 'You’re offline — showing the last saved forecast. Reconnect and pull down to refresh.'
-              : `Forecast last updated ${updatedLabel || 'a while ago'} — may be outdated. Pull down from the top to refresh.`}
+              ? t('hero.offlineBanner')
+              : t('hero.staleBanner', { ago: updatedLabel || '—' })}
           </div>
         )}
 
-        <div className="current-chips" aria-label="Quick stats">
-          {offline && <span className="current-chip offline">Offline · last saved</span>}
+        <div className="current-chips" aria-label={t('hero.quickStats')}>
+          {offline && <span className="current-chip offline">{t('hero.offlineChip')}</span>}
           {stale && !offline && (
-            <span className="current-chip stale" title="Pull down to refresh">
-              May be outdated · pull to refresh
+            <span className="current-chip stale" title={t('app.pullRefresh')}>
+              {t('hero.staleChip')}
             </span>
           )}
           {alertCount > 0 && (
             <span className="current-chip alert">
-              {alertCount} alert{alertCount > 1 ? 's' : ''}
+              {alertCount > 1
+                ? t('hero.alerts_plural', { n: alertCount })
+                : t('hero.alerts', { n: alertCount })}
             </span>
           )}
           {rainLabel && <span className="current-chip rain">{rainLabel}</span>}
