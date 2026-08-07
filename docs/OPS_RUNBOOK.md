@@ -12,9 +12,22 @@ Expect `ok: true` and secrets flags (jwt / cron / vapidPrivate).
 - Alert if:
   - HTTP not 200, or `ok !== true`
   - `secrets.jwt`, `secrets.cron`, or `secrets.vapidPrivate` flip to `false`
-  - Worker logs show repeated `alert-push-cron failed`
+  - Worker logs show repeated `alert-push-cron failed` or `health-cron secrets missing`
+- Cron already logs `health-cron` + `alert-push-cron` every 10m (Workers Observability).
 - Optional: hit `/api/sky/kp` daily; 5xx means stargaze aurora may degrade (client also tries SWPC directly).
 - After each deploy: `npm run test:all` (smoke + core).
+
+### Password reset email
+```bash
+npx wrangler secret put RESEND_API_KEY   # from resend.com
+# optional:
+npx wrangler secret put EMAIL_FROM       # e.g. Solara <noreply@yourdomain.com>
+npx wrangler d1 migrations apply atmos-db --remote
+```
+Without Resend, tokens are still created in D1; links appear in Worker logs only.
+
+### Android
+See **`docs/ANDROID.md`**.
 
 ### Stargaze extras
 ```

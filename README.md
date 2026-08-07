@@ -74,6 +74,14 @@ local `server/data/users.json`.
 
 This project includes a **Capacitor iOS** shell (`ios/`) so you can ship Solara on the App Store.
 
+### Android
+Capacitor Android project lives in `android/`. See **[docs/ANDROID.md](docs/ANDROID.md)**.
+
+```bash
+npm run android:prepare
+npm run android:open
+```
+
 ```bash
 npm run build:ios    # build web + sync into Xcode project
 # On a Mac:

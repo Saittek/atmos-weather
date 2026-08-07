@@ -1,5 +1,6 @@
 import express from 'express'
 import cors from 'cors'
+import crypto from 'node:crypto'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import {
@@ -247,6 +248,58 @@ app.post('/api/auth/change-password', authMiddleware, async (req, res) => {
   } catch (e) {
     console.error(e)
     res.status(500).json({ error: 'Could not change password' })
+  }
+})
+
+/** Dev-only password reset tokens (printed to server console — no mailer). */
+const localResetTokens = new Map()
+
+app.post('/api/auth/forgot-password', (req, res) => {
+  const generic = {
+    ok: true,
+    message:
+      'If an account exists for that email, a reset link was sent. (Local dev: check the API console.)',
+  }
+  try {
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : ''
+    if (!email.includes('@')) return res.json(generic)
+    const user = findUserByEmail(email)
+    if (user) {
+      const token = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '')
+      localResetTokens.set(token, {
+        userId: user.id,
+        expires: Date.now() + 60 * 60 * 1000,
+      })
+      const link = `http://localhost:5173/reset-password?token=${token}`
+      console.log('[solara] password reset link (local):', link)
+    }
+    res.json(generic)
+  } catch (e) {
+    console.error(e)
+    res.json(generic)
+  }
+})
+
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const token = typeof req.body?.token === 'string' ? req.body.token.trim() : ''
+    const newPassword = req.body?.newPassword
+    if (!token || typeof newPassword !== 'string' || newPassword.length < 8) {
+      return res
+        .status(400)
+        .json({ error: 'Valid reset token and a new password (8+ characters) are required' })
+    }
+    const row = localResetTokens.get(token)
+    if (!row || row.expires < Date.now()) {
+      return res.status(400).json({ error: 'This reset link is invalid or expired' })
+    }
+    const passwordHash = await bcrypt.hash(newPassword, 10)
+    updateUserPassword(row.userId, passwordHash)
+    localResetTokens.delete(token)
+    res.json({ ok: true, message: 'Password updated — you can sign in now' })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ error: 'Could not reset password' })
   }
 })
 

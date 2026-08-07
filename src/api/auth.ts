@@ -213,7 +213,7 @@ export async function fetchMe(): Promise<{ user: AuthUser; data: CloudPrefs } | 
   }
 }
 
-/** Signed-in password change (email “forgot password” needs a mailer — see support). */
+/** Signed-in password change. */
 export async function changePassword(
   currentPassword: string,
   newPassword: string,
@@ -221,6 +221,25 @@ export async function changePassword(
   await request<{ ok: boolean }>('/api/auth/change-password', {
     method: 'POST',
     body: JSON.stringify({ currentPassword, newPassword }),
+  })
+}
+
+/** Request a reset email (always generic success — no account enumeration). */
+export async function forgotPassword(email: string): Promise<{ ok: boolean; message: string }> {
+  return request<{ ok: boolean; message: string }>('/api/auth/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  })
+}
+
+/** Complete reset with one-time token from email link. */
+export async function resetPassword(
+  token: string,
+  newPassword: string,
+): Promise<{ ok: boolean; message: string }> {
+  return request<{ ok: boolean; message: string }>('/api/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ token, newPassword }),
   })
 }
 

@@ -1238,6 +1238,22 @@ export function RadarMap({
           </label>
         </div>
 
+        <div className="radar-product-legend" role="note">
+          <strong>Source</strong>
+          <span>
+            {caRegion && (sourceId === 'storm_chaser' || sourceId === 'eccc_radar')
+              ? 'ECCC MSC GeoMet (Canada)'
+              : usRegion && sourceId === 'storm_chaser'
+                ? 'NEXRAD / IEM (US)'
+                : sourceId === 'eccc_radar'
+                  ? 'ECCC MSC GeoMet'
+                  : 'RainViewer / regional composite'}
+          </span>
+          {showFires ? <span className="radar-legend-tag">FIRMS fires</span> : null}
+          {severeToggles.warnings ? (
+            <span className="radar-legend-tag">Warnings</span>
+          ) : null}
+        </div>
         <p className="radar-product-hint">
           {overlay !== 'none'
             ? 'Interactive model fields from Ventusky — pan, zoom, and scrub time inside the map.'

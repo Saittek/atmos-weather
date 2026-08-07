@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { LocationResult } from '../api/types'
 import { formatLocationLabel, locationKey } from '../api/weather'
+import { favoritesCap } from '../lib/entitlements'
 import { HomeLocationPanel } from './HomeLocationPanel'
 
 const MINI_KEY = 'solara-favorites-minimized'
@@ -67,7 +68,7 @@ export function Favorites({
         <h2>★ Saved places</h2>
         <div className="favorites-header-actions">
           <span className="panel-hint">
-            {favorites.length}/12
+            {favorites.length}/{favoritesCap()}
             {accountSynced ? ' · ☁' : signedIn ? '' : ' · local'}
           </span>
           <button

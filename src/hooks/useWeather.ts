@@ -29,6 +29,7 @@ import { publishNativeWidgetSnapshot } from '../lib/nativeWidget'
 import { loadOfflineBundle, offlineAgeLabel, saveOfflineBundle } from '../utils/offlineCache'
 import { filterActiveAlerts } from '../utils/activeAlerts'
 import { applyTheme } from '../lib/theme'
+import { favoritesCap } from '../lib/entitlements'
 import { shouldSuppressAlertNotify } from '../utils/quietHours'
 
 const STORAGE_KEY = 'atmos-weather-prefs-v2'
@@ -172,7 +173,7 @@ function cloudToPrefs(c: CloudPrefs, local: Prefs): Prefs {
     lastLocation: c.lastLocation ?? local.lastLocation,
     homeLocation,
     workLocation,
-    favorites: [...map.values()].slice(0, 12),
+    favorites: [...map.values()].slice(0, favoritesCap()),
     severeMode: c.severeMode ?? local.severeMode,
     stormMode: c.stormMode ?? local.stormMode,
     notifyAlerts: c.notifyAlerts ?? local.notifyAlerts,
@@ -697,11 +698,22 @@ export function useWeather() {
       const p = prefsRef.current
       const key = locationKey(loc)
       const exists = p.favorites.some((f) => locationKey(f) === key)
-      const favorites = exists
-        ? p.favorites.filter((f) => locationKey(f) !== key)
-        : [...p.favorites, loc].slice(0, 12)
+      if (!exists) {
+        const cap = favoritesCap()
+        if (p.favorites.length >= cap) {
+          showStatus(
+            `Saved places full (${cap}). Remove one or Preview Pro in Settings for more.`,
+          )
+          return
+        }
+        const favorites = [...p.favorites, loc].slice(0, cap)
+        commitPrefs({ ...p, favorites })
+        showStatus('Saved to favorites')
+        return
+      }
+      const favorites = p.favorites.filter((f) => locationKey(f) !== key)
       commitPrefs({ ...p, favorites })
-      showStatus(exists ? 'Removed from favorites' : 'Saved to favorites')
+      showStatus('Removed from favorites')
     },
     [commitPrefs, showStatus],
   )

@@ -1,7 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { getRememberedEmail } from '../api/auth'
+import { Link } from 'react-router-dom'
+import { forgotPassword, getRememberedEmail } from '../api/auth'
 import { useAuth } from '../hooks/useAuth'
+import { useI18n } from '../i18n/I18nProvider'
 
 interface Props {
   open: boolean
@@ -9,16 +11,18 @@ interface Props {
   onSuccess: () => void
 }
 
-type Mode = 'login' | 'register'
+type Mode = 'login' | 'register' | 'forgot'
 
 export function AuthModal({ open, onClose, onSuccess }: Props) {
   const { login, register } = useAuth()
+  const { t } = useI18n()
   const [mode, setMode] = useState<Mode>('login')
   const [name, setName] = useState('')
   const [email, setEmail] = useState(() => getRememberedEmail() ?? '')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [info, setInfo] = useState<string | null>(null)
 
   // Prefill remembered email each time the modal opens
   useEffect(() => {
@@ -48,7 +52,13 @@ export function AuthModal({ open, onClose, onSuccess }: Props) {
     e.preventDefault()
     setBusy(true)
     setError(null)
+    setInfo(null)
     try {
+      if (mode === 'forgot') {
+        const res = await forgotPassword(email.trim())
+        setInfo(res.message)
+        return
+      }
       if (mode === 'register' && password.length < 8) {
         throw new Error('Password must be at least 8 characters')
       }
@@ -72,47 +82,47 @@ export function AuthModal({ open, onClose, onSuccess }: Props) {
       <button type="button" className="auth-backdrop" aria-label="Close" onClick={onClose} />
       <div className="auth-modal">
         <div className="auth-header">
-          <h2 id="auth-title">{mode === 'login' ? 'Welcome back' : 'Create account'}</h2>
+          <h2 id="auth-title">
+            {mode === 'login'
+              ? t('auth.welcome')
+              : mode === 'forgot'
+                ? t('auth.forgot')
+                : t('auth.create')}
+          </h2>
           <button type="button" className="auth-close" onClick={onClose} aria-label="Close">
             ×
           </button>
         </div>
         <p className="auth-sub">
-          Sync home pin, favorites, last place, units, and theme across desktop and phone.
-          {mode === 'login' && (
-            <>
-              {' '}
-              Forgot password? Sign in is required to change it — if you’re locked out, see{' '}
-              <a href="/support.html" target="_blank" rel="noreferrer">
-                support
-              </a>
-              .
-            </>
-          )}
+          {mode === 'forgot' ? t('auth.resetHint') : t('auth.sub')}
         </p>
 
-        <div className="auth-tabs">
-          <button
-            type="button"
-            className={mode === 'login' ? 'active' : ''}
-            onClick={() => {
-              setMode('login')
-              setError(null)
-            }}
-          >
-            Sign in
-          </button>
-          <button
-            type="button"
-            className={mode === 'register' ? 'active' : ''}
-            onClick={() => {
-              setMode('register')
-              setError(null)
-            }}
-          >
-            Create account
-          </button>
-        </div>
+        {mode !== 'forgot' && (
+          <div className="auth-tabs">
+            <button
+              type="button"
+              className={mode === 'login' ? 'active' : ''}
+              onClick={() => {
+                setMode('login')
+                setError(null)
+                setInfo(null)
+              }}
+            >
+              {t('auth.signIn')}
+            </button>
+            <button
+              type="button"
+              className={mode === 'register' ? 'active' : ''}
+              onClick={() => {
+                setMode('register')
+                setError(null)
+                setInfo(null)
+              }}
+            >
+              {t('auth.create')}
+            </button>
+          </div>
+        )}
 
         <form className="auth-form" onSubmit={(e) => void submit(e)}>
           {mode === 'register' && (
@@ -138,34 +148,83 @@ export function AuthModal({ open, onClose, onSuccess }: Props) {
               placeholder="you@example.com"
             />
           </label>
-          <label>
-            Password
-            <input
-              type="password"
-              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-              required
-              minLength={8}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="At least 8 characters"
-            />
-          </label>
+          {mode !== 'forgot' && (
+            <label>
+              Password
+              <input
+                type="password"
+                autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                required
+                minLength={8}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="At least 8 characters"
+              />
+            </label>
+          )}
 
           {error && (
             <p className="auth-error" role="alert">
               {error}
             </p>
           )}
+          {info && (
+            <p className="auth-success" role="status">
+              {info}
+            </p>
+          )}
 
           <button type="submit" className="primary-btn auth-submit" disabled={busy}>
-            {busy ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account'}
+            {busy
+              ? 'Please wait…'
+              : mode === 'login'
+                ? t('auth.signIn')
+                : mode === 'forgot'
+                  ? t('auth.resetSend')
+                  : t('auth.create')}
           </button>
         </form>
 
-        <p className="auth-foot">
-          Accounts are stored on your Solara server. Passwords are hashed — never stored
-          plain text.
-        </p>
+        {mode === 'login' && (
+          <p className="auth-foot">
+            <button
+              type="button"
+              className="auth-link-btn"
+              onClick={() => {
+                setMode('forgot')
+                setError(null)
+                setInfo(null)
+              }}
+            >
+              {t('auth.forgot')}
+            </button>
+            {' · '}
+            <Link to="/reset-password" onClick={onClose}>
+              Full reset page
+            </Link>
+          </p>
+        )}
+        {mode === 'forgot' && (
+          <p className="auth-foot">
+            <button
+              type="button"
+              className="auth-link-btn"
+              onClick={() => {
+                setMode('login')
+                setError(null)
+                setInfo(null)
+              }}
+            >
+              ← Back to sign in
+            </button>
+          </p>
+        )}
+        {mode === 'register' && (
+          <p className="auth-foot">
+            Accounts are stored on your Solara server. Passwords are hashed — never stored plain
+            text.
+          </p>
+        )}
       </div>
     </div>,
     document.body,

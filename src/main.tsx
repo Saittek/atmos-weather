@@ -5,8 +5,17 @@ import './index.css'
 import App from './App.tsx'
 import { AuthProvider } from './hooks/useAuth'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { I18nProvider } from './i18n/I18nProvider'
 import { initNativeShell, isNativeApp } from './lib/native'
 import { applyMobilePerfClass, loadAdSenseDeferred, scheduleIdle } from './utils/device'
+import { detectLocale, saveLocale } from './i18n/messages'
+
+// Document language early for a11y / SEO
+try {
+  saveLocale(detectLocale())
+} catch {
+  /* ignore */
+}
 
 applyMobilePerfClass()
 if (typeof window !== 'undefined') {
@@ -31,9 +40,11 @@ if (rootEl) {
     <StrictMode>
       <ErrorBoundary>
         <BrowserRouter>
-          <AuthProvider>
-            <App />
-          </AuthProvider>
+          <I18nProvider>
+            <AuthProvider>
+              <App />
+            </AuthProvider>
+          </I18nProvider>
         </BrowserRouter>
       </ErrorBoundary>
     </StrictMode>,

@@ -108,6 +108,25 @@ async function main() {
     else ok('POST change-password', String(res.status))
   }
 
+  // Forgot password always generic 200
+  {
+    const res = await fetch(`${BASE}/api/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'smoke-nonexistent@example.com' }),
+    })
+    const j = await res.json().catch(() => ({}))
+    if (res.ok && j?.ok) ok('POST forgot-password generic ok')
+    else fail('POST forgot-password', String(res.status))
+  }
+
+  // Reset password page SPA
+  {
+    const { res } = await get('/reset-password')
+    if (res.ok) ok('GET /reset-password (SPA)')
+    else fail('GET /reset-password', String(res.status))
+  }
+
   // Metrics endpoint accepts POST (may 204/200)
   {
     const res = await fetch(`${BASE}/api/metrics/page`, {

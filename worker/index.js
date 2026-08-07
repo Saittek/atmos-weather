@@ -648,11 +648,12 @@ export default {
         return json({
           ok: true,
           service: 'solara-api',
-          version: '1.1.0',
+          version: '1.2.0',
           time: new Date().toISOString(),
           features: [
             'auth',
             'auth-change-password',
+            'auth-forgot-password',
             'chat',
             'fires',
             'push',
@@ -670,6 +671,7 @@ export default {
             jwt: Boolean(getJwtSecret(env)),
             cron: Boolean(env.CRON_SECRET && String(env.CRON_SECRET).length >= 8),
             vapidPrivate: Boolean(env.VAPID_PRIVATE_KEY),
+            resend: Boolean(env.RESEND_API_KEY),
             apns:
               Boolean(env.APNS_KEY_ID) &&
               Boolean(env.APNS_TEAM_ID) &&
@@ -681,7 +683,10 @@ export default {
               'Native aps-environment may be off until App ID has Push; web push uses VAPID',
             monitoring:
               'Poll /api/health every 5m; alert if ok=false or secrets.jwt/cron/vapidPrivate flip false',
-            routes: ['/', '/radar', '/globe', '/chase', '/stargaze'],
+            routes: ['/', '/radar', '/globe', '/chase', '/stargaze', '/reset-password'],
+            emailReset: Boolean(env.RESEND_API_KEY)
+              ? 'RESEND_API_KEY set — forgot-password emails enabled'
+              : 'Set RESEND_API_KEY (+ optional EMAIL_FROM) for reset emails; tokens still created in D1',
           },
         })
       }
@@ -1146,7 +1151,7 @@ export default {
         })
       }
 
-      // ── change password (signed-in only; no email reset without a mailer) ──
+      // ── change password (signed-in) ──
       if (path === '/api/auth/change-password' && method === 'POST') {
         const limited = rateLimitAuth(request, 'change-password', 8, 60 * 60 * 1000)
         if (limited) return limited
@@ -1172,6 +1177,95 @@ export default {
           .bind(passwordHash, auth.user.id)
           .run()
         return json({ ok: true, message: 'Password updated' })
+      }
+
+      // ── forgot password (always generic response — no account enumeration) ──
+      if (path === '/api/auth/forgot-password' && method === 'POST') {
+        const limited = rateLimitAuth(request, 'forgot-password', 6, 60 * 60 * 1000)
+        if (limited) return limited
+        const body = await request.json().catch(() => ({}))
+        const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : ''
+        const generic = {
+          ok: true,
+          message:
+            'If an account exists for that email, a reset link was sent. Check spam; the link expires in 1 hour.',
+        }
+        if (!validateEmail(email) || !env.DB) return json(generic)
+
+        try {
+          const row = await env.DB.prepare('SELECT id, email FROM users WHERE email = ?')
+            .bind(email)
+            .first()
+          if (row) {
+            const token = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '')
+            const createdAt = new Date().toISOString()
+            const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+            // Invalidate prior unused tokens for this user
+            await env.DB.prepare(
+              `UPDATE password_resets SET used_at = ? WHERE user_id = ? AND used_at IS NULL`,
+            )
+              .bind(createdAt, row.id)
+              .run()
+              .catch(() => {})
+            await env.DB.prepare(
+              `INSERT INTO password_resets (token, user_id, email, expires_at, used_at, created_at)
+               VALUES (?, ?, ?, ?, NULL, ?)`,
+            )
+              .bind(token, row.id, email, expiresAt, createdAt)
+              .run()
+
+            const origin = new URL(request.url).origin
+            const link = `${origin}/reset-password?token=${encodeURIComponent(token)}`
+            const mailed = await sendPasswordResetEmail(env, email, link)
+            if (!mailed.sent) {
+              console.log(
+                'password-reset token created (email not sent — set RESEND_API_KEY)',
+                email,
+                mailed.reason || '',
+              )
+            }
+          }
+        } catch (e) {
+          console.error('forgot-password', e)
+        }
+        return json(generic)
+      }
+
+      // ── reset password with one-time token ──
+      if (path === '/api/auth/reset-password' && method === 'POST') {
+        const limited = rateLimitAuth(request, 'reset-password', 10, 60 * 60 * 1000)
+        if (limited) return limited
+        const body = await request.json().catch(() => ({}))
+        const token = typeof body?.token === 'string' ? body.token.trim() : ''
+        const newPassword = body?.newPassword
+        if (!token || !validatePassword(newPassword)) {
+          return err('Valid reset token and a new password (8+ characters) are required')
+        }
+        if (!env.DB) return err('Server misconfigured', 503)
+        let row
+        try {
+          row = await env.DB.prepare(
+            `SELECT token, user_id, expires_at, used_at FROM password_resets WHERE token = ?`,
+          )
+            .bind(token)
+            .first()
+        } catch (e) {
+          console.error(e)
+          return err('Reset unavailable — try again later', 503)
+        }
+        if (!row || row.used_at) return err('This reset link is invalid or already used', 400)
+        if (new Date(row.expires_at).getTime() < Date.now()) {
+          return err('This reset link has expired — request a new one', 400)
+        }
+        const passwordHash = await hashPassword(newPassword)
+        const now = new Date().toISOString()
+        await env.DB.prepare('UPDATE users SET password_hash = ? WHERE id = ?')
+          .bind(passwordHash, row.user_id)
+          .run()
+        await env.DB.prepare('UPDATE password_resets SET used_at = ? WHERE token = ?')
+          .bind(now, token)
+          .run()
+        return json({ ok: true, message: 'Password updated — you can sign in now' })
       }
 
       // ── user data ──
@@ -1204,9 +1298,74 @@ export default {
   /** Every 10 minutes: severe alerts → Web Push for notify-enabled users */
   async scheduled(event, env, ctx) {
     ctx.waitUntil(
-      runAlertPushCron(env)
-        .then((r) => console.log('alert-push-cron', JSON.stringify(r)))
-        .catch((e) => console.error('alert-push-cron failed', e)),
+      (async () => {
+        // Self-health log for Workers Observability / log drains
+        try {
+          const secretsOk =
+            Boolean(getJwtSecret(env)) &&
+            Boolean(env.CRON_SECRET && String(env.CRON_SECRET).length >= 8)
+          console.log(
+            'health-cron',
+            JSON.stringify({
+              ok: true,
+              d1: Boolean(env.DB),
+              secretsOk,
+              vapid: Boolean(env.VAPID_PRIVATE_KEY),
+              resend: Boolean(env.RESEND_API_KEY),
+              t: new Date().toISOString(),
+            }),
+          )
+          if (!secretsOk) console.error('health-cron secrets missing jwt or CRON_SECRET')
+        } catch (e) {
+          console.error('health-cron failed', e)
+        }
+        try {
+          const r = await runAlertPushCron(env)
+          console.log('alert-push-cron', JSON.stringify(r))
+        } catch (e) {
+          console.error('alert-push-cron failed', e)
+        }
+      })(),
     )
   },
+}
+
+/** Optional Resend.com transactional email for password reset links. */
+async function sendPasswordResetEmail(env, to, link) {
+  const key = env.RESEND_API_KEY
+  if (!key || typeof key !== 'string') {
+    return { sent: false, reason: 'no RESEND_API_KEY' }
+  }
+  const from = env.EMAIL_FROM || 'Solara Weather <onboarding@resend.dev>'
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${key}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from,
+        to: [to],
+        subject: 'Reset your Solara password',
+        text: [
+          'Reset your Solara password using this one-time link (expires in 1 hour):',
+          '',
+          link,
+          '',
+          'If you did not request a reset, you can ignore this email.',
+          '— Solara Weather',
+        ].join('\n'),
+      }),
+    })
+    if (!res.ok) {
+      const t = await res.text().catch(() => '')
+      console.error('resend failed', res.status, t.slice(0, 200))
+      return { sent: false, reason: `resend ${res.status}` }
+    }
+    return { sent: true }
+  } catch (e) {
+    console.error('resend error', e)
+    return { sent: false, reason: 'fetch error' }
+  }
 }

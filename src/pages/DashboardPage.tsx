@@ -43,6 +43,7 @@ import { FirstRunCoach, markFirstWeatherOk } from '../components/FirstRunCoach'
 import { loadPushStatus, sendTestNotification } from '../api/push'
 import { useAuth } from '../hooks/useAuth'
 import { useRainWatch } from '../hooks/useRainWatch'
+import { useI18n } from '../i18n/I18nProvider'
 import { isDaytimeNow } from '../utils/daylight'
 import { getWeatherInfo } from '../utils/weatherCodes'
 import { locationKey, shareUrl } from '../api/weather'
@@ -147,6 +148,7 @@ function MapChunkFallback({ label }: { label: string }) {
 
 export default function DashboardPage() {
   const navigate = useNavigate()
+  const { t: tNav } = useI18n()
   const [isMobile] = useState(() => isMobileViewport())
   /** Mobile: radar is opt-in — Leaflet + tile loops are the #1 resource hog */
   const [radarOpen, setRadarOpen] = useState(false)
@@ -819,18 +821,18 @@ export default function DashboardPage() {
                 />
 
                 {/* Phone/iOS: top-bar quick-nav is CSS-hidden — keep modes one tap away */}
-                <nav className="mobile-modes-row" aria-label="App modes">
+                <nav className="mobile-modes-row" aria-label={tNav('nav.modes')}>
                   <Link to={radarPath} className="chip-btn mobile-mode-chip">
-                    📡 Radar
+                    📡 {tNav('nav.radar')}
                   </Link>
                   <Link to={stargazePath} className="chip-btn mobile-mode-chip mobile-mode-stargaze">
-                    ✨ Stargaze
+                    ✨ {tNav('nav.stargaze')}
                   </Link>
                   <Link to="/globe" className="chip-btn mobile-mode-chip">
-                    🌍 Earth
+                    🌍 {tNav('nav.earth')}
                   </Link>
                   <Link to={chasePath} className="chip-btn mobile-mode-chip">
-                    🌪 Chase
+                    🌪 {tNav('nav.chase')}
                   </Link>
                 </nav>
 

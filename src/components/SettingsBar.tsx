@@ -5,8 +5,10 @@ import type { DensityMode, ThemeMode } from '../api/types'
 import type { Units } from '../utils/format'
 import { UnitToggle } from './UnitToggle'
 import { AccountMenu } from './AccountMenu'
-import { getEntitlements } from '../lib/entitlements'
+import { getEntitlements, setPlanLocal, type PlanId } from '../lib/entitlements'
 import { isAnalyticsOptedOut, setAnalyticsOptOut } from '../lib/analytics'
+import { useI18n } from '../i18n/I18nProvider'
+import { LOCALE_LABELS, type LocaleId } from '../i18n/messages'
 
 /** Deep links for full-page modes (mobile top bar hides quick-nav). */
 export interface ExplorePaths {
@@ -104,7 +106,23 @@ export function SettingsBar({
   const [moreOpen, setMoreOpen] = useState(false)
   const moreRef = useRef<HTMLDivElement>(null)
   const [analyticsOff, setAnalyticsOff] = useState(() => isAnalyticsOptedOut())
-  const plan = getEntitlements()
+  const [plan, setPlan] = useState(() => getEntitlements())
+  const { locale, setLocale, t } = useI18n()
+
+  useEffect(() => {
+    const sync = () => setPlan(getEntitlements())
+    window.addEventListener('solara-plan-change', sync)
+    window.addEventListener('storage', sync)
+    return () => {
+      window.removeEventListener('solara-plan-change', sync)
+      window.removeEventListener('storage', sync)
+    }
+  }, [])
+
+  const applyPlan = (p: PlanId) => {
+    setPlanLocal(p)
+    setPlan(getEntitlements(p))
+  }
 
   useEffect(() => {
     if (!moreOpen) return
@@ -132,21 +150,38 @@ export function SettingsBar({
   const settingsPanel = (
     <>
       <div className="settings-more-section settings-plan-card">
-        <span className="settings-more-label">Plan</span>
+        <span className="settings-more-label">{t('settings.plan')}</span>
         <div className="settings-plan-row">
-          <strong>{plan.plan === 'pro' ? 'Solara Pro' : 'Solara Free'}</strong>
+          <strong>{plan.plan === 'pro' ? t('settings.planPro') : t('settings.planFree')}</strong>
           <span className="settings-plan-badge">{plan.plan === 'pro' ? 'Pro' : 'Free'}</span>
         </div>
         <p className="settings-plan-hint">
-          {plan.plan === 'pro'
-            ? 'Pro unlocks (when available): extended radar history, multi-widget, ad-free.'
-            : 'Core weather, radar, Earth, alerts, and chat stay free. Pro unlocks later — no payment yet.'}
+          {plan.plan === 'pro' ? t('settings.planHintPro') : t('settings.planHintFree')}
         </p>
+        <div className="settings-plan-actions">
+          {plan.plan === 'free' ? (
+            <button
+              type="button"
+              className="chip-btn settings-more-action"
+              onClick={() => applyPlan('pro')}
+            >
+              {t('settings.previewPro')}
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="chip-btn settings-more-action"
+              onClick={() => applyPlan('free')}
+            >
+              {t('settings.backFree')}
+            </button>
+          )}
+        </div>
       </div>
 
       {explorePaths && (
         <div className="settings-more-section">
-          <span className="settings-more-label">Explore</span>
+          <span className="settings-more-label">{t('settings.explore')}</span>
           <div className="settings-explore-links">
             <Link
               to={explorePaths.stargaze}
@@ -154,7 +189,7 @@ export function SettingsBar({
               role="menuitem"
               onClick={() => setMoreOpen(false)}
             >
-              ✨ Stargaze · night sky &amp; astro
+              {t('settings.stargaze')}
             </Link>
             <Link
               to={explorePaths.radar}
@@ -162,7 +197,7 @@ export function SettingsBar({
               role="menuitem"
               onClick={() => setMoreOpen(false)}
             >
-              📡 Full-page radar
+              {t('settings.radar')}
             </Link>
             <Link
               to={explorePaths.earth}
@@ -170,7 +205,7 @@ export function SettingsBar({
               role="menuitem"
               onClick={() => setMoreOpen(false)}
             >
-              🌍 3D Earth · global radar
+              {t('settings.earth')}
             </Link>
             <Link
               to={explorePaths.chase}
@@ -178,19 +213,36 @@ export function SettingsBar({
               role="menuitem"
               onClick={() => setMoreOpen(false)}
             >
-              🌪 Storm chasers desk
+              {t('settings.chase')}
             </Link>
           </div>
         </div>
       )}
 
       <div className="settings-more-section">
-        <span className="settings-more-label">Units</span>
+        <span className="settings-more-label">{t('settings.language')}</span>
+        <div className="unit-toggle theme-toggle settings-theme-all" role="group" aria-label={t('settings.language')}>
+          {(Object.keys(LOCALE_LABELS) as LocaleId[]).map((id) => (
+            <button
+              key={id}
+              type="button"
+              className={locale === id ? 'active' : ''}
+              onClick={() => setLocale(id)}
+              aria-pressed={locale === id}
+            >
+              {LOCALE_LABELS[id]}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="settings-more-section">
+        <span className="settings-more-label">{t('settings.units')}</span>
         <UnitToggle units={units} onChange={onUnits} />
       </div>
 
       <div className="settings-more-section">
-        <span className="settings-more-label">Theme</span>
+        <span className="settings-more-label">{t('settings.theme')}</span>
         <div className="unit-toggle theme-toggle settings-theme-all" role="group" aria-label="Theme">
           {(['dark', 'light', 'auto'] as ThemeMode[]).map((t) => (
             <button
@@ -465,8 +517,8 @@ export function SettingsBar({
           type="button"
           className={`chip-btn icon-chip settings-open-btn ${moreOpen ? 'active' : ''}`}
           onClick={() => setMoreOpen((o) => !o)}
-          title="Settings"
-          aria-label="Open settings"
+          title={t('settings.open')}
+          aria-label={t('settings.open')}
           aria-expanded={moreOpen}
           aria-haspopup="dialog"
         >

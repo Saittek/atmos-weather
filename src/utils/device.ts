@@ -69,9 +69,20 @@ export function applyMobilePerfClass(): void {
 export function loadAdSenseDeferred(client = 'ca-pub-3200072038162515'): void {
   if (typeof document === 'undefined') return
   if (document.querySelector('script[data-solara-adsense]')) return
+  // Pro preview / ad-free entitlement
+  try {
+    if (localStorage.getItem('solara-plan-v1') === 'pro') return
+  } catch {
+    /* ignore */
+  }
 
   const inject = () => {
     if (document.querySelector('script[data-solara-adsense]')) return
+    try {
+      if (localStorage.getItem('solara-plan-v1') === 'pro') return
+    } catch {
+      /* ignore */
+    }
     const s = document.createElement('script')
     s.async = true
     s.dataset.solaraAdsense = '1'

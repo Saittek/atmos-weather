@@ -42,6 +42,12 @@ export const FREE_LIMITS = {
   chatMessagesPerHour: 40,
 } as const
 
+export const PRO_LIMITS = {
+  favorites: 24,
+  tripCities: 12,
+  chatMessagesPerHour: 120,
+} as const
+
 export function readPlan(): PlanId {
   try {
     const v = localStorage.getItem(STORAGE_KEY)
@@ -52,10 +58,11 @@ export function readPlan(): PlanId {
   return 'free'
 }
 
-/** Dev / future restore-purchase hook — no payment yet. */
+/** Preview Pro / future StoreKit restore — no real payment yet. */
 export function setPlanLocal(plan: PlanId) {
   try {
     localStorage.setItem(STORAGE_KEY, plan)
+    window.dispatchEvent(new CustomEvent('solara-plan-change', { detail: plan }))
   } catch {
     /* ignore */
   }
@@ -67,4 +74,20 @@ export function getEntitlements(plan: PlanId = readPlan()): Entitlements {
 
 export function isPro(): boolean {
   return readPlan() === 'pro'
+}
+
+export function favoritesCap(plan: PlanId = readPlan()): number {
+  return plan === 'pro' || getEntitlements(plan).extraFavorites
+    ? PRO_LIMITS.favorites
+    : FREE_LIMITS.favorites
+}
+
+export function tripCitiesCap(plan: PlanId = readPlan()): number {
+  return plan === 'pro' ? PRO_LIMITS.tripCities : FREE_LIMITS.tripCities
+}
+
+/** When AdSense is enabled, Pro preview suppresses it. */
+export function shouldShowAds(): boolean {
+  if (getEntitlements().adFree) return false
+  return true
 }
