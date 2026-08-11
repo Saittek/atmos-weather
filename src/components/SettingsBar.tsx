@@ -505,8 +505,8 @@ export function SettingsBar({
         type="button"
         className={`chip-btn icon-chip storm-chip topbar-desktop-only ${stormMode ? 'active storm-on' : ''}`}
         onClick={() => onStormMode(!stormMode)}
-        title="Storm mode: radar-first layout"
-        aria-label="Storm mode"
+        title={t('settings.stormModeHint')}
+        aria-label={t('settings.stormMode')}
         aria-pressed={stormMode}
       >
         🌩
@@ -521,8 +521,8 @@ export function SettingsBar({
         className={`chip-btn icon-chip refresh-btn ${refreshing || loading ? 'spinning' : ''}`}
         onClick={onRefresh}
         disabled={loading || refreshing}
-        title="Refresh weather"
-        aria-label="Refresh weather"
+        title={t('app.refresh')}
+        aria-label={t('app.refresh')}
       >
         ↻
       </button>
@@ -550,22 +550,27 @@ export function SettingsBar({
         {/* Mobile full-screen sheet (portaled so it is never clipped) */}
         {moreOpen &&
           createPortal(
-            <div className="settings-sheet-root" role="dialog" aria-modal="true" aria-label="Settings">
+            <div
+              className="settings-sheet-root"
+              role="dialog"
+              aria-modal="true"
+              aria-label={t('settings.title')}
+            >
               <button
                 type="button"
                 className="settings-sheet-backdrop"
-                aria-label="Close settings"
+                aria-label={t('settings.close')}
                 onClick={() => setMoreOpen(false)}
               />
               <div className="settings-sheet">
                 <div className="settings-sheet-head">
-                  <strong>Settings</strong>
+                  <strong>{t('settings.title')}</strong>
                   <button
                     type="button"
                     className="chip-btn"
                     onClick={() => setMoreOpen(false)}
                   >
-                    Done
+                    {t('settings.done')}
                   </button>
                 </div>
                 <div className="settings-sheet-body">{settingsPanel}</div>

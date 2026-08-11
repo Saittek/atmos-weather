@@ -10,6 +10,9 @@ import { isDaytimeNow } from './daylight'
 import type { AirQualityData } from '../api/types'
 import { willIGetWet } from './wetSummary'
 import { precipTimingShort } from './precipTiming'
+import { todayRange } from './todayRange'
+import { resolvePrecipKind } from './precipKind'
+import { detectLocale } from '../i18n/messages'
 
 /** Index of "today" in daily arrays when past_days may prepend history */
 export function todayDailyIndex(weather: WeatherData): number {
@@ -37,7 +40,9 @@ export function weatherStory(
   placeName: string,
   air?: AirQualityData | null,
 ): string {
-  const ti = todayDailyIndex(weather)
+  const fr = detectLocale() === 'fr'
+  const range = todayRange(weather)
+  const ti = range.dayIndex
   const d = weather.daily
   const c = weather.current
   const displayCode = effectiveWeatherCode(
@@ -45,45 +50,77 @@ export function weatherStory(
     displayOptsFromWeather(weather, air),
   )
   const info = getWeatherInfo(displayCode, isDaytimeNow(weather))
-  const wet = willIGetWet(weather)
-  const hi = formatTemp(d.temperature_2m_max[ti], units)
-  const lo = formatTemp(d.temperature_2m_min[ti], units)
+  const wet = willIGetWet(weather, units)
+  const hi = formatTemp(range.high, units)
+  const lo = formatTemp(range.low, units)
   const pop = d.precipitation_probability_max[ti] ?? 0
   const wind = d.wind_speed_10m_max[ti] ?? c.wind_speed_10m
   const uv = d.uv_index_max[ti] ?? 0
+  const kind = resolvePrecipKind(c.temperature_2m, c.weather_code, pop >= 40)
+  const precipNoun =
+    kind === 'snow' ? (fr ? 'neige' : 'snow') : kind === 'mix' ? (fr ? 'mélange' : 'wintry mix') : fr ? 'pluie' : 'rain'
 
   const parts: string[] = []
-  parts.push(
-    `Right now in ${placeName}: ${info.description.toLowerCase()}, ${formatTemp(c.temperature_2m, units)} (feels ${formatTemp(c.apparent_temperature, units)}).`,
-  )
-  parts.push(`Today’s range is about ${lo} to ${hi}.`)
-
-  if (pop >= 50 || (d.precipitation_sum[ti] ?? 0) >= 1) {
-    parts.push(`Rain is in the picture (up to ${pop}% chance).`)
-  } else if (pop >= 25) {
-    parts.push(`A slight chance of showers (${pop}%).`)
+  if (fr) {
+    parts.push(
+      `En ce moment à ${placeName} : ${info.description.toLowerCase()}, ${formatTemp(c.temperature_2m, units)} (ressenti ${formatTemp(c.apparent_temperature, units)}).`,
+    )
+    parts.push(`Plage d’aujourd’hui : environ ${lo} à ${hi}.`)
+    if (pop >= 50 || (d.precipitation_sum[ti] ?? 0) >= 1) {
+      parts.push(`${precipNoun.charAt(0).toUpperCase() + precipNoun.slice(1)} possible (jusqu’à ${pop} %).`)
+    } else if (pop >= 25) {
+      parts.push(`Faible risque d’averses (${pop} %).`)
+    } else {
+      parts.push('Peu de précipitations prévues.')
+    }
   } else {
-    parts.push('Precipitation chances look low.')
+    parts.push(
+      `Right now in ${placeName}: ${info.description.toLowerCase()}, ${formatTemp(c.temperature_2m, units)} (feels ${formatTemp(c.apparent_temperature, units)}).`,
+    )
+    parts.push(`Today’s range is about ${lo} to ${hi}.`)
+    if (pop >= 50 || (d.precipitation_sum[ti] ?? 0) >= 1) {
+      parts.push(`${precipNoun.charAt(0).toUpperCase() + precipNoun.slice(1)} is in the picture (up to ${pop}% chance).`)
+    } else if (pop >= 25) {
+      parts.push(`A slight chance of showers (${pop}%).`)
+    } else {
+      parts.push('Precipitation chances look low.')
+    }
   }
 
   parts.push(wet.detail)
 
-  if (uv >= 7) parts.push(`UV peaks near ${uv.toFixed(0)} — sun protection midday.`)
-  if (wind >= 40) parts.push('Breezy to windy at times — secure loose outdoor items.')
+  if (uv >= 7) {
+    parts.push(
+      fr
+        ? `UV jusqu’à environ ${uv.toFixed(0)} — protection solaire midi.`
+        : `UV peaks near ${uv.toFixed(0)} — sun protection midday.`,
+    )
+  }
+  if (wind >= 40) {
+    parts.push(
+      fr
+        ? 'Venteux par moments — sécurisez les objets légers.'
+        : 'Breezy to windy at times — secure loose outdoor items.',
+    )
+  }
 
   const yIdx = yesterdayDailyIndex(weather)
   if (yIdx != null) {
     const yHi = convertTemp(d.temperature_2m_max[yIdx], units)
-    const tHi = convertTemp(d.temperature_2m_max[ti], units)
+    const tHi = convertTemp(range.high, units)
     const diff = Math.round(tHi - yHi)
     if (Math.abs(diff) >= 2) {
       parts.push(
-        diff > 0
-          ? `Running about ${diff}° warmer than yesterday’s high.`
-          : `About ${Math.abs(diff)}° cooler than yesterday’s high.`,
+        fr
+          ? diff > 0
+            ? `Environ ${diff}° plus chaud que le max d’hier.`
+            : `Environ ${Math.abs(diff)}° plus frais que le max d’hier.`
+          : diff > 0
+            ? `Running about ${diff}° warmer than yesterday’s high.`
+            : `About ${Math.abs(diff)}° cooler than yesterday’s high.`,
       )
     } else {
-      parts.push('Similar temperatures to yesterday.')
+      parts.push(fr ? 'Températures semblables à hier.' : 'Similar temperatures to yesterday.')
     }
   }
 

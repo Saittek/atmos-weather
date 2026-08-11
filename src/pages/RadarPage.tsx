@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { reverseGeocode } from '../api/weather'
 import type { LocationResult } from '../api/types'
 import type { Units } from '../utils/format'
+import { useI18n } from '../i18n/I18nProvider'
 
 const RadarMap = lazy(() =>
   import('../components/RadarMap').then((m) => ({ default: m.RadarMap })),
@@ -11,20 +12,23 @@ const RadarMap = lazy(() =>
 function readStoredPrefs(): {
   lastLocation: LocationResult | null
   homeLocation: LocationResult | null
+  units: Units
 } {
   try {
     const raw = localStorage.getItem('atmos-weather-prefs-v2')
-    if (!raw) return { lastLocation: null, homeLocation: null }
+    if (!raw) return { lastLocation: null, homeLocation: null, units: 'imperial' }
     const p = JSON.parse(raw) as {
       lastLocation?: LocationResult
       homeLocation?: LocationResult | null
+      units?: Units
     }
     return {
       lastLocation: p.lastLocation ?? null,
       homeLocation: p.homeLocation ?? null,
+      units: p.units === 'metric' ? 'metric' : 'imperial',
     }
   } catch {
-    return { lastLocation: null, homeLocation: null }
+    return { lastLocation: null, homeLocation: null, units: 'imperial' }
   }
 }
 
@@ -52,6 +56,7 @@ const FALLBACK: LocationResult = {
  * Query: ?lat=&lon=&name=&units=
  */
 export default function RadarPage() {
+  const { t } = useI18n()
   const [params] = useSearchParams()
   const stored = useMemo(() => readStoredPrefs(), [])
   const [place, setPlace] = useState<LocationResult>(() => {
@@ -59,7 +64,12 @@ export default function RadarPage() {
   })
   const homeLocation = stored.homeLocation
 
-  const units: Units = params.get('units') === 'metric' ? 'metric' : 'imperial'
+  const units: Units =
+    params.get('units') === 'metric'
+      ? 'metric'
+      : params.get('units') === 'imperial'
+        ? 'imperial'
+        : stored.units
 
   // Keep place in sync when navigating /radar?lat=… from dashboard links
   useEffect(() => {
@@ -112,15 +122,15 @@ export default function RadarPage() {
     <div className="radar-page">
       <header className="radar-page-bar">
         <Link to={backQuery} className="chip-btn">
-          ← Dashboard
+          {t('page.back')}
         </Link>
         <div className="radar-page-title">
-          <strong>📡 Live Radar</strong>
+          <strong>📡 {t('page.radar')}</strong>
           <span>{place.name}</span>
         </div>
         <div className="radar-page-actions">
           <Link to="/" className="chip-btn hide-sm">
-            Home
+            {t('search.home')}
           </Link>
         </div>
       </header>

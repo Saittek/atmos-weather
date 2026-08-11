@@ -46,6 +46,19 @@ Run after every TestFlight install. Mark fails and file as bugs.
 - [ ] Send test notification works (web push)
 - [ ] Quiet hours mutes non-extreme (if enabled)
 
+## Language
+- [ ] Settings → Language → Français: home shell stays French (settings, modes, empty, auth)
+- [ ] Precip timing + wet line update language after toggle
+
+## Account / password
+- [ ] Forgot password returns generic success (no email leak)
+- [ ] Change password while signed in works
+
+## Quiet hours / offline
+- [ ] Quiet hours mute non-extreme overnight (Home timezone)
+- [ ] Airplane mode on city B after viewing A: no silent jump to wrong city
+- [ ] Reconnect auto-refreshes weather
+
 ## Theme / a11y
 - [ ] Light + dark look correct
 - [ ] Reduced motion: no rain/snow particles (or static wash)

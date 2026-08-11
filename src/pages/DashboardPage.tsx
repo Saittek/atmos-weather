@@ -409,7 +409,7 @@ export default function DashboardPage() {
         <section className="panel radar-cta-panel" aria-label="Radar">
           <div className="panel-header">
             <h2>📡 Radar</h2>
-            <span className="panel-hint">Off until you open it</span>
+            <span className="panel-hint">{tNav('radar.ctaOff')}</span>
           </div>
           <p className="radar-cta-copy muted-center">
             Live radar uses more battery. Opens automatically when rain risk is high.
@@ -423,10 +423,10 @@ export default function DashboardPage() {
                 setRadarOpen(true)
               }}
             >
-              View radar
+              {tNav('radar.view')}
             </button>
             <Link to={radarPath} className="chip-btn">
-              Full page
+              {tNav('radar.fullPage')}
             </Link>
           </div>
         </section>
@@ -490,7 +490,7 @@ export default function DashboardPage() {
       aria-busy={loading || refreshing || pull.refreshing || geoLoading ? true : undefined}
     >
       <a className="skip-link" href="#main-content">
-        Skip to forecast
+        {tNav('app.skipForecast')}
       </a>
       {!isMobile && <div className="bg-noise" aria-hidden />}
       <div className="bg-scrim" aria-hidden />
@@ -617,9 +617,9 @@ export default function DashboardPage() {
               </Link>
               <Link
                 to={chasePath}
-                className="chip-btn icon-chip nav-chip hide-sm"
-                title="Storm chasers"
-                aria-label="Storm chasers"
+                className="chip-btn icon-chip nav-chip"
+                title={tNav('nav.chase')}
+                aria-label={tNav('nav.chase')}
               >
                 🌪
               </Link>
@@ -727,10 +727,10 @@ export default function DashboardPage() {
             <span>{error}</span>
             <div className="banner-actions">
               <button type="button" onClick={requestMyLocation}>
-                My location
+                {tNav('empty.location')}
               </button>
               <button type="button" className="banner-dismiss" onClick={clearError}>
-                Dismiss
+                {tNav('empty.dismiss')}
               </button>
             </div>
           </div>

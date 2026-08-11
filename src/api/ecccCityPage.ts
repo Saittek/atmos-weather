@@ -175,7 +175,8 @@ export async function fetchNearestEcccCityPage(
     if (!best || candidate.distanceKm < best.distanceKm) best = candidate
   }
   // Reject absurdly far matches
-  if (best && best.distanceKm > 250) return null
+  // Prefer nearby official city pages only (avoid distant overlay)
+  if (best && best.distanceKm > 80) return null
   return best
 }
 

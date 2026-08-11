@@ -17,7 +17,8 @@ import {
   windDirection,
 } from '../utils/weatherCodes'
 import { isDaytimeNow } from '../utils/daylight'
-import { nextPrecipLabel, todayDailyIndex } from '../utils/weatherStory'
+import { nextPrecipLabel } from '../utils/weatherStory'
+import { todayRange } from '../utils/todayRange'
 import { vsNormalLine } from '../utils/severeTimeline'
 import { formatUpdatedAgo, isWeatherStale } from '../utils/relativeTime'
 import { isMobileViewport } from '../utils/device'
@@ -70,19 +71,11 @@ export function CurrentWeather({
     label: trWeatherLabel(locale, infoRaw.label),
     description: trWeatherLabel(locale, infoRaw.description),
   }
-  const ti = todayDailyIndex(weather)
+  const range = todayRange(weather)
+  const ti = range.dayIndex
   const today = weather.daily
-  // If actual now exceeds the forecast max (or a mis-aligned daily slot), show a sensible high
-  const highRaw = today.temperature_2m_max[ti]
-  const lowRaw = today.temperature_2m_min[ti]
-  const high =
-    highRaw != null && Number.isFinite(highRaw)
-      ? Math.max(highRaw, c.temperature_2m)
-      : c.temperature_2m
-  const low =
-    lowRaw != null && Number.isFinite(lowRaw)
-      ? Math.min(lowRaw, c.temperature_2m)
-      : c.temperature_2m
+  const high = range.high
+  const low = range.low
   const timing = precipTiming(weather, units)
   const rainLabel = timing.level === 'dry' && timing.next3hMm < 0.15
     ? nextPrecipLabel(weather)

@@ -138,7 +138,7 @@ After Apple portal steps: just push `main` or start Codemagic.
 |------|--------|
 | Capacitor iOS `com.solara.weather` | ✅ |
 | Widget extension + App Group entitlements | ✅ |
-| `aps-environment` + `UIBackgroundModes` remote-notification | ✅ |
+| `aps-environment` + `UIBackgroundModes` remote-notification | ⏸ **OFF** on purpose (archive-safe) — re-enable when Push is on the App ID |
 | Codemagic `ios-testflight` (SPM fix, dual profiles, raw archive logs) | ✅ |
 | Web push subscribe + test notification UI | ✅ |
 | Worker APNs send path (`worker/apns.js`) | ✅ when secrets set |

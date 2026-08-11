@@ -1,6 +1,8 @@
 import type { WeatherData } from '../api/types'
 import { detectLocale } from '../i18n/messages'
-import { parseWeatherLocal } from './format'
+import type { Units } from './format'
+import { formatPrecipAmount, parseWeatherLocal, precipUnit } from './format'
+import { resolvePrecipKind } from './precipKind'
 
 export interface WetSummary {
   title: string
@@ -10,11 +12,18 @@ export interface WetSummary {
 }
 
 /** Plain-language “will I get wet?” for the next ~12 hours (EN / FR) */
-export function willIGetWet(weather: WeatherData): WetSummary {
+export function willIGetWet(weather: WeatherData, units: Units = 'metric'): WetSummary {
   const fr = detectLocale() === 'fr'
   const h = weather.hourly
   const tz = weather.timezone
   const now = Date.now()
+  const kind = resolvePrecipKind(
+    weather.current?.temperature_2m ?? 10,
+    weather.current?.weather_code ?? 0,
+    true,
+  )
+  const precipWord =
+    kind === 'snow' ? (fr ? 'neige' : 'snow') : kind === 'mix' ? (fr ? 'mélange' : 'mix') : fr ? 'pluie' : 'rain'
 
   type Slot = { ms: number; mm: number; pop: number; label: string }
   const slots: Slot[] = []
@@ -63,6 +72,7 @@ export function willIGetWet(weather: WeatherData): WetSummary {
   }
 
   if (wetIdx === 0 || first.mm >= 0.2) {
+    const amt = `~${formatPrecipAmount(first.mm, units)} ${precipUnit(units)}`
     return {
       title: fr
         ? heavyIdx === 0
@@ -74,8 +84,8 @@ export function willIGetWet(weather: WeatherData): WetSummary {
       detail:
         first.mm >= 0.2
           ? fr
-            ? `Précipitations dans l’heure (~${first.mm.toFixed(1)} mm). Prenez un manteau ou un parapluie.`
-            : `Precipitation is in the next hour (~${first.mm.toFixed(1)} mm). Grab a jacket or umbrella.`
+            ? `${precipWord} dans l’heure (${amt}). Prenez un manteau ou un parapluie.`
+            : `${precipWord} in the next hour (${amt}). Grab a jacket or umbrella.`
           : fr
             ? `${first.pop} % de risque dans l’heure — gardez un petit parapluie.`
             : `${first.pop}% chance in the next hour — keep a compact umbrella handy.`,
@@ -94,10 +104,12 @@ export function willIGetWet(weather: WeatherData): WetSummary {
         : `Dry for ~${hours}h, then watch it`,
       detail: fr
         ? `Restez au sec jusqu’à environ ${dryUntil}, puis ${
-            when.mm >= 0.5 ? 'attendez-vous à de la pluie' : `${when.pop} % de risque d’averses`
+            when.mm >= 0.5
+              ? `attendez-vous à de la ${precipWord}`
+              : `${when.pop} % de risque d’averses`
           }. Parapluie ensuite si vous êtes encore dehors.`
         : `Stay dry until around ${dryUntil}, then ${
-            when.mm >= 0.5 ? 'expect rain' : `${when.pop}% chance of showers`
+            when.mm >= 0.5 ? `expect ${precipWord}` : `${when.pop}% chance of showers`
           }. Umbrella after that if you’re still out.`,
       umbrella: hours <= 4,
       level: heavyIdx >= 0 ? 'wet' : 'maybe',

@@ -372,9 +372,19 @@ export default function StormChaserPage() {
       )}
 
       {!location && !loading && (
-        <div className="empty-state">
+        <div className="empty-state empty-state-rich">
           <h1>Pick a location</h1>
           <p className="empty-lead">Search above or use your location to open the storm desk.</p>
+          <div className="empty-actions">
+            <button
+              type="button"
+              className="primary-btn"
+              onClick={() => void requestMyLocation()}
+              disabled={geoLoading}
+            >
+              {geoLoading ? '…' : 'Use my location'}
+            </button>
+          </div>
         </div>
       )}
 

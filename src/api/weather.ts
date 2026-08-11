@@ -539,15 +539,44 @@ function mapNwsAlert(f: {
   }
 }
 
+/** Prefer FR or EN nested EC fields by UI locale */
+function ecLang(): 'en' | 'fr' {
+  try {
+    const v = localStorage.getItem('solara-locale-v1')
+    if (v === 'fr') return 'fr'
+  } catch {
+    /* ignore */
+  }
+  return 'en'
+}
+
+function ecPick(p: Record<string, unknown>, base: string): string {
+  const lang = ecLang()
+  const primary = p[`${base}_${lang}`]
+  const fallback = p[`${base}_en`] ?? p[`${base}_fr`] ?? p[base]
+  const v = primary ?? fallback
+  return v != null ? String(v) : ''
+}
+
 /** Map Environment Canada risk colour / impact / type → NWS-like severity labels */
 function mapEcSeverity(p: Record<string, unknown>): string {
-  const colour = String(p.risk_colour_en ?? '').toLowerCase()
-  const impact = String(p.impact_en ?? '').toLowerCase()
+  const colour = String(
+    p.risk_colour_en ?? p.risk_colour_fr ?? p.risk_colour ?? '',
+  ).toLowerCase()
+  const impact = String(p.impact_en ?? p.impact_fr ?? p.impact ?? '').toLowerCase()
   const type = String(p.alert_type ?? '').toLowerCase()
 
-  if (colour === 'red' || impact === 'extreme') return 'Extreme'
-  if (colour === 'orange' || impact === 'high' || type === 'warning') return 'Severe'
-  if (colour === 'yellow' || impact === 'moderate' || type === 'watch') return 'Moderate'
+  if (colour === 'red' || impact === 'extreme' || impact === 'extrême') return 'Extreme'
+  if (
+    colour === 'orange' ||
+    impact === 'high' ||
+    impact === 'élevé' ||
+    impact === 'eleve' ||
+    type === 'warning'
+  )
+    return 'Severe'
+  if (colour === 'yellow' || impact === 'moderate' || impact === 'modéré' || type === 'watch')
+    return 'Moderate'
   if (type === 'advisory' || type === 'statement' || colour === 'grey' || colour === 'gray')
     return 'Minor'
   return 'Unknown'
@@ -565,14 +594,17 @@ function mapEcAlert(f: {
   properties: Record<string, unknown>
 }): WeatherAlert {
   const p = f.properties
-  const name = String(p.alert_name_en ?? p.alert_short_name_en ?? 'Weather alert')
-  const area = String(p.feature_name_en ?? '')
+  const name =
+    ecPick(p, 'alert_name') ||
+    ecPick(p, 'alert_short_name') ||
+    (ecLang() === 'fr' ? 'Alerte météo' : 'Weather alert')
+  const area = ecPick(p, 'feature_name')
   const province = String(p.province ?? '')
   const areas = [area, province].filter(Boolean).join(', ')
   const type = String(p.alert_type ?? 'alert')
-  const text = String(p.alert_text_en ?? '')
-  const impact = String(p.impact_en ?? '')
-  const confidence = String(p.confidence_en ?? '')
+  const text = ecPick(p, 'alert_text')
+  const impact = ecPick(p, 'impact')
+  const confidence = ecPick(p, 'confidence')
 
   // Split long EC text: first paragraph as headline-ish, rest as body
   const paragraphs = text
@@ -581,12 +613,14 @@ function mapEcAlert(f: {
     .filter(Boolean)
   const headline =
     paragraphs[0]?.replace(/\s+/g, ' ').slice(0, 220) ||
-    `${name}${areas ? ` for ${areas}` : ''}`
+    `${name}${areas ? (ecLang() === 'fr' ? ` pour ${areas}` : ` for ${areas}`) : ''}`
 
   // Actionable lines often appear after "Take action" etc.
   const instruction =
     paragraphs.find((para) =>
-      /take action|protect yourself|call 9-1-1|what to do|prepare|evacuate/i.test(para),
+      /take action|protect yourself|call 9-1-1|what to do|prepare|evacuate|protégez|appelez|que faire|évacuez/i.test(
+        para,
+      ),
     ) ?? ''
 
   return {
@@ -738,11 +772,10 @@ async function fetchCanadaAlerts(lat: number, lon: number): Promise<WeatherAlert
     const seen = new Set<string>()
     const alerts: WeatherAlert[] = []
     for (const f of features) {
-      // Only alerts whose polygon covers this exact location
+      // Prefer polygon cover; if no geometry, keep when bbox already tight (0.08°)
       const inside = pointInGeometry(lon, lat, f.geometry)
       if (inside === false) continue
-      // No geometry: do not guess — skip (avoids neighboring area noise)
-      if (inside === null) continue
+      // null geometry: still accept (bbox fetch is small; better than missing alerts)
 
       const mapped = mapEcAlert(f)
       // Prefer unique event+area; EC ids already include feature

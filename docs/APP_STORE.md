@@ -22,7 +22,7 @@ Optional for **accounts/sync** on device:
 
 | Requirement | Notes |
 |-------------|--------|
-| Hosted API | Deploy `server/` to Railway, Fly.io, Render, etc. |
+| Hosted API | Cloudflare Worker + D1 (`npm run deploy` / `wrangler deploy`) |
 | `VITE_API_BASE` | `https://solaraweather.com` when building for device/cloud auth |
 
 Without a hosted API, **favorites and prefs still work on-device** (local storage). Sign-in just won’t sync to a server.
@@ -186,13 +186,13 @@ Flow (Codemagic): push repo → cloud Mac runs `npm run build` + `cap sync` + `x
 
 ---
 
-## Android later
+## Android
+
+Capacitor Android project is already in `android/`. See **`docs/ANDROID.md`**.
 
 ```bash
-npm install @capacitor/android
-npx cap add android
-npm run build && npx cap sync android
-npx cap open android
+npm run android:prepare
+npm run android:open
 ```
 
 ---

@@ -12,7 +12,7 @@ It is **not** the web `/widget` page or “Add to Home Screen” PWA icon.
 | Bundle ID (widget) | `com.solara.weather.widget` |
 | Bundle ID (app) | `com.solara.weather` |
 | App Group | `group.com.solara.weather` |
-| Capacitor bridge | `ios/App/App/SolaraWidgetPlugin.swift` → JS name `SolaraWidget` |
+| Capacitor bridge | `plugins/solara-widget/ios/Sources/SolaraWidgetPlugin/SolaraWidgetPlugin.swift` → JS name `SolaraWidget` |
 | JS publisher | `src/lib/nativeWidget.ts` (called from `useWeather` after forecast load) |
 | Widget kind | `SolaraHomeWidget` |
 | Sizes | Small + Medium + Large |

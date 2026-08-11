@@ -10,7 +10,11 @@ import { UnitToggle } from '../components/UnitToggle'
 import { MoonPhaseIcon } from '../components/MoonPhaseIcon'
 import { ClearSkyChart } from '../components/ClearSkyChart'
 import type { LocationResult } from '../api/types'
-import { fetchIssPasses, fetchKpIndex, type IssSnapshot } from '../api/skyExtras'
+import {
+  fetchIssPassesDetailed,
+  fetchKpIndex,
+  type IssSnapshot,
+} from '../api/skyExtras'
 import {
   fetchCloudModelAgreement,
   type CloudAgreement,
@@ -86,9 +90,15 @@ export default function StargazePage() {
   const [shareMsg, setShareMsg] = useState<string | null>(null)
   const [redMode, setRedMode] = useState(loadRed)
   const [kp, setKp] = useState<number | null>(null)
+  const [kpStatus, setKpStatus] = useState<'loading' | 'ok' | 'error'>('loading')
   const [iss, setIss] = useState<IssSnapshot | null>(null)
+  const [issStatus, setIssStatus] = useState<'loading' | 'ok' | 'empty' | 'error' | 'unavailable'>(
+    'loading',
+  )
+  const [issMsg, setIssMsg] = useState<string | null>(null)
   const [compareOn, setCompareOn] = useState(false)
   const [homeWeatherScore, setHomeWeatherScore] = useState<number | null>(null)
+  const [homeCompareNote, setHomeCompareNote] = useState<string | null>(null)
   const [notifyMsg, setNotifyMsg] = useState<string | null>(null)
   const [sites, setSites] = useState<DarkSite[]>(() => loadDarkSites())
   const [bortleClass, setBortleClass] = useState<number | null>(null)
@@ -122,8 +132,16 @@ export default function StargazePage() {
 
   useEffect(() => {
     let cancelled = false
+    setKpStatus('loading')
     void fetchKpIndex().then((k) => {
-      if (!cancelled && k) setKp(k.kp)
+      if (cancelled) return
+      if (k) {
+        setKp(k.kp)
+        setKpStatus('ok')
+      } else {
+        setKp(null)
+        setKpStatus('error')
+      }
     })
     return () => {
       cancelled = true
@@ -133,8 +151,19 @@ export default function StargazePage() {
   useEffect(() => {
     if (!location) return
     let cancelled = false
-    void fetchIssPasses(location.latitude, location.longitude).then((p) => {
-      if (!cancelled) setIss(p)
+    setIssStatus('loading')
+    setIssMsg(null)
+    void fetchIssPassesDetailed(location.latitude, location.longitude).then((r) => {
+      if (cancelled) return
+      if (r.status === 'ok' || r.status === 'empty') {
+        setIss(r.data)
+        setIssStatus(r.status)
+        setIssMsg(null)
+      } else {
+        setIss(null)
+        setIssStatus(r.status)
+        setIssMsg(r.message)
+      }
     })
     void lookupBortleAt(location.latitude, location.longitude).then((c) => {
       if (cancelled) return
@@ -212,17 +241,18 @@ export default function StargazePage() {
 
   const shown = brief ?? offlineBrief
 
-  // Compare home vs current — score only using same weather if home ≈ current
+  // Compare home vs current — darkness/Bortle at home coords; same cloud model (not dual-fetch)
   useEffect(() => {
     if (!compareOn || !homeLocation || !weather || !location) {
       setHomeWeatherScore(null)
+      setHomeCompareNote(null)
       return
     }
     if (sameExactPlace(location, homeLocation)) {
       setHomeWeatherScore(shown?.imagingScore ?? null)
+      setHomeCompareNote(null)
       return
     }
-    // Approximate: use same weather model shifted only by Bortle (true dual-fetch is heavier)
     const homeBrief = buildStargazeBrief(weather, {
       lat: homeLocation.latitude,
       lon: homeLocation.longitude,
@@ -230,6 +260,9 @@ export default function StargazePage() {
       auroraKp: kp,
     })
     setHomeWeatherScore(homeBrief.imagingScore)
+    setHomeCompareNote(
+      'Darkness / Bortle at home only — cloud & humidity still use weather for this place.',
+    )
   }, [compareOn, homeLocation, weather, location, air, kp, shown?.imagingScore])
 
   const onSelect = (loc: LocationResult) => {
@@ -646,6 +679,9 @@ export default function StargazePage() {
                 {shown.bortle.label} — {shown.bortle.sky}. {shown.bortle.detail}
               </p>
               {shown.smokeNote && <p className="sg-smoke-note">{shown.smokeNote}</p>}
+              {kpStatus === 'error' && (
+                <p className="muted-center sg-aurora">🌌 Aurora index unavailable right now</p>
+              )}
               {shown.auroraLabel && (
                 <p className={`sg-aurora${shown.auroraLikely ? ' hot' : ''}`}>
                   🌌 {shown.auroraLabel}
@@ -970,11 +1006,16 @@ export default function StargazePage() {
                 <h2>Satellite flyovers</h2>
                 <span className="panel-hint">ISS · Hubble · Tiangong</span>
               </div>
-              {!iss && <p className="muted-center">Loading pass predictions…</p>}
-              {iss && iss.passes.length === 0 && (
+              {issStatus === 'loading' && (
+                <p className="muted-center">Loading pass predictions…</p>
+              )}
+              {(issStatus === 'error' || issStatus === 'unavailable') && (
+                <p className="muted-center">{issMsg || 'Satellite passes unavailable.'}</p>
+              )}
+              {issStatus === 'empty' && (
                 <p className="muted-center">No bright passes in the next ~36h from this model.</p>
               )}
-              {iss && iss.passes.length > 0 && (
+              {issStatus === 'ok' && iss && iss.passes.length > 0 && (
                 <ul className="sg-iss-list">
                   {iss.passes.map((p) => (
                     <li key={`${p.name}-${p.maxMs}`}>
@@ -1026,8 +1067,8 @@ export default function StargazePage() {
                       </span>
                     </div>
                     <p className="sg-footnote">
-                      Uses Bortle at each pin with this place’s cloud forecast as a proxy when
-                      Home isn’t loaded separately.
+                      {homeCompareNote ||
+                        'Uses Bortle at each pin with this place’s cloud forecast as a proxy when Home isn’t loaded separately.'}
                     </p>
                   </div>
                 )}

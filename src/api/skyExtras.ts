@@ -108,19 +108,47 @@ export async function fetchKpIndex(): Promise<KpSnapshot | null> {
   return null
 }
 
+export type IssFetchResult =
+  | { status: 'ok'; data: IssSnapshot }
+  | { status: 'empty'; data: IssSnapshot }
+  | { status: 'error'; message: string }
+  | { status: 'unavailable'; message: string }
+
 export async function fetchIssPasses(
   lat: number,
   lon: number,
 ): Promise<IssSnapshot | null> {
+  const r = await fetchIssPassesDetailed(lat, lon)
+  if (r.status === 'ok' || r.status === 'empty') return r.data
+  return null
+}
+
+/** Preferred: explicit status so UI never hangs on “Loading…”. */
+export async function fetchIssPassesDetailed(
+  lat: number,
+  lon: number,
+): Promise<IssFetchResult> {
   const base = getApiBase()
-  if (!base) return null
+  if (!base) {
+    return {
+      status: 'unavailable',
+      message: 'ISS passes need the Solara API (open the installed app or solaraweather.com).',
+    }
+  }
   try {
     const url = `${base}/api/sky/iss?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`
     const res = await fetch(url, { signal: AbortSignal.timeout(12_000) })
-    if (!res.ok) return null
+    if (!res.ok) {
+      return { status: 'error', message: `Pass service unavailable (${res.status})` }
+    }
     const data = await res.json()
-    if (!data || !Array.isArray(data.passes)) return null
-    return {
+    if (!data || !Array.isArray(data.passes)) {
+      return {
+        status: 'error',
+        message: 'Pass service returned an unexpected response',
+      }
+    }
+    const snap: IssSnapshot = {
       passes: data.passes.map(
         (p: {
           name?: string
@@ -140,7 +168,11 @@ export async function fetchIssPasses(
       ),
       note: data.note || 'Visible satellite passes (approx).',
     }
+    return {
+      status: snap.passes.length ? 'ok' : 'empty',
+      data: snap,
+    }
   } catch {
-    return null
+    return { status: 'error', message: 'Could not load satellite passes' }
   }
 }

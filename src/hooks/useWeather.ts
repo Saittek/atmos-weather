@@ -927,6 +927,17 @@ export function useWeather() {
     return () => clearInterval(id)
   }, [location])
 
+  // When connectivity returns, refresh the place we were viewing
+  useEffect(() => {
+    const onOnline = () => {
+      const loc = locationRef.current
+      if (!loc) return
+      void loadForLocationRef.current?.(loc, { soft: true })
+    }
+    window.addEventListener('online', onOnline)
+    return () => window.removeEventListener('online', onOnline)
+  }, [])
+
   // When the user returns to the tab after a while, soft-refresh once (keeps “now” current)
   useEffect(() => {
     if (!location) return

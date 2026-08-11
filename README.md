@@ -124,7 +124,7 @@ Saved to your account (cloud on the local server):
 
 **Local:** passwords bcrypt-hashed; data in `server/data/users.json` (gitignored).  
 **Production (Cloudflare):** PBKDF2-hashed passwords + JWT in D1 (`atmos-db`).  
-JWT sessions last 30 days. Signed-in users can **Change password** from Account menu (no email reset yet).
+JWT sessions last 30 days. Signed-in users can **Change password**; **Forgot password** emails a one-time link when `RESEND_API_KEY` is set (otherwise tokens are created in D1 / local console).
 
 ## Features
 

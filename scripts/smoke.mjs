@@ -42,6 +42,15 @@ async function main() {
     const { res, json } = await get('/api/health', { json: true })
     if (res.ok && json?.ok) ok('GET /api/health', json.service || 'ok')
     else fail('GET /api/health', `${res.status}`)
+    if (res.ok && Array.isArray(json?.features)) {
+      if (json.features.includes('auth-forgot-password')) ok('Health features forgot-password')
+      else fail('Health features forgot-password', 'missing')
+      if (json.secrets && json.secrets.resend === false) {
+        ok('Health resend secret', 'not set (emails log-only)')
+      } else if (json.secrets?.resend) {
+        ok('Health resend secret', 'configured')
+      }
+    }
   }
 
   // Tropical

@@ -21,7 +21,8 @@ import {
   precipUnit,
 } from '../utils/format'
 import { aqiLabel, uvLabel, windDirection } from '../utils/weatherCodes'
-import { todayDailyIndex, weatherStory } from '../utils/weatherStory'
+import { weatherStory } from '../utils/weatherStory'
+import { todayRange } from '../utils/todayRange'
 import { willIGetWet } from '../utils/wetSummary'
 import { resolvePrecipKind } from '../utils/precipKind'
 import { precipTiming } from '../utils/precipTiming'
@@ -43,8 +44,9 @@ export function TodayHero({ weather, units, placeName, air = null, sourceLine }:
     () => weatherStory(weather, units, placeName, air),
     [weather, units, placeName, air],
   )
-  const wet = useMemo(() => willIGetWet(weather), [weather])
-  const ti = todayDailyIndex(weather)
+  const wet = useMemo(() => willIGetWet(weather, units), [weather, units])
+  const range = todayRange(weather)
+  const ti = range.dayIndex
   const c = weather.current
   const h = weather.hourly
   const tz = weather.timezone
@@ -69,14 +71,8 @@ export function TodayHero({ weather, units, placeName, air = null, sourceLine }:
   const vis = h.visibility[idx] ?? 10000
   const dew = h.dew_point_2m[idx] ?? c.temperature_2m - 5
 
-  const high = Math.max(
-    weather.daily.temperature_2m_max[ti] ?? c.temperature_2m,
-    c.temperature_2m,
-  )
-  const low = Math.min(
-    weather.daily.temperature_2m_min[ti] ?? c.temperature_2m,
-    c.temperature_2m,
-  )
+  const high = range.high
+  const low = range.low
 
   const stargaze = useMemo(() => {
     try {

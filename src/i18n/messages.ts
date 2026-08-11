@@ -85,6 +85,10 @@ const en = {
   'empty.location': 'Use my location',
   'empty.radar': 'Open radar',
   'empty.stargaze': '✨ Stargaze',
+  'empty.dismiss': 'Dismiss',
+  'radar.ctaOff': 'Off until you open it',
+  'radar.view': 'View radar',
+  'radar.fullPage': 'Full page',
 
   // Favorites
   'fav.title': '★ Saved places',
@@ -100,6 +104,8 @@ const en = {
   // Settings
   'settings.open': 'Open settings',
   'settings.title': 'Settings',
+  'settings.done': 'Done',
+  'settings.close': 'Close settings',
   'settings.explore': 'Explore',
   'settings.units': 'Units',
   'settings.theme': 'Theme',
@@ -394,6 +400,10 @@ const fr: Record<MessageKey, string> = {
   'empty.location': 'Ma position',
   'empty.radar': 'Ouvrir le radar',
   'empty.stargaze': '✨ Ciel étoilé',
+  'empty.dismiss': 'Fermer',
+  'radar.ctaOff': 'Masqué jusqu’à ouverture',
+  'radar.view': 'Voir le radar',
+  'radar.fullPage': 'Plein écran',
 
   'fav.title': '★ Lieux enregistrés',
   'fav.local': 'local',
@@ -409,6 +419,8 @@ const fr: Record<MessageKey, string> = {
 
   'settings.open': 'Ouvrir les réglages',
   'settings.title': 'Réglages',
+  'settings.done': 'Terminé',
+  'settings.close': 'Fermer les réglages',
   'settings.explore': 'Explorer',
   'settings.units': 'Unités',
   'settings.theme': 'Thème',
