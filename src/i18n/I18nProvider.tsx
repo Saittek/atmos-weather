@@ -13,11 +13,14 @@ import {
   type LocaleId,
   type MessageKey,
 } from './messages'
+import { te as translateMode, type ModeKey } from './modes'
 
 interface I18nCtx {
   locale: LocaleId
   setLocale: (l: LocaleId) => void
   t: (key: MessageKey, vars?: Record<string, string | number>) => string
+  /** Mode pages (radar / stargaze / earth) */
+  te: (key: ModeKey, vars?: Record<string, string | number>) => string
 }
 
 const Ctx = createContext<I18nCtx | null>(null)
@@ -35,7 +38,12 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     [locale],
   )
 
-  const value = useMemo(() => ({ locale, setLocale, t }), [locale, setLocale, t])
+  const te = useCallback(
+    (key: ModeKey, vars?: Record<string, string | number>) => translateMode(locale, key, vars),
+    [locale],
+  )
+
+  const value = useMemo(() => ({ locale, setLocale, t, te }), [locale, setLocale, t, te])
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }
@@ -43,11 +51,11 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 export function useI18n(): I18nCtx {
   const ctx = useContext(Ctx)
   if (!ctx) {
-    // Fallback when used outside provider (tests / edge)
     return {
       locale: 'en',
       setLocale: () => {},
       t: (key, vars) => translate('en', key, vars),
+      te: (key, vars) => translateMode('en', key, vars),
     }
   }
   return ctx

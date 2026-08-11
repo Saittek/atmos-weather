@@ -31,6 +31,7 @@ import {
 import { formatRadarTime } from '../utils/format'
 import type { Units } from '../utils/format'
 import type { LocationResult } from '../api/types'
+import { useI18n } from '../i18n/I18nProvider'
 import type { StormWarning } from '../api/severeLayers'
 import { MapOverlays, OVERLAY_OPTIONS, type OverlayMode } from './MapOverlays'
 import { FireSmokeLayers } from './FireSmokeLayers'
@@ -597,6 +598,7 @@ export function RadarMap({
   homeLocation = null,
 }: Props) {
   void _units
+  const { te } = useI18n()
   const lite = useMemo(() => isConstrainedDevice(), [])
   const mapboxToken = useMemo(() => getMapboxToken(), [])
   const BASEMAPS = useMemo(() => buildBasemaps(mapboxToken), [mapboxToken])
@@ -726,17 +728,17 @@ export function RadarMap({
         lat,
         lon,
       })
-      if (!next.length) throw new Error('No frames available for this source')
+      if (!next.length) throw new Error(te('radar.noFrames'))
       setFrames(next)
       // Show the most recent frame (current time) while paused
       setFrameIdx(next.length - 1)
     } catch (e) {
       setFrames([])
-      setError(e instanceof Error ? e.message : 'Radar failed to load')
+      setError(e instanceof Error ? e.message : te('radar.failed'))
     } finally {
       setLoading(false)
     }
-  }, [sourceId, lite, mapboxToken, lat, lon])
+  }, [sourceId, lite, mapboxToken, lat, lon, te])
 
   useEffect(() => {
     void reload()
@@ -830,7 +832,7 @@ export function RadarMap({
   const timeLabel = frame?.time
     ? formatRadarTime(frame.time)
     : loading
-      ? 'Loading…'
+      ? te('common.loading')
       : '—'
 
   const ventuskyOn = overlay !== 'none'
@@ -843,11 +845,18 @@ export function RadarMap({
       className={`panel radar-panel ${fullscreen ? 'is-fullscreen' : ''} ${pageMode ? 'radar-page-mode' : ''} ${severeMode ? 'severe-radar' : ''} ${ventuskyOn ? 'has-ventusky' : ''} ${compact ? 'radar-compact' : ''} ${chaserStyle ? 'radar-chaser-style' : ''}`}
     >
       <div className="panel-header radar-header">
-        <h2>{ventuskyOn ? '🌡 Model map' : '📡 Live radar'}</h2>
+        <h2>{ventuskyOn ? te('radar.modelMap') : te('radar.live')}</h2>
         <div className="radar-header-actions">
           <span className="panel-hint">{ventuskyOn ? 'Ventusky' : meta.coverage}</span>
           {!ventuskyOn && (
-            <button type="button" className="chip-btn" onClick={() => void reload()} disabled={loading}>
+            <button
+              type="button"
+              className="chip-btn"
+              onClick={() => void reload()}
+              disabled={loading}
+              title={te('common.retry')}
+              aria-label={te('common.retry')}
+            >
               ↻
             </button>
           )}
@@ -858,20 +867,20 @@ export function RadarMap({
       </div>
 
       {/* Quick model layers — always visible so mobile can open Ventusky without hunting */}
-      <div className="ventusky-quick" role="toolbar" aria-label="Model map layers">
+      <div className="ventusky-quick" role="toolbar" aria-label={te('radar.layers')}>
         <button
           type="button"
           className={`chip-btn ${overlay === 'none' ? 'active' : ''}`}
           onClick={() => setOverlay('none')}
         >
-          Radar
+          {te('radar.layerRadar')}
         </button>
         {(
           [
-            ['temp', 'Temp'],
-            ['wind', 'Wind'],
-            ['precip', 'Rain'],
-            ['clouds', 'Clouds'],
+            ['temp', te('radar.layerTemp')],
+            ['wind', te('radar.layerWind')],
+            ['precip', te('radar.layerRain')],
+            ['clouds', te('radar.layerClouds')],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -887,9 +896,9 @@ export function RadarMap({
           type="button"
           className={`chip-btn ${['gust', 'pressure', 'cape'].includes(overlay) ? 'active' : ''}`}
           onClick={() => setOverlay(overlay === 'gust' ? 'pressure' : overlay === 'pressure' ? 'cape' : 'gust')}
-          title="More Ventusky layers"
+          title={te('radar.moreLayers')}
         >
-          More
+          {te('common.more')}
         </button>
       </div>
 
@@ -907,12 +916,20 @@ export function RadarMap({
           <>
             {loading && (
               <div className="radar-overlay-msg" role="status">
-                Loading {meta.name}…
+                {te('radar.loadingName', { name: meta.name })}
               </div>
             )}
             {error && (
-              <div className="radar-overlay-msg error" role="alert">
-                {error}
+              <div className="radar-overlay-msg error radar-overlay-error" role="alert">
+                <p>{error}</p>
+                <button
+                  type="button"
+                  className="primary-btn radar-retry-btn"
+                  onClick={() => void reload()}
+                  disabled={loading}
+                >
+                  {te('common.retry')}
+                </button>
               </div>
             )}
 
@@ -1065,7 +1082,7 @@ export function RadarMap({
                   return next
                 })
               }}
-              aria-label={playing ? 'Pause' : 'Play'}
+              aria-label={playing ? te('common.pause') : te('common.play')}
             >
               {playing ? '❚❚' : '▶'}
             </button>
@@ -1080,7 +1097,7 @@ export function RadarMap({
                 setPlaying(false)
                 setFrameIdx(Number(e.target.value))
               }}
-              aria-label="Radar timeline"
+              aria-label={te('radar.timeline')}
             />
             <div className="speed-group">
               {(
@@ -1105,7 +1122,7 @@ export function RadarMap({
 
         <div className="radar-options">
           <label className="opt">
-            Source
+            {te('common.source')}
             <select
               value={sourceId}
               onChange={(e) => setSourceId(e.target.value as RadarSourceId)}
@@ -1119,7 +1136,7 @@ export function RadarMap({
           </label>
 
           <label className="opt">
-            Opacity
+            {te('common.opacity')}
             <input
               type="range"
               min={0.2}
@@ -1131,14 +1148,13 @@ export function RadarMap({
           </label>
 
           <label className="opt">
-            Map
+            {te('common.map')}
             <select
               value={basemap}
               onChange={(e) => setBasemap(e.target.value as Basemap)}
             >
               {(Object.keys(BASEMAPS) as Basemap[])
                 .filter((k) => {
-                  // Hide Mapbox basemap choices when no token (except labels already mark add token)
                   if (!mapboxToken && k.startsWith('mapbox_')) return false
                   return true
                 })
@@ -1150,13 +1166,11 @@ export function RadarMap({
             </select>
           </label>
           {prefersMapboxBasemap(sourceId) && !mapboxToken && (
-            <p className="radar-mapbox-hint muted-center">
-              For Mapbox dark map set <code>VITE_MAPBOX_TOKEN</code> — storm radar still runs.
-            </p>
+            <p className="radar-mapbox-hint muted-center">{te('radar.mapboxHint')}</p>
           )}
 
           <label className="opt">
-            Model map (Ventusky)
+            {te('radar.modelSelect')}
             <select
               value={overlay}
               onChange={(e) => setOverlay(e.target.value as OverlayMode)}
@@ -1175,10 +1189,10 @@ export function RadarMap({
               checked={showFires}
               onChange={(e) => setShowFires(e.target.checked)}
             />
-            🔥 Fires
+            {te('radar.fires')}
           </label>
 
-          <label className="toggle" title="NWS storm-based warning polygons (IEM)">
+          <label className="toggle" title={te('radar.titleWarn')}>
             <input
               type="checkbox"
               checked={severeToggles.warnings}
@@ -1186,9 +1200,9 @@ export function RadarMap({
                 setSevereToggles((t) => ({ ...t, warnings: e.target.checked }))
               }
             />
-            ⚠ Warn/Watch
+            {te('radar.warnWatch')}
           </label>
-          <label className="toggle" title="SPC tornado / hail / wind reports">
+          <label className="toggle" title={te('radar.titleReports')}>
             <input
               type="checkbox"
               checked={severeToggles.reports}
@@ -1196,9 +1210,9 @@ export function RadarMap({
                 setSevereToggles((t) => ({ ...t, reports: e.target.checked }))
               }
             />
-            📍 Reports
+            {te('radar.reports')}
           </label>
-          <label className="toggle" title="SPC Day 1 tornado risk (or categorical)">
+          <label className="toggle" title={te('radar.titleOutlook')}>
             <input
               type="checkbox"
               checked={severeToggles.outlook}
@@ -1206,12 +1220,9 @@ export function RadarMap({
                 setSevereToggles((t) => ({ ...t, outlook: e.target.checked }))
               }
             />
-            🗺 SPC risk
+            {te('radar.spcRisk')}
           </label>
-          <label
-            className="toggle"
-            title="Nearest NEXRAD storm-relative velocity (rotation couplets, US)"
-          >
+          <label className="toggle" title={te('radar.titleVelocity')}>
             <input
               type="checkbox"
               checked={severeToggles.velocity}
@@ -1220,12 +1231,9 @@ export function RadarMap({
               }
               disabled={!usRegion}
             />
-            🌀 Velocity
+            {te('radar.velocity')}
           </label>
-          <label
-            className="toggle"
-            title="NEXRAD storm cells + 30-min motion vectors (IEM storm attributes)"
-          >
+          <label className="toggle" title={te('radar.titleTracks')}>
             <input
               type="checkbox"
               checked={severeToggles.tracks}
@@ -1234,24 +1242,24 @@ export function RadarMap({
               }
               disabled={!usRegion}
             />
-            ↗ Tracks
+            {te('radar.tracks')}
           </label>
         </div>
 
         <div className="radar-product-legend" role="note">
-          <strong>Source</strong>
+          <strong>{te('common.source')}</strong>
           <span>
             {caRegion && (sourceId === 'storm_chaser' || sourceId === 'eccc_radar')
-              ? 'ECCC MSC GeoMet (Canada)'
+              ? te('radar.sourceEccc')
               : usRegion && sourceId === 'storm_chaser'
-                ? 'NEXRAD / IEM (US)'
+                ? te('radar.sourceNexrad')
                 : sourceId === 'eccc_radar'
-                  ? 'ECCC MSC GeoMet'
-                  : 'RainViewer / regional composite'}
+                  ? te('radar.sourceEcccShort')
+                  : te('radar.sourceRv')}
           </span>
-          {showFires ? <span className="radar-legend-tag">FIRMS fires</span> : null}
+          {showFires ? <span className="radar-legend-tag">{te('radar.tagFires')}</span> : null}
           {severeToggles.warnings ? (
-            <span className="radar-legend-tag">Warnings</span>
+            <span className="radar-legend-tag">{te('radar.tagWarnings')}</span>
           ) : null}
         </div>
         <p className="radar-product-hint">

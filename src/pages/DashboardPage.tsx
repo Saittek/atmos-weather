@@ -18,7 +18,7 @@ import { SunMoon } from '../components/SunMoon'
 import { Favorites } from '../components/Favorites'
 import { SettingsBar } from '../components/SettingsBar'
 import { AllergySection } from '../components/AllergySection'
-import { Onboarding } from '../components/Onboarding'
+
 import { AlertTopBar, AlertTopBarCircle, setAlertsMinimizedStored } from '../components/AlertTopBar'
 import { AmbientOrbs } from '../components/AmbientOrbs'
 import { WeatherAtmosphere } from '../components/WeatherAtmosphere'
@@ -533,8 +533,6 @@ export default function DashboardPage() {
         minimized={alertsMinimized}
         onMinimizedChange={setAlertsMinimized}
       />
-
-      <Onboarding />
 
       {/* Fixed topbar lives outside .app-shell so overflow-x:clip never affects pin-to-viewport */}
       <header className="topbar">

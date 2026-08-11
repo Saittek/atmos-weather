@@ -20,6 +20,7 @@ import {
   type CloudAgreement,
 } from '../api/cloudModels'
 import { formatSpeed, formatTime } from '../utils/format'
+import { useI18n } from '../i18n/I18nProvider'
 import {
   buildStargazeBrief,
   cacheStargazeBrief,
@@ -68,6 +69,7 @@ function loadRed(): boolean {
 }
 
 export default function StargazePage() {
+  const { te } = useI18n()
   const [params, setSearchParams] = useSearchParams()
   const {
     location,
@@ -500,20 +502,20 @@ export default function StargazePage() {
     <div className={`sg-page app${redMode ? ' sg-red' : ''}`} data-page="stargaze">
       <header className="sg-topbar">
         <div className="sg-topbar-row">
-          <Link to="/" className="chip-btn" title="Dashboard">
+          <Link to="/" className="chip-btn" title={te('common.dashboard')}>
             ← Solara
           </Link>
           <h1 className="sg-title">
-            <span aria-hidden>✨</span> Stargaze
+            <span aria-hidden>✨</span> {te('sg.title')}
           </h1>
           <div className="sg-top-actions">
             <button
               type="button"
               className={`chip-btn${redMode ? ' on' : ''}`}
               onClick={toggleRed}
-              title="Red mode for night vision"
+              title={te('sg.redTitle')}
             >
-              🔴 Red
+              {te('sg.red')}
             </button>
             <UnitToggle units={units} onChange={setUnits} />
             <button
@@ -541,7 +543,7 @@ export default function StargazePage() {
         {error && (
           <div className="panel sg-error" role="alert">
             <p>
-              <strong>Couldn’t load weather.</strong> {error}
+              <strong>{te('sg.loadFail')}</strong> {error}
             </p>
             <div className="sg-hero-actions">
               <button
@@ -552,10 +554,10 @@ export default function StargazePage() {
                   refresh()
                 }}
               >
-                Retry
+                {te('sg.retry')}
               </button>
               <button type="button" className="chip-btn" onClick={() => void requestMyLocation()}>
-                Use my location
+                {te('sg.useLoc')}
               </button>
             </div>
           </div>
@@ -564,10 +566,10 @@ export default function StargazePage() {
         {briefError && weather && (
           <div className="panel sg-error" role="alert">
             <p>
-              <strong>Sky planner hit a snag.</strong> {briefError}
+              <strong>{te('sg.briefFail')}</strong> {briefError}
             </p>
             <button type="button" className="chip-btn" onClick={() => refresh()}>
-              Reload weather
+              {te('sg.reload')}
             </button>
           </div>
         )}
@@ -575,7 +577,7 @@ export default function StargazePage() {
         {(loading || (!weather && !shown && !error)) && (
           <div className="sg-loading" role="status">
             <div className="spinner large" />
-            <p>Loading sky forecast…</p>
+            <p>{te('sg.loading')}</p>
           </div>
         )}
 
@@ -583,21 +585,21 @@ export default function StargazePage() {
           <>
             {!brief && offlineBrief && (
               <p className="sg-offline-banner" role="status">
-                Offline · showing last saved stargaze brief
+                {te('sg.offline')}
               </p>
             )}
 
             {/* Go / no-go */}
-            <section className={`panel sg-gono ${goClass(shown.go)}`} aria-label="Go or no-go">
+            <section className={`panel sg-gono ${goClass(shown.go)}`} aria-label={te('sg.gono')}>
               <p className="sg-gono-label">{shown.goLabel}</p>
               <p className="sg-gono-detail">{shown.goDetail}</p>
             </section>
 
             <section className={`panel sg-hero ${gradeClass(shown.imagingGrade)}`}>
-              <p className="sg-kicker">Tonight at {placeName}</p>
+              <p className="sg-kicker">{te('sg.tonightAt', { place: placeName })}</p>
               <div className="sg-hero-grid">
                 <div className="sg-score-block">
-                  <p className="sg-score-label">Imaging</p>
+                  <p className="sg-score-label">{te('sg.imaging')}</p>
                   <p className="sg-score-big">
                     {shown.imagingScore}
                     <span className="sg-score-max">/100</span>
@@ -607,7 +609,7 @@ export default function StargazePage() {
                   </p>
                 </div>
                 <div className="sg-score-block secondary">
-                  <p className="sg-score-label">Visual</p>
+                  <p className="sg-score-label">{te('sg.visual')}</p>
                   <p className="sg-score-mid">
                     {shown.visualScore}
                     <span className="sg-score-max">/100</span>
@@ -622,13 +624,15 @@ export default function StargazePage() {
                     <p className="sg-moon-name">
                       {shown.moon.emoji} {shown.moon.name}
                     </p>
-                    <p className="sg-moon-illum">{shown.moon.illumination}% illuminated</p>
+                    <p className="sg-moon-illum">
+                      {te('sg.illuminated', { n: shown.moon.illumination })}
+                    </p>
                     {moonGeo && (
                       <p className="sg-moon-illum">
                         ↑ {fmtMs(moonGeo.riseMs)} · transit {fmtMs(moonGeo.transitMs)}
                         {moonGeo.transitAlt != null ? ` (${moonGeo.transitAlt}°)` : ''} · ↓{' '}
                         {fmtMs(moonGeo.setMs)}
-                        {moonGeo.upNow ? ' · up now' : ''}
+                        {moonGeo.upNow ? te('sg.upNow') : ''}
                       </p>
                     )}
                     <p className="sg-moon-illum">{shown.sqm?.label ?? '—'}</p>
@@ -638,26 +642,29 @@ export default function StargazePage() {
               <p className="sg-summary">{shown.summary}</p>
               {shown.bestWindow && (
                 <p className="sg-best-window">
-                  <strong>Best window</strong> · {shown.bestWindow.startLabel} –{' '}
+                  <strong>{te('sg.bestWindow')}</strong> · {shown.bestWindow.startLabel} –{' '}
                   {shown.bestWindow.endLabel}
-                  <span className="sg-best-score"> · avg {shown.bestWindow.avgScore}</span>
+                  <span className="sg-best-score">
+                    {te('sg.avg', { n: shown.bestWindow.avgScore })}
+                  </span>
                 </p>
               )}
               <div className="sg-hero-actions">
                 <button type="button" className="primary-btn" onClick={() => void share()}>
-                  Share night
+                  {te('sg.shareNight')}
                 </button>
                 <button type="button" className="chip-btn" onClick={() => void requestClearNotify()}>
-                  Notify if clear
+                  {te('sg.notifyClear')}
                 </button>
                 {shareMsg && <span className="sg-share-msg">{shareMsg}</span>}
                 {notifyMsg && <span className="sg-share-msg">{notifyMsg}</span>}
               </div>
+              <p className="sg-footnote muted-center">{te('sg.notifyHint')}</p>
             </section>
 
-            <section className="panel sg-factors" aria-label="Sky factors">
+            <section className="panel sg-factors" aria-label={te('sg.factors')}>
               <div className="panel-header">
-                <h2>Sky factors</h2>
+                <h2>{te('sg.factors')}</h2>
               </div>
               <ul className="sg-factor-grid">
                 {shown.factors.map((f) => (
@@ -667,7 +674,7 @@ export default function StargazePage() {
                   </li>
                 ))}
                 <li className="sg-factor tone-ok">
-                  <span className="sg-factor-label">Wind</span>
+                  <span className="sg-factor-label">{te('common.wind')}</span>
                   <span className="sg-factor-value">
                     {weather
                       ? formatSpeed(weather.current.wind_speed_10m, units)
@@ -680,12 +687,12 @@ export default function StargazePage() {
               </p>
               {shown.smokeNote && <p className="sg-smoke-note">{shown.smokeNote}</p>}
               {kpStatus === 'error' && (
-                <p className="muted-center sg-aurora">🌌 Aurora index unavailable right now</p>
+                <p className="muted-center sg-aurora">{te('sg.auroraUnavail')}</p>
               )}
               {shown.auroraLabel && (
                 <p className={`sg-aurora${shown.auroraLikely ? ' hot' : ''}`}>
                   🌌 {shown.auroraLabel}
-                  {shown.auroraLikely ? ' · aurora watch' : ''}
+                  {shown.auroraLikely ? te('sg.auroraWatch') : ''}
                 </p>
               )}
               {cloudAgree && (
@@ -705,9 +712,9 @@ export default function StargazePage() {
             </section>
 
             {location && (
-              <section className="panel" aria-label="Live clouds">
+              <section className="panel" aria-label={te('sg.liveClouds')}>
                 <div className="panel-header">
-                  <h2>Live clouds / radar</h2>
+                  <h2>{te('sg.liveClouds')}</h2>
                   <span className="panel-hint">Is the hole real right now?</span>
                 </div>
                 <Suspense fallback={<p className="muted-center">Loading map…</p>}>
@@ -721,9 +728,9 @@ export default function StargazePage() {
             )}
 
             {location && (
-              <section className="panel" aria-label="Light pollution map">
+              <section className="panel" aria-label={te('sg.lightMap')}>
                 <div className="panel-header">
-                  <h2>Light pollution map</h2>
+                  <h2>{te('sg.lightMap')}</h2>
                   <span className="panel-hint">Zoom &amp; pan · yellow pin</span>
                 </div>
                 <Suspense fallback={<p className="muted-center">Loading pollution map…</p>}>
@@ -739,9 +746,9 @@ export default function StargazePage() {
 
             {/* 7-night strip */}
             {shown.nights.length > 0 && (
-              <section className="panel" aria-label="Next nights">
+              <section className="panel" aria-label={te('sg.nextNights')}>
                 <div className="panel-header">
-                  <h2>Next nights</h2>
+                  <h2>{te('sg.nextNights')}</h2>
                   <span className="panel-hint">Plan the week</span>
                 </div>
                 <ol className="sg-nights">
@@ -761,9 +768,9 @@ export default function StargazePage() {
               </section>
             )}
 
-            <section className="panel sg-darkness" aria-label="Darkness">
+            <section className="panel sg-darkness" aria-label={te('sg.twilight')}>
               <div className="panel-header">
-                <h2>Twilight & darkness</h2>
+                <h2>{te('sg.twilight')}</h2>
                 <span className="panel-hint">Civil · nautical · astronomical</span>
               </div>
               <div className="sg-dark-grid sg-dark-grid-6">
@@ -810,9 +817,9 @@ export default function StargazePage() {
             </section>
 
             {/* Planets */}
-            <section className="panel" aria-label="Planets">
+            <section className="panel" aria-label={te('sg.planets')}>
               <div className="panel-header">
-                <h2>Bright planets</h2>
+                <h2>{te('sg.planets')}</h2>
                 <span className="panel-hint">Rough evening placement</span>
               </div>
               <ul className="sg-planets">
@@ -828,9 +835,9 @@ export default function StargazePage() {
             </section>
 
             {/* Events */}
-            <section className="panel" aria-label="Sky events">
+            <section className="panel" aria-label={te('sg.meteors')}>
               <div className="panel-header">
-                <h2>Meteor showers & events</h2>
+                <h2>{te('sg.meteors')}</h2>
               </div>
               <ul className="sg-events">
                 {events.map((e) => (
@@ -849,9 +856,9 @@ export default function StargazePage() {
             </section>
 
             {/* Annual darkness */}
-            <section className="panel" aria-label="Annual darkness">
+            <section className="panel" aria-label={te('sg.annual')}>
               <div className="panel-header">
-                <h2>Annual darkness</h2>
+                <h2>{te('sg.annual')}</h2>
                 <span className="panel-hint">Avg night hours / month @ this lat</span>
               </div>
               <div className="sg-annual">
@@ -869,15 +876,15 @@ export default function StargazePage() {
             </section>
 
             {/* Dark sites + radar */}
-            <section className="panel" aria-label="Dark sites">
+            <section className="panel" aria-label={te('sg.darkSites')}>
               <div className="panel-header">
-                <h2>Dark sites</h2>
+                <h2>{te('sg.darkSites')}</h2>
                 <button type="button" className="chip-btn" onClick={saveSite}>
-                  Save this place
+                  {te('sg.saveSite')}
                 </button>
               </div>
               {sites.length === 0 && (
-                <p className="muted-center">Save observing spots for one-tap jumps.</p>
+                <p className="muted-center">{te('sg.pickLead')}</p>
               )}
               <ul className="sg-sites">
                 {sites.map((s) => {
@@ -930,9 +937,9 @@ export default function StargazePage() {
             </section>
 
             {shown.hours?.length > 0 && (
-              <section className="panel sg-hours-panel" aria-label="Clear sky chart">
+              <section className="panel sg-hours-panel" aria-label={te('sg.clearChart')}>
                 <div className="panel-header">
-                  <h2>Clear sky chart</h2>
+                  <h2>{te('sg.clearChart')}</h2>
                   <span className="panel-hint">Tap an hour · blue is best</span>
                 </div>
                 <ClearSkyChart hours={shown.hours} />
@@ -940,9 +947,9 @@ export default function StargazePage() {
             )}
 
             {(shown.bestNightsMonth?.length ?? 0) > 0 && (
-              <section className="panel" aria-label="Best nights">
+              <section className="panel" aria-label={te('sg.bestNights')}>
                 <div className="panel-header">
-                  <h2>Best nights ahead</h2>
+                  <h2>{te('sg.bestNights')}</h2>
                 </div>
                 <ol className="sg-best-nights">
                   {(shown.bestNightsMonth ?? []).map((n, i) => (
@@ -961,7 +968,7 @@ export default function StargazePage() {
             {/* Targets */}
             <section className="panel" aria-label="Tonight targets">
               <div className="panel-header">
-                <h2>Tonight ideas</h2>
+                <h2>{te('sg.targets')}</h2>
               </div>
               <ul className="sg-targets">
                 {shown.targets.map((t) => (
@@ -981,7 +988,7 @@ export default function StargazePage() {
             {altitudes.length > 0 && (
               <section className="panel" aria-label="Target altitude">
                 <div className="panel-header">
-                  <h2>Object altitude</h2>
+                  <h2>{te('sg.altitude')}</h2>
                   <span className="panel-hint">When it climbs high enough</span>
                 </div>
                 <ul className="sg-alt-list">
@@ -1001,19 +1008,19 @@ export default function StargazePage() {
             )}
 
             {/* Satellites */}
-            <section className="panel" aria-label="Satellite passes">
+            <section className="panel" aria-label={te('sg.sats')}>
               <div className="panel-header">
-                <h2>Satellite flyovers</h2>
-                <span className="panel-hint">ISS · Hubble · Tiangong</span>
+                <h2>{te('sg.sats')}</h2>
+                <span className="panel-hint">{te('sg.satsHint')}</span>
               </div>
               {issStatus === 'loading' && (
-                <p className="muted-center">Loading pass predictions…</p>
+                <p className="muted-center">{te('sg.satsLoading')}</p>
               )}
               {(issStatus === 'error' || issStatus === 'unavailable') && (
-                <p className="muted-center">{issMsg || 'Satellite passes unavailable.'}</p>
+                <p className="muted-center">{issMsg || te('sg.satsUnavailable')}</p>
               )}
               {issStatus === 'empty' && (
-                <p className="muted-center">No bright passes in the next ~36h from this model.</p>
+                <p className="muted-center">{te('sg.satsNone')}</p>
               )}
               {issStatus === 'ok' && iss && iss.passes.length > 0 && (
                 <ul className="sg-iss-list">
@@ -1035,40 +1042,41 @@ export default function StargazePage() {
                 </ul>
               )}
               <p className="sg-footnote muted-center">
-                {iss?.note || 'Confirm with NASA Spot the Station for official times.'}
+                {iss?.note || te('sg.satsNote')}
               </p>
             </section>
 
             {/* Compare home */}
             {homeLocation && (
-              <section className="panel" aria-label="Compare places">
+              <section className="panel" aria-label={te('sg.homeVs')}>
                 <div className="panel-header">
-                  <h2>Home vs here</h2>
+                  <h2>{te('sg.homeVs')}</h2>
                   <button
                     type="button"
                     className="chip-btn"
                     onClick={() => setCompareOn((v) => !v)}
                   >
-                    {compareOn ? 'Hide' : 'Compare'}
+                    {compareOn ? te('common.hide') : te('common.compare')}
                   </button>
                 </div>
                 {compareOn && (
                   <div className="sg-compare">
                     <div>
-                      <span className="label">Here · {location.name}</span>
+                      <span className="label">{te('sg.here', { name: location.name })}</span>
                       <span className="value">{shown.imagingScore}/100</span>
                     </div>
                     <div>
                       <span className="label">
-                        Home · {homeLocation.name?.replace(/\s*\(Home\)\s*$/i, '')}
+                        {te('sg.home', {
+                          name: homeLocation.name?.replace(/\s*\(Home\)\s*$/i, '') || '',
+                        })}
                       </span>
                       <span className="value">
                         {homeWeatherScore != null ? `${homeWeatherScore}/100` : '—'}
                       </span>
                     </div>
                     <p className="sg-footnote">
-                      {homeCompareNote ||
-                        'Uses Bortle at each pin with this place’s cloud forecast as a proxy when Home isn’t loaded separately.'}
+                      {homeCompareNote || te('sg.compareNote')}
                     </p>
                   </div>
                 )}
@@ -1077,7 +1085,7 @@ export default function StargazePage() {
 
             <section className="panel sg-tips" aria-label="Tips">
               <div className="panel-header">
-                <h2>Planner tips</h2>
+                <h2>{te('sg.tips')}</h2>
               </div>
               <ul className="sg-tip-list">
                 {shown.tips.map((t) => (
@@ -1086,18 +1094,18 @@ export default function StargazePage() {
               </ul>
             </section>
 
-            <nav className="sg-footer-nav" aria-label="More Solara">
+            <nav className="sg-footer-nav" aria-label={te('sg.more')}>
               <Link to="/" className="chip-btn">
-                Dashboard
+                {te('common.dashboard')}
               </Link>
               <Link
                 to={`/radar?lat=${location.latitude.toFixed(4)}&lon=${location.longitude.toFixed(4)}&name=${encodeURIComponent(location.name)}`}
                 className="chip-btn"
               >
-                Radar
+                {te('radar.layerRadar')}
               </Link>
               <Link to="/globe" className="chip-btn">
-                Earth
+                {te('globe.title')}
               </Link>
             </nav>
           </>
@@ -1105,8 +1113,18 @@ export default function StargazePage() {
 
         {!loading && !weather && !shown && (
           <div className="panel sg-empty">
-            <h2>Pick a place to plan the night</h2>
-            <p>Search above or use Near me / Home.</p>
+            <h2>{te('sg.pickPlace')}</h2>
+            <p>{te('sg.pickLead')}</p>
+            <div className="empty-actions" style={{ marginTop: '0.75rem' }}>
+              <button
+                type="button"
+                className="primary-btn"
+                onClick={() => void requestMyLocation()}
+                disabled={geoLoading}
+              >
+                {te('sg.useLoc')}
+              </button>
+            </div>
           </div>
         )}
       </main>

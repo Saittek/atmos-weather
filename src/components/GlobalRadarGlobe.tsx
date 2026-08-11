@@ -19,6 +19,7 @@ import {
   terminatorLine,
 } from '../utils/sunTerminator'
 import { moonPhase } from '../utils/moon'
+import { useI18n } from '../i18n/I18nProvider'
 
 const SPEED_MS = { slow: 900, normal: 520, fast: 300 } as const
 type SpeedKey = keyof typeof SPEED_MS
@@ -291,7 +292,7 @@ async function warmGlobeTiles(
   onHint?: (s: string) => void,
 ): Promise<void> {
   const warmZoom = Math.min(map.getMaxZoom(), GLOBE_MAX_ZOOM)
-  onHint?.('Loading high-detail Earth…')
+  onHint?.('Loading high-detail Earth…') // caller passes te() when used
   // First: max zoom at home longitude so local tiles fill immediately
   map.jumpTo({ center: GLOBE_WORLD_CENTER, zoom: warmZoom, bearing: 0, pitch: 0 })
   await waitMs(280)
@@ -322,6 +323,7 @@ async function warmGlobeTiles(
 }
 
 export function GlobalRadarGlobe() {
+  const { te } = useI18n()
   const containerRef = useRef<HTMLDivElement>(null)
   const trackSvgRef = useRef<SVGSVGElement>(null)
   const dayNightCanvasRef = useRef<HTMLCanvasElement>(null)
@@ -366,7 +368,7 @@ export function GlobalRadarGlobe() {
   const mountedRef = useRef(true)
 
   const [loading, setLoading] = useState(true)
-  const [loadHint, setLoadHint] = useState('Loading Earth…')
+  const [loadHint, setLoadHint] = useState(() => te('globe.loadingEarth'))
   const [error, setError] = useState<string | null>(null)
   const [frames, setFrames] = useState<RadarFrame[]>([])
   const [frameIdx, setFrameIdx] = useState(0)
@@ -1341,7 +1343,7 @@ export function GlobalRadarGlobe() {
 
     const boot = async () => {
       try {
-        setLoadHint('Building globe…')
+        setLoadHint(te('globe.building'))
         await new Promise<void>((resolve) => {
           if (map.isStyleLoaded()) resolve()
           else map.once('load', () => resolve())
@@ -1357,15 +1359,19 @@ export function GlobalRadarGlobe() {
         paintStarfield()
 
         // Load Earth at max zoom around the sphere so detail stays in the tile cache
-        await warmGlobeTiles(map, () => cancelled, setLoadHint)
+        await warmGlobeTiles(map, () => cancelled, (s) => {
+          if (s.startsWith('Loading high-detail')) setLoadHint(te('globe.loadingDetail'))
+          else if (s.startsWith('Caching')) setLoadHint(s) // progress numbers OK
+          else setLoadHint(s)
+        })
         if (cancelled) return
 
-        setLoadHint('Loading global radar…')
+        setLoadHint(te('globe.loadingRadar'))
         const { host, frames: fr, nowIndex: ni } = await loadGlobalRadarLoop({ maxPast: 12 })
         if (cancelled) return
 
         if (!fr.length) {
-          setError('No radar frames available')
+          setError(te('globe.noFrames'))
           setLoading(false)
           return
         }
@@ -1402,7 +1408,7 @@ export function GlobalRadarGlobe() {
           /* non-fatal */
         }
 
-        setLoadHint('Loading tropical cyclones…')
+        setLoadHint(te('globe.loadingTropical'))
         try {
           const tropical = await fetchTropicalGlobeData()
           if (!cancelled && tropical && mapRef.current) {
@@ -1454,7 +1460,7 @@ export function GlobalRadarGlobe() {
         }
       } catch (e) {
         if (cancelled) return
-        setError(e instanceof Error ? e.message : 'Failed to load Earth')
+        setError(e instanceof Error ? e.message : te('globe.failed'))
         setLoading(false)
       }
     }
@@ -1889,10 +1895,10 @@ export function GlobalRadarGlobe() {
             id="globe-options-menu"
             className="globe-options-menu"
             role="menu"
-            aria-label="Earth map options"
+            aria-label={te('globe.options')}
           >
-            <div className="globe-options-section" role="group" aria-label="Map style">
-              <div className="globe-options-heading">Map style</div>
+            <div className="globe-options-section" role="group" aria-label={te('globe.mapStyle')}>
+              <div className="globe-options-heading">{te('globe.mapStyle')}</div>
               <div className="globe-options-chips">
                 {(Object.keys(BASEMAPS) as BasemapId[]).map((id) => (
                   <button
@@ -1909,8 +1915,8 @@ export function GlobalRadarGlobe() {
               </div>
             </div>
 
-            <div className="globe-options-section" role="group" aria-label="Layers">
-              <div className="globe-options-heading">Layers</div>
+            <div className="globe-options-section" role="group" aria-label={te('globe.layers')}>
+              <div className="globe-options-heading">{te('globe.layers')}</div>
               <div className="globe-options-chips">
                 <button
                   type="button"
@@ -1919,7 +1925,7 @@ export function GlobalRadarGlobe() {
                   onClick={() => setShowRadar((v) => !v)}
                   aria-checked={showRadar}
                 >
-                  Radar
+                  {te('radar.layerRadar')}
                 </button>
                 <button
                   type="button"
@@ -2068,7 +2074,7 @@ export function GlobalRadarGlobe() {
         )}
       </div>
 
-      <div className="globe-controls" role="toolbar" aria-label="Radar playback">
+      <div className="globe-controls" role="toolbar" aria-label={te('globe.playback')}>
         <div className="globe-timeline-wrap">
           <input
             type="range"
@@ -2079,7 +2085,7 @@ export function GlobalRadarGlobe() {
             value={frameIdx}
             disabled={!frames.length || loading}
             onChange={(e) => scrub(Number(e.target.value))}
-            aria-label="Radar frame timeline"
+            aria-label={te('globe.timeline')}
             style={{ ['--globe-progress' as string]: `${progress * 100}%` } as Record<string, string>}
           />
           <div className="globe-timeline-marks">
