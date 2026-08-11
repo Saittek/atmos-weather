@@ -394,7 +394,12 @@ export function SettingsBar({
               />
               <span>
                 <strong>{t('settings.quietHours')}</strong>
-                <em>{t('settings.quietHint')}</em>
+                <em>
+                  {t('settings.quietHint')}
+                  {locale === 'fr'
+                    ? ' (heure du domicile / lieu)'
+                    : ' (Home / place local time)'}
+                </em>
               </span>
             </label>
             {quietHoursEnabled && (

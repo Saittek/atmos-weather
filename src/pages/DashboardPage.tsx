@@ -243,6 +243,11 @@ export default function DashboardPage() {
     units,
     enabled: Boolean(homeLocation && (notifyAlerts || severeMode)),
     homeWeather: sameExactPlace(location, homeLocation) ? weather : null,
+    quietHours: {
+      quietHoursEnabled,
+      quietStart,
+      quietEnd,
+    },
   })
 
   const rainWatchRefresh = rainWatch.refresh

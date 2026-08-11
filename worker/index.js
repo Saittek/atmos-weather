@@ -201,6 +201,17 @@ function cleanUserData(incoming) {
       typeof src.quietEnd === 'string' && /^\d{1,2}:\d{2}$/.test(src.quietEnd)
         ? src.quietEnd
         : '07:00',
+    // IANA zone for quiet-hours evaluation on the worker (home / last place)
+    quietTimezone: (() => {
+      if (typeof src.quietTimezone === 'string' && src.quietTimezone.length > 1) {
+        return String(src.quietTimezone).slice(0, 64)
+      }
+      const home = cleanLocation(src.homeLocation)
+      if (home?.timezone) return home.timezone
+      const last = cleanLocation(src.lastLocation)
+      if (last?.timezone) return last.timezone
+      return undefined
+    })(),
   }
 }
 

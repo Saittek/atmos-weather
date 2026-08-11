@@ -7,6 +7,7 @@
  */
 
 import type { CurrentWeather, DailyWeather, HourlyWeather, WeatherData } from './types'
+import { parseWeatherLocal } from '../utils/format'
 
 const CITYPAGE =
   'https://api.weather.gc.ca/collections/citypageweather-realtime/items'
@@ -230,15 +231,29 @@ export function mergeEcccIntoWeather(
     const windChill = num((cc.windChill as { value?: unknown })?.value)
     const ts = str((cc.timestamp as { en?: string })?.en ?? cc.timestamp) || out.current.time
 
-    // Day/night only from sunrise/sunset (never UTC hour hacks)
+    // Day/night only from sunrise/sunset (parse in forecast TZ — never bare Date.parse)
     let isDay = out.current.is_day
     const riseSet = p.riseSet as { sunrise?: { en?: string }; sunset?: { en?: string } } | undefined
+    const tz = out.timezone
     if (riseSet?.sunrise?.en && riseSet?.sunset?.en) {
-      const now = Date.parse(ts.includes('Z') || /[+-]\d{2}:?\d{2}$/.test(ts) ? ts : ts)
-      const rise = Date.parse(riseSet.sunrise.en)
-      const set = Date.parse(riseSet.sunset.en)
-      if (Number.isFinite(now) && Number.isFinite(rise) && Number.isFinite(set)) {
-        isDay = now >= rise && now < set ? 1 : 0
+      const parseEcccInstant = (raw: string): number => {
+        const s = String(raw || '').trim()
+        if (!s) return NaN
+        // Absolute ISO with Z or offset
+        if (/Z$/i.test(s) || /[+-]\d{2}:?\d{2}$/.test(s)) {
+          const t = Date.parse(s)
+          return Number.isFinite(t) ? t : NaN
+        }
+        // Wall clock in forecast timezone
+        const normalized = s.includes('T') ? s : s.replace(' ', 'T')
+        const t = parseWeatherLocal(normalized, tz)
+        return Number.isFinite(t) ? t : NaN
+      }
+      const nowMs = parseEcccInstant(ts)
+      const rise = parseEcccInstant(riseSet.sunrise.en)
+      const set = parseEcccInstant(riseSet.sunset.en)
+      if (Number.isFinite(nowMs) && Number.isFinite(rise) && Number.isFinite(set)) {
+        isDay = nowMs >= rise && nowMs < set ? 1 : 0
       }
     }
 

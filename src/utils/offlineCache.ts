@@ -42,6 +42,24 @@ export function saveOfflineBundle(bundle: OfflineBundle) {
   }
 }
 
+/** True when two places are the same pin (~1.1 km at mid latitudes for 0.01°). */
+export function sameOfflinePlace(
+  a: { latitude: number; longitude: number } | null | undefined,
+  b: { latitude: number; longitude: number } | null | undefined,
+  maxDeg = 0.015,
+): boolean {
+  if (!a || !b) return false
+  return (
+    Math.abs(Number(a.latitude) - Number(b.latitude)) <= maxDeg &&
+    Math.abs(Number(a.longitude) - Number(b.longitude)) <= maxDeg
+  )
+}
+
+/**
+ * Load offline weather for a place.
+ * - `prefer` only: return cache for that pin (or null) — never a different city.
+ * - no prefer: return last global snapshot (boot only).
+ */
 export function loadOfflineBundle(prefer?: LocationResult | null): OfflineBundle | null {
   try {
     if (prefer) {
@@ -49,8 +67,14 @@ export function loadOfflineBundle(prefer?: LocationResult | null): OfflineBundle
       if (rawMap) {
         const map = JSON.parse(rawMap) as Record<string, OfflineBundle>
         const hit = map[placeKey(prefer)]
-        if (hit?.weather) return hit
+        if (hit?.weather && sameOfflinePlace(prefer, hit.location)) return hit
+        // Fuzzy scan map for near match (key rounding can miss)
+        for (const b of Object.values(map)) {
+          if (b?.weather && sameOfflinePlace(prefer, b.location)) return b
+        }
       }
+      // Do NOT fall through to global KEY — that may be another city
+      return null
     }
     const raw = localStorage.getItem(KEY)
     if (!raw) return null

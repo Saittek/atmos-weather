@@ -25,12 +25,41 @@ function parseHm(hm, fallbackMins) {
   return ((h % 24) * 60 + (m % 60) + 24 * 60) % (24 * 60)
 }
 
-/** Quiet hours in the worker (UTC wall clock — clients store local preference). */
+/** Minutes since midnight in an IANA zone (or device UTC fallback). */
+function minutesInZone(date, timeZone) {
+  if (!timeZone) {
+    return date.getUTCHours() * 60 + date.getUTCMinutes()
+  }
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: false,
+      timeZone,
+    }).formatToParts(date)
+    let h = Number(parts.find((p) => p.type === 'hour')?.value ?? 0)
+    const m = Number(parts.find((p) => p.type === 'minute')?.value ?? 0)
+    if (h === 24) h = 0
+    return ((h % 24) * 60 + (m % 60) + 24 * 60) % (24 * 60)
+  } catch {
+    return date.getUTCHours() * 60 + date.getUTCMinutes()
+  }
+}
+
+/**
+ * Quiet hours in home/place IANA timezone when known.
+ * Prefs: quietHoursEnabled, quietStart/End "HH:MM", quietTimezone or homeLocation.timezone
+ */
 function inQuietHours(data, date = new Date()) {
   if (!data?.quietHoursEnabled) return false
   const start = parseHm(data.quietStart, 22 * 60)
   const end = parseHm(data.quietEnd, 7 * 60)
-  const now = date.getUTCHours() * 60 + date.getUTCMinutes()
+  const tz =
+    (typeof data.quietTimezone === 'string' && data.quietTimezone) ||
+    data.homeLocation?.timezone ||
+    data.lastLocation?.timezone ||
+    null
+  const now = minutesInZone(date, tz)
   if (start === end) return false
   if (start < end) return now >= start && now < end
   return now >= start || now < end

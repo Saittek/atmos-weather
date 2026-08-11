@@ -466,7 +466,12 @@ export function useWeather() {
               for (const top of activeAlerts.slice(0, 3)) {
                 if (!['Extreme', 'Severe', 'Moderate'].includes(top.severity)) continue
                 if (
-                  shouldSuppressAlertNotify(quietPrefs, top.severity)
+                  shouldSuppressAlertNotify(
+                    quietPrefs,
+                    top.severity,
+                    new Date(),
+                    w.timezone || loc.timezone,
+                  )
                 ) {
                   continue
                 }
@@ -483,7 +488,14 @@ export function useWeather() {
                 }
               }
               saveNotified(notifiedRef.current)
-              if (!shouldSuppressAlertNotify(quietPrefs, 'Moderate')) {
+              if (
+                !shouldSuppressAlertNotify(
+                  quietPrefs,
+                  'Moderate',
+                  new Date(),
+                  w.timezone || loc.timezone,
+                )
+              ) {
                 const aqi = a?.current?.us_aqi
                 if (aqi != null && aqi >= 100) {
                   const aqiKey = `aqi-${locationKey(loc)}-${Math.floor(aqi / 25)}`
@@ -556,14 +568,12 @@ export function useWeather() {
         }
       } catch (e) {
         if (gen !== fetchGen.current) return
-        // Offline fallback: prefer this place, else last good snapshot
-        const cached =
-          loadOfflineBundle(loc) ||
-          loadOfflineBundle(prefsRef.current.homeLocation) ||
-          loadOfflineBundle()
+        // Offline: only use cache for THIS place — never swap to home/last city
+        const cached = loadOfflineBundle(loc)
         if (cached?.weather) {
           const cachedAlerts = filterActiveAlerts(cached.alerts ?? [])
-          setLocation(cached.location)
+          // Keep the place the user asked for; weather is for the same pin
+          setLocation(loc)
           setWeather(cached.weather)
           setAir(cached.air)
           setAlerts(cachedAlerts)
@@ -577,13 +587,13 @@ export function useWeather() {
           setError(null)
           // Keep Home Screen widget filled with last known forecast
           void publishNativeWidgetSnapshot({
-            location: cached.location,
+            location: loc,
             weather: cached.weather,
             units: prefsRef.current.units,
             homeLocation: prefsRef.current.homeLocation,
           })
           showStatus(
-            `Offline · last weather ${offlineAgeLabel(cached.savedAt)} (${new Date(cached.savedAt).toLocaleString()})`,
+            `Offline · last weather for ${loc.name} · ${offlineAgeLabel(cached.savedAt)}`,
             5000,
           )
         } else {

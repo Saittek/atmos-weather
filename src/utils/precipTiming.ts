@@ -51,6 +51,24 @@ export function precipTiming(weather: WeatherData, units: Units = 'metric'): Pre
 
   type Slot = { ms: number; mm: number; pop: number; code?: number }
   const slots: Slot[] = []
+  const h = weather.hourly
+
+  /** Nearest hourly PoP for a timestamp (minutely has no PoP). */
+  const hourlyPopAt = (ms: number): number => {
+    if (!h?.time?.length) return 0
+    let best = 0
+    let bestDist = Infinity
+    for (let i = 0; i < h.time.length; i++) {
+      const hm = parseWeatherLocal(h.time[i], tz)
+      const d = Math.abs(hm - ms)
+      if (d < bestDist) {
+        bestDist = d
+        best = h.precipitation_probability[i] ?? 0
+      }
+      if (hm > ms + 2 * 3600_000) break
+    }
+    return best
+  }
 
   const m = weather.minutely_15
   if (m?.time?.length) {
@@ -61,14 +79,19 @@ export function precipTiming(weather: WeatherData, units: Units = 'metric'): Pre
       slots.push({
         ms,
         mm: m.precipitation[i] ?? 0,
-        pop: 0,
+        pop: hourlyPopAt(ms),
         code: m.weather_code?.[i],
       })
     }
   }
 
-  if (slots.length < 2) {
-    const h = weather.hourly
+  // Prefer hourly when minutely is thin, or when amounts look dry but PoP is elevated
+  const maxMinutelyMm = slots.reduce((a, s) => Math.max(a, s.mm), 0)
+  const maxMinutelyPop = slots.reduce((a, s) => Math.max(a, s.pop), 0)
+  const useHourly =
+    slots.length < 2 || (maxMinutelyMm < 0.15 && maxMinutelyPop >= 40)
+
+  if (useHourly && h?.time?.length) {
     slots.length = 0
     for (let i = 0; i < h.time.length; i++) {
       const ms = parseWeatherLocal(h.time[i], tz)

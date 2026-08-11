@@ -16,6 +16,10 @@ import type { Units } from '../utils/format'
 import { isDaytimeNow } from '../utils/daylight'
 import { getWeatherInfo } from '../utils/weatherCodes'
 import { todayDailyIndex } from '../utils/weatherStory'
+import {
+  shouldSuppressAlertNotify,
+  type QuietHoursPrefs,
+} from '../utils/quietHours'
 import { heavyHaptic } from './useThreatProximity'
 
 const ESCALATION_KEY = 'solara-home-escalation-v1'
@@ -89,10 +93,13 @@ export function useHomeAlerts(opts: {
   enabled?: boolean
   /** Prefer home weather; if null, use weather when isHome */
   homeWeather?: WeatherData | null
+  /** Quiet hours prefs (mute non-extreme overnight) */
+  quietHours?: QuietHoursPrefs
 }) {
-  const { home, weather, units, enabled = true, homeWeather } = opts
+  const { home, weather, units, enabled = true, homeWeather, quietHours } = opts
   const watchSeen = useRef(loadSet(WATCH_SEEN_KEY))
   const escalated = useRef(loadSet(ESCALATION_KEY))
+  const quiet = quietHours ?? {}
 
   // —— Watch → warning escalation near home ——
   useEffect(() => {
@@ -105,6 +112,7 @@ export function useHomeAlerts(opts: {
         const polys = await fetchAllThreatPolygons(home.latitude, home.longitude)
         if (cancelled) return
         const near = findNearbyThreats(home.latitude, home.longitude, polys, HOME_KM)
+        const tz = home.timezone || homeWeather?.timezone || weather?.timezone
 
         for (const t of near) {
           if (!severePhen(t)) continue
@@ -117,6 +125,15 @@ export function useHomeAlerts(opts: {
         for (const t of near) {
           if (!severePhen(t) || !isWarning(t)) continue
           if (!t.inside && t.distanceKm > 25) continue
+
+          // Quiet hours: still allow severe/extreme home warnings through
+          if (
+            shouldSuppressAlertNotify(quiet, 'Severe', new Date(), tz, {
+              allowSevereThrough: true,
+            })
+          ) {
+            continue
+          }
 
           const escKey = `esc-${t.warning.id}`
           if (escalated.current.has(escKey)) continue
@@ -154,7 +171,18 @@ export function useHomeAlerts(opts: {
       cancelled = true
       window.clearInterval(id)
     }
-  }, [home?.latitude, home?.longitude, enabled, home])
+  }, [
+    home?.latitude,
+    home?.longitude,
+    home?.timezone,
+    enabled,
+    home,
+    quiet.quietHoursEnabled,
+    quiet.quietStart,
+    quiet.quietEnd,
+    homeWeather?.timezone,
+    weather?.timezone,
+  ])
 
   // —— Morning daily brief (once per local day, home weather preferred) ——
   useEffect(() => {
@@ -162,7 +190,10 @@ export function useHomeAlerts(opts: {
     const w = homeWeather ?? weather
     if (!w) return
 
-    const tz = w.timezone
+    const tz = w.timezone || home.timezone
+    // Morning brief is optional comfort — respect quiet hours fully
+    if (shouldSuppressAlertNotify(quiet, 'Moderate', new Date(), tz)) return
+
     const day = localDayKey(tz)
     const hour = localHour(tz)
     if (hour < BRIEF_HOUR_START || hour > BRIEF_HOUR_END) return
