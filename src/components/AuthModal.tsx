@@ -78,7 +78,7 @@ export function AuthModal({ open, onClose, onSuccess }: Props) {
   }
 
   return createPortal(
-    <div className="auth-overlay" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+    <div className="auth-overlay redesign-auth" role="dialog" aria-modal="true" aria-labelledby="auth-title">
       <button type="button" className="auth-backdrop" aria-label="Close" onClick={onClose} />
       <div className="auth-modal">
         <div className="auth-header">

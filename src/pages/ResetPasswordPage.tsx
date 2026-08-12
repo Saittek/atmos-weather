@@ -50,7 +50,7 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="app reset-password-page">
+    <div className="app reset-password-page solara-redesign-m4">
       <header className="topbar reset-topbar">
         <Link to="/" className="chip-btn">
           ← Solara

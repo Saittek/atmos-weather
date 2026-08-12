@@ -141,16 +141,30 @@ export function FirstRunCoach({
 
   return (
     <div
-      className="first-run-coach"
+      className="first-run-coach redesign-coach"
       role="dialog"
+      aria-modal="true"
       aria-label={t('coach.kicker', { n: step + 1, total: steps.length })}
     >
       <div className="first-run-coach-card">
         <p className="first-run-kicker">
           {t('coach.kicker', { n: step + 1, total: steps.length })}
         </p>
+        <div className="first-run-steps" role="tablist" aria-label="Tour progress">
+          {steps.map((_, i) => (
+            <button
+              key={i}
+              type="button"
+              role="tab"
+              aria-selected={i === step}
+              aria-label={`Step ${i + 1}`}
+              className={`first-run-step-dot ${i === step ? 'is-active' : ''} ${i < step ? 'is-done' : ''}`}
+              onClick={() => setStep(i)}
+            />
+          ))}
+        </div>
         {s.emoji && (
-          <div className="onboard-emoji" aria-hidden style={{ fontSize: '2rem', marginBottom: '0.35rem' }}>
+          <div className="onboard-emoji first-run-emoji" aria-hidden>
             {s.emoji}
           </div>
         )}

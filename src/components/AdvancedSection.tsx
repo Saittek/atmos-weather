@@ -17,7 +17,7 @@ export function AdvancedSection({
   const [open, setOpen] = useState(defaultOpen)
 
   return (
-    <section className={`advanced-section ${open ? 'is-open' : ''}`} id={id}>
+    <section className={`advanced-section redesign-feed ${open ? 'is-open' : ''}`} id={id}>
       <button
         type="button"
         className="advanced-toggle"
