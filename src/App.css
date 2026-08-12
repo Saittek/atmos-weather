@@ -6093,6 +6093,9 @@ html.mobile-perf[data-theme='light'] .topbar {
   font-size: 0.8rem;
   color: var(--text-mute);
 }
+.moon-row .moon-times-line {
+  font-variant-numeric: tabular-nums;
+}
 
 /* ===== Core weather: day parts, week strip, hazards, precip totals ===== */
 .daypart-grid {

@@ -3,6 +3,7 @@ import { formatDuration, formatTime } from '../utils/format'
 import { moonPhase } from '../utils/moon'
 import { parseSunTime } from '../utils/daylight'
 import { todayDailyIndex } from '../utils/weatherStory'
+import { moonGeometry } from '../utils/moonTimes'
 import { MoonPhaseIcon } from './MoonPhaseIcon'
 import { useI18n } from '../i18n/I18nProvider'
 
@@ -10,21 +11,65 @@ interface Props {
   weather: WeatherData
 }
 
+/** Prefer sun times whose local calendar day matches the daily row (guards bad ECCC injects). */
+function pickSunPair(
+  weather: WeatherData,
+  ti: number,
+): { sunrise?: string; sunset?: string; riseMs: number | null; setMs: number | null } {
+  const d = weather.daily
+  const tz = weather.timezone
+  const tryIndex = (i: number) => {
+    const sunrise = d.sunrise?.[i]
+    const sunset = d.sunset?.[i]
+    const riseMs = parseSunTime(sunrise, tz)
+    const setMs = parseSunTime(sunset, tz)
+    if (riseMs == null || setMs == null || setMs <= riseMs) {
+      return null
+    }
+    const rowDay = d.time?.[i]?.slice(0, 10)
+    if (rowDay) {
+      const riseDay = new Intl.DateTimeFormat('en-CA', {
+        timeZone: tz || undefined,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(new Date(riseMs))
+      if (riseDay !== rowDay) return null
+    }
+    return { sunrise, sunset, riseMs, setMs }
+  }
+
+  // Today first, then neighbors (evening edge cases), then any valid row
+  for (const i of [ti, ti - 1, ti + 1]) {
+    if (i < 0 || i >= (d.sunrise?.length ?? 0)) continue
+    const hit = tryIndex(i)
+    if (hit) return hit
+  }
+  for (let i = 0; i < (d.sunrise?.length ?? 0); i++) {
+    const hit = tryIndex(i)
+    if (hit) return hit
+  }
+  // Last resort: raw today strings even if day-mismatch (better than blank)
+  const sunrise = d.sunrise?.[ti] ?? d.sunrise?.[0]
+  const sunset = d.sunset?.[ti] ?? d.sunset?.[0]
+  return {
+    sunrise,
+    sunset,
+    riseMs: parseSunTime(sunrise, tz),
+    setMs: parseSunTime(sunset, tz),
+  }
+}
+
 export function SunMoon({ weather }: Props) {
   const { t, locale } = useI18n()
   const d = weather.daily
   const ti = todayDailyIndex(weather)
-  const sunrise = d.sunrise?.[ti] ?? d.sunrise?.[0]
-  const sunset = d.sunset?.[ti] ?? d.sunset?.[0]
+  const { sunrise, sunset, riseMs, setMs } = pickSunPair(weather, ti)
   let daylight = d.daylight_duration?.[ti] ?? d.daylight_duration?.[0]
   const sunshine = d.sunshine_duration?.[ti] ?? d.sunshine_duration?.[0]
   const uv = d.uv_index_max?.[ti] ?? d.uv_index_max?.[0]
   const moon = moonPhase(new Date())
   const tz = weather.timezone
-
-  // parseSunTime handles Open-Meteo wall times + ECCC absolute Z timestamps
-  const riseMs = parseSunTime(sunrise, tz)
-  const setMs = parseSunTime(sunset, tz)
   const now = Date.now()
 
   // If API omitted daylight_duration, derive from rise→set when valid
@@ -33,6 +78,15 @@ export function SunMoon({ weather }: Props) {
     riseMs != null &&
     setMs != null &&
     setMs > riseMs
+  ) {
+    daylight = (setMs - riseMs) / 1000
+  } else if (
+    riseMs != null &&
+    setMs != null &&
+    setMs > riseMs &&
+    Number.isFinite(daylight) &&
+    // If duration disagrees with the pair by >45 min, trust the pair
+    Math.abs((setMs - riseMs) / 1000 - (daylight as number)) > 45 * 60
   ) {
     daylight = (setMs - riseMs) / 1000
   }
@@ -47,13 +101,30 @@ export function SunMoon({ weather }: Props) {
   }
 
   const riseLabel =
-    sunrise && riseMs != null
-      ? formatTime(sunrise, tz)
-      : '—'
-  const setLabel =
-    sunset && setMs != null
-      ? formatTime(sunset, tz)
-      : '—'
+    sunrise && riseMs != null ? formatTime(sunrise, tz) : '—'
+  const setLabel = sunset && setMs != null ? formatTime(sunset, tz) : '—'
+
+  // Moon geometry for this place (approx rise / set)
+  const geo =
+    Number.isFinite(weather.latitude) && Number.isFinite(weather.longitude)
+      ? moonGeometry(weather.latitude, weather.longitude, now)
+      : null
+  const moonRiseLabel =
+    geo?.riseMs != null
+      ? new Date(geo.riseMs).toLocaleTimeString(undefined, {
+          hour: 'numeric',
+          minute: '2-digit',
+          timeZone: tz,
+        })
+      : null
+  const moonSetLabel =
+    geo?.setMs != null
+      ? new Date(geo.setMs).toLocaleTimeString(undefined, {
+          hour: 'numeric',
+          minute: '2-digit',
+          timeZone: tz,
+        })
+      : null
 
   const fr = locale === 'fr'
 
@@ -150,9 +221,26 @@ export function SunMoon({ weather }: Props) {
               ? `~${moon.illumination} % illuminée · jour ${Math.round(moon.phase * 29.53)} du cycle`
               : `~${moon.illumination}% illuminated · day ${Math.round(moon.phase * 29.53)} of cycle`}
           </p>
+          {(moonRiseLabel || moonSetLabel) && (
+            <p className="moon-times-line">
+              {fr ? 'Lune' : 'Moon'}{' '}
+              {moonRiseLabel ? `${fr ? 'lever' : 'rise'} ${moonRiseLabel}` : '—'}
+              {' · '}
+              {moonSetLabel ? `${fr ? 'coucher' : 'set'} ${moonSetLabel}` : '—'}
+              {geo?.upNow != null
+                ? fr
+                  ? geo.upNow
+                    ? ' · au-dessus'
+                    : ' · sous l’horizon'
+                  : geo.upNow
+                    ? ' · up'
+                    : ' · below'
+                : null}
+            </p>
+          )}
         </div>
       </div>
-      {(!sunrise || !sunset) && (
+      {(!sunrise || !sunset || riseMs == null || setMs == null) && (
         <p className="muted-center" style={{ marginTop: '0.5rem', fontSize: '0.8rem' }}>
           {fr
             ? 'Heures du soleil indisponibles pour ce lieu — réessayez après actualisation.'

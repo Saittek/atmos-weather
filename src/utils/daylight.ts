@@ -62,6 +62,13 @@ export function isSunUpAt(weather: WeatherData, atMs: number = Date.now()): bool
       const set = parseSunTime(sunsets[i], tz)
       if (rise == null || set == null) continue
       if (set > rise) {
+        // Skip rows where injected times belong to a different local day
+        // (e.g. ECCC tomorrow pair written onto "today" before local midnight)
+        const rowDay = d.time?.[i]?.slice(0, 10)
+        if (rowDay) {
+          const riseDay = calendarDayInTz(rise, tz)
+          if (riseDay !== rowDay) continue
+        }
         if (atMs >= rise && atMs < set) return true
         // On this calendar day but outside the window → night for that day
         if (d.time?.[i]) {

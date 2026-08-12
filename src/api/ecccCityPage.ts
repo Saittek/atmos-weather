@@ -8,6 +8,63 @@
 
 import type { CurrentWeather, DailyWeather, HourlyWeather, WeatherData } from './types'
 import { parseWeatherLocal } from '../utils/format'
+import { isSunUpAt } from '../utils/daylight'
+
+/** Calendar day YYYY-MM-DD in an IANA timezone */
+function calendarDayInTz(ms: number, timeZone?: string): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: timeZone || undefined,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(ms))
+}
+
+/**
+ * Parse ECCC City Page timestamps (absolute Z/offset, or wall clock in forecast TZ).
+ */
+function parseEcccInstant(raw: string, tz?: string): number {
+  const s = String(raw || '').trim()
+  if (!s) return NaN
+  if (/Z$/i.test(s) || /[+-]\d{2}:?\d{2}$/.test(s)) {
+    const t = Date.parse(s)
+    return Number.isFinite(t) ? t : NaN
+  }
+  const normalized = s.includes('T') ? s : s.replace(' ', 'T')
+  const t = parseWeatherLocal(normalized, tz)
+  return Number.isFinite(t) ? t : NaN
+}
+
+/**
+ * Write ECCC riseSet onto the matching daily row only.
+ * City Page often rolls to *tomorrow's* pair before local midnight — never
+ * force that onto "today" or the sun arc / is_day logic breaks all evening.
+ */
+function applyEcccRiseSet(
+  d: DailyWeather,
+  riseSet: { sunrise?: { en?: string }; sunset?: { en?: string } } | undefined,
+  tz?: string,
+): void {
+  const riseRaw = riseSet?.sunrise?.en
+  const setRaw = riseSet?.sunset?.en
+  if (!riseRaw || !setRaw || !d.sunrise?.length || !d.sunset?.length || !d.time?.length) {
+    return
+  }
+  const riseMs = parseEcccInstant(riseRaw, tz)
+  const setMs = parseEcccInstant(setRaw, tz)
+  if (!Number.isFinite(riseMs) || !Number.isFinite(setMs) || setMs <= riseMs) return
+
+  const riseDay = calendarDayInTz(riseMs, tz)
+  let idx = d.time.findIndex((t) => t.startsWith(riseDay))
+  if (idx < 0) return
+
+  d.sunrise[idx] = riseRaw
+  d.sunset[idx] = setRaw
+  // Keep day length consistent with the pair we just wrote
+  if (d.daylight_duration?.[idx] != null) {
+    d.daylight_duration[idx] = (setMs - riseMs) / 1000
+  }
+}
 
 const CITYPAGE =
   'https://api.weather.gc.ca/collections/citypageweather-realtime/items'
@@ -232,31 +289,8 @@ export function mergeEcccIntoWeather(
     const windChill = num((cc.windChill as { value?: unknown })?.value)
     const ts = str((cc.timestamp as { en?: string })?.en ?? cc.timestamp) || out.current.time
 
-    // Day/night only from sunrise/sunset (parse in forecast TZ — never bare Date.parse)
-    let isDay = out.current.is_day
-    const riseSet = p.riseSet as { sunrise?: { en?: string }; sunset?: { en?: string } } | undefined
-    const tz = out.timezone
-    if (riseSet?.sunrise?.en && riseSet?.sunset?.en) {
-      const parseEcccInstant = (raw: string): number => {
-        const s = String(raw || '').trim()
-        if (!s) return NaN
-        // Absolute ISO with Z or offset
-        if (/Z$/i.test(s) || /[+-]\d{2}:?\d{2}$/.test(s)) {
-          const t = Date.parse(s)
-          return Number.isFinite(t) ? t : NaN
-        }
-        // Wall clock in forecast timezone
-        const normalized = s.includes('T') ? s : s.replace(' ', 'T')
-        const t = parseWeatherLocal(normalized, tz)
-        return Number.isFinite(t) ? t : NaN
-      }
-      const nowMs = parseEcccInstant(ts)
-      const rise = parseEcccInstant(riseSet.sunrise.en)
-      const set = parseEcccInstant(riseSet.sunset.en)
-      if (Number.isFinite(nowMs) && Number.isFinite(rise) && Number.isFinite(set)) {
-        isDay = nowMs >= rise && nowMs < set ? 1 : 0
-      }
-    }
+    // is_day finalized after riseSet is applied to daily (ECCC pair may already be tomorrow)
+    const isDay = out.current.is_day
 
     // ECCC often leaves stale windChill/humidex on the payload — only apply when
     // the air temp is in the right season for that index (fixes "dress for cold" on hot days).
@@ -429,16 +463,39 @@ export function mergeEcccIntoWeather(
       if (a.low != null) d.apparent_temperature_min[di] = a.low
     }
 
-    // Sunrise/sunset for *today* from riseSet (not index 0 when past_days is set)
-    const riseSet = p.riseSet as { sunrise?: { en?: string }; sunset?: { en?: string } } | undefined
-    if (riseSet?.sunrise?.en && d.sunrise?.[todayIdx] != null) {
-      d.sunrise[todayIdx] = riseSet.sunrise.en
-    }
-    if (riseSet?.sunset?.en && d.sunset?.[todayIdx] != null) {
-      d.sunset[todayIdx] = riseSet.sunset.en
-    }
+    // Match riseSet to the calendar day of sunrise — not blindly todayIdx
+    // (ECCC often publishes tomorrow's pair before local midnight).
+    applyEcccRiseSet(
+      d,
+      p.riseSet as { sunrise?: { en?: string }; sunset?: { en?: string } } | undefined,
+      tz,
+    )
 
     out.daily = d
+  } else {
+    // No forecast periods, but riseSet may still be present
+    applyEcccRiseSet(
+      out.daily as DailyWeather,
+      p.riseSet as { sunrise?: { en?: string }; sunset?: { en?: string } } | undefined,
+      out.timezone,
+    )
+  }
+
+  // Final day/night from daily sun tables (Open-Meteo + correctly placed ECCC)
+  try {
+    const sunUp = isSunUpAt(out, Date.now())
+    out.current = {
+      ...out.current,
+      is_day: sunUp ? 1 : 0,
+    }
+    // Re-map ECCC icon with corrected day/night when we have an icon code
+    const cc2 = p.currentConditions as Record<string, unknown> | undefined
+    const icon2 = num((cc2?.iconCode as { value?: unknown })?.value)
+    if (icon2 != null) {
+      out.current.weather_code = ecccIconToWmo(icon2, sunUp)
+    }
+  } catch {
+    /* keep prior is_day */
   }
 
   out.solara_source = {
