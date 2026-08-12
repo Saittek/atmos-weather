@@ -25,6 +25,12 @@ import {
   upcomingSolarEclipses,
   type SolarEclipse,
 } from '../data/solarEclipses'
+import {
+  layersForMode,
+  loadGlobePrefs,
+  saveGlobePrefs,
+  type GlobeMode,
+} from '../lib/globePrefs'
 
 const SPEED_MS = { slow: 900, normal: 520, fast: 300 } as const
 type SpeedKey = keyof typeof SPEED_MS
@@ -144,14 +150,27 @@ const BASEMAPS: Record<BasemapId, BasemapDef> = {
   },
 }
 
-const REGIONS: { id: string; label: string; center: [number, number]; zoom: number }[] = [
-  { id: 'world', label: 'World', center: GLOBE_WORLD_CENTER, zoom: GLOBE_WORLD_ZOOM },
-  { id: 'atl', label: 'Atlantic', center: [-55, 22], zoom: 2.6 },
-  { id: 'epac', label: 'E. Pacific', center: [-120, 18], zoom: 2.7 },
-  { id: 'cpac', label: 'C. Pacific', center: [-160, 20], zoom: 2.7 },
-  { id: 'wpac', label: 'W. Pacific', center: [140, 18], zoom: 2.5 },
-  { id: 'nio', label: 'N. Indian', center: [75, 15], zoom: 2.8 },
+const REGIONS: { id: string; labelKey: string; center: [number, number]; zoom: number }[] = [
+  { id: 'world', labelKey: 'globe.world', center: GLOBE_WORLD_CENTER, zoom: GLOBE_WORLD_ZOOM },
+  { id: 'atl', labelKey: 'globe.atlantic', center: [-55, 22], zoom: 2.6 },
+  { id: 'epac', labelKey: 'globe.epac', center: [-120, 18], zoom: 2.7 },
+  { id: 'cpac', labelKey: 'globe.cpac', center: [-160, 20], zoom: 2.7 },
+  { id: 'wpac', labelKey: 'globe.wpac', center: [140, 18], zoom: 2.5 },
+  { id: 'nio', labelKey: 'globe.nio', center: [75, 15], zoom: 2.8 },
 ]
+
+const BASEMAP_LABEL_KEYS: Record<BasemapId, string> = {
+  satellite: 'globe.satellite',
+  voyager: 'globe.color',
+  light: 'globe.light',
+  dark: 'globe.dark',
+}
+
+interface GlobeProps {
+  /** Mission mode from GlobePage segment control */
+  missionMode?: GlobeMode
+  onMissionModeChange?: (mode: GlobeMode) => void
+}
 
 /** Sample longitudes used to pull max-zoom tiles into the cache around the sphere. */
 const WARM_LON_SAMPLES = [0, -90, 90, 180, -45, 45, -135, 135]
@@ -342,8 +361,13 @@ async function warmGlobeTiles(
   await waitMs(200)
 }
 
-export function GlobalRadarGlobe() {
+export function GlobalRadarGlobe({
+  missionMode: missionModeProp,
+  onMissionModeChange,
+}: GlobeProps = {}) {
   const { te, locale } = useI18n()
+  const prefs0 = loadGlobePrefs()
+  const modeLayers0 = layersForMode(missionModeProp ?? prefs0.mode)
   const containerRef = useRef<HTMLDivElement>(null)
   const trackSvgRef = useRef<SVGSVGElement>(null)
   const dayNightCanvasRef = useRef<HTMLCanvasElement>(null)
@@ -394,18 +418,18 @@ export function GlobalRadarGlobe() {
   const [frameIdx, setFrameIdx] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [speed, setSpeed] = useState<SpeedKey>('normal')
-  const [opacity, setOpacity] = useState(0.78)
+  const [opacity, setOpacity] = useState(prefs0.opacity)
   const [nowIndex, setNowIndex] = useState(0)
   const [storms, setStorms] = useState<TropicalStorm[]>([])
-  const [showTropical, setShowTropical] = useState(true)
-  const [showRadar, setShowRadar] = useState(true)
-  const [showLabels, setShowLabels] = useState(true)
-  const [showIR, setShowIR] = useState(false)
-  const [showDayNight, setShowDayNight] = useState(true)
+  const [showTropical, setShowTropical] = useState(modeLayers0.showTropical)
+  const [showRadar, setShowRadar] = useState(modeLayers0.showRadar)
+  const [showLabels, setShowLabels] = useState(prefs0.showLabels)
+  const [showIR, setShowIR] = useState(prefs0.showIR)
+  const [showDayNight, setShowDayNight] = useState(modeLayers0.showDayNight)
   /** Real-time Sun + Moon at subsolar / sublunar points */
-  const [showBodies, setShowBodies] = useState(true)
+  const [showBodies, setShowBodies] = useState(modeLayers0.showBodies)
   /** Solar eclipse paths + partial visibility (NASA) */
-  const [showEclipses, setShowEclipses] = useState(true)
+  const [showEclipses, setShowEclipses] = useState(modeLayers0.showEclipses)
   /** null = all upcoming; else focus one eclipse path */
   const [activeEclipseId, setActiveEclipseId] = useState<string | null>(null)
   const [eclipsePopup, setEclipsePopup] = useState<{
@@ -418,15 +442,66 @@ export function GlobalRadarGlobe() {
     x: number
     y: number
   } | null>(null)
-  const [spinning, setSpinning] = useState(false)
-  const [basemapId, setBasemapId] = useState<BasemapId>('satellite')
+  const [spinning, setSpinning] = useState(
+    modeLayers0.spinning && !prefersReducedMotion() ? modeLayers0.spinning : false,
+  )
+  const [basemapId, setBasemapId] = useState<BasemapId>(prefs0.basemapId)
   const [activeRegion, setActiveRegion] = useState('world')
   const [optionsOpen, setOptionsOpen] = useState(false)
+  const [playerMore, setPlayerMore] = useState(false)
+  const [mapInteractive, setMapInteractive] = useState(false)
+  const [missionMode, setMissionMode] = useState<GlobeMode>(
+    missionModeProp ?? prefs0.mode,
+  )
   const optionsMenuRef = useRef<HTMLDivElement>(null)
-  const showEclipsesRef = useRef(true)
+  const showEclipsesRef = useRef(modeLayers0.showEclipses)
   const activeEclipseIdRef = useRef<string | null>(null)
 
   const upcomingEclipses = upcomingSolarEclipses()
+
+  /** Apply mission mode layer preset */
+  const applyMissionMode = useCallback(
+    (mode: GlobeMode, opts?: { flyStorms?: boolean; flyEclipse?: boolean }) => {
+      const L = layersForMode(mode)
+      setMissionMode(mode)
+      setShowRadar(L.showRadar)
+      setShowDayNight(L.showDayNight)
+      setShowBodies(L.showBodies)
+      setShowEclipses(L.showEclipses)
+      setShowTropical(L.showTropical)
+      if (!prefersReducedMotion()) setSpinning(L.spinning)
+      else setSpinning(false)
+      saveGlobePrefs({ mode, spinning: L.spinning })
+      onMissionModeChange?.(mode)
+      if (mode === 'eclipse') {
+        setActiveEclipseId(null)
+        if (opts?.flyEclipse !== false && upcomingSolarEclipses()[0]) {
+          /* fly after paint via effect */
+        }
+      }
+      if (mode !== 'eclipse') setEclipsePopup(null)
+    },
+    [onMissionModeChange],
+  )
+
+  // Sync mode from page segment control
+  useEffect(() => {
+    if (missionModeProp && missionModeProp !== missionMode) {
+      applyMissionMode(missionModeProp)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- external mode driver
+  }, [missionModeProp])
+
+  // Persist a few prefs
+  useEffect(() => {
+    saveGlobePrefs({
+      basemapId,
+      showIR,
+      showLabels,
+      opacity,
+      spinning,
+    })
+  }, [basemapId, showIR, showLabels, opacity, spinning])
 
   opacityRef.current = opacity
   showRadarRef.current = showRadar
@@ -1573,65 +1648,66 @@ export function GlobalRadarGlobe() {
         applySpaceSky(map)
         paintStarfield()
 
-        // Load Earth at max zoom around the sphere so detail stays in the tile cache
-        await warmGlobeTiles(map, () => cancelled, (s) => {
-          if (s.startsWith('Loading high-detail')) setLoadHint(te('globe.loadingDetail'))
-          else if (s.startsWith('Caching')) setLoadHint(s) // progress numbers OK
-          else setLoadHint(s)
+        // Interactive ASAP at world view (defer expensive full-sphere tile warm)
+        map.jumpTo({
+          center: GLOBE_WORLD_CENTER,
+          zoom: GLOBE_WORLD_ZOOM,
+          bearing: 0,
+          pitch: 0,
         })
-        if (cancelled) return
+        readyRef.current = true
+        setMapInteractive(true)
+        scheduleOverlay()
+        syncEclipseLayers(map, showEclipsesRef.current, activeEclipseIdRef.current)
+        try {
+          updateCelestialBodies(map)
+        } catch {
+          /* ignore */
+        }
 
+        // Radar + tropical in parallel (don't block on tile warm)
         setLoadHint(te('globe.loadingRadar'))
-        const { host, frames: fr, nowIndex: ni } = await loadGlobalRadarLoop({ maxPast: 12 })
+        const radarP = loadGlobalRadarLoop({ maxPast: 12 }).catch(() => null)
+        const tropicalP = fetchTropicalGlobeData().catch(() => null)
+
+        const radar = await radarP
         if (cancelled) return
 
-        if (!fr.length) {
+        if (!radar || !radar.frames.length) {
           setError(te('globe.noFrames'))
           setLoading(false)
           return
         }
 
-        hostRef.current = host
-        framesRef.current = fr
-        frameIdxRef.current = ni
-        setFrames(fr)
-        setNowIndex(ni)
-        setFrameIdx(ni)
-        readyRef.current = true
-        scheduleOverlay()
-        syncEclipseLayers(map, showEclipsesRef.current, activeEclipseIdRef.current)
+        hostRef.current = radar.host
+        framesRef.current = radar.frames
+        frameIdxRef.current = radar.nowIndex
+        setFrames(radar.frames)
+        setNowIndex(radar.nowIndex)
+        setFrameIdx(radar.nowIndex)
+        applyFrame(radar.nowIndex, true)
+        setLoadHint(te('globe.ready'))
+        setLoading(false)
 
-        // Paint radar at world view, then briefly re-warm radar tiles at high zoom
-        applyFrame(ni, true)
-        try {
-          const warmZ = Math.min(map.getMaxZoom(), RADAR_MAXZOOM)
-          map.jumpTo({ center: GLOBE_WORLD_CENTER, zoom: warmZ, bearing: 0, pitch: 0 })
-          await waitMs(220)
-          if (!cancelled) {
-            applyFrame(ni, true)
-            await waitMs(180)
-          }
-          if (!cancelled) {
-            map.jumpTo({
-              center: GLOBE_WORLD_CENTER,
-              zoom: GLOBE_WORLD_ZOOM,
-              bearing: 0,
-              pitch: 0,
-            })
-            applyFrame(ni, true)
-          }
-        } catch {
-          /* non-fatal */
-        }
+        // Background tile warm (detail when zooming) — non-blocking
+        void warmGlobeTiles(map, () => cancelled, () => {
+          /* quiet */
+        }).catch(() => {
+          /* optional */
+        })
 
         setLoadHint(te('globe.loadingTropical'))
         try {
-          const tropical = await fetchTropicalGlobeData()
+          const tropical = await tropicalP
           if (!cancelled && tropical && mapRef.current) {
             setStorms(tropical.storms)
-            placeMarkers(mapRef.current, tropical, true)
-            // Default camera: frame active storms when any exist
-            if (tropical.storms.length) {
+            const showTracks = showTropicalRef.current
+            placeMarkers(mapRef.current, tropical, showTracks)
+            // Storms mode: frame active storms
+            if (
+              tropical.storms.length &&
+              (missionModeProp === 'storms' || loadGlobePrefs().mode === 'storms')
+            ) {
               const list = tropical.storms
               const lons = list.flatMap((s) => [
                 s.lon,
@@ -1656,7 +1732,7 @@ export function GlobalRadarGlobe() {
                   zoom: z,
                   bearing: 0,
                   pitch: 0,
-                  duration: prefersReducedMotion() ? 0 : 1400,
+                  duration: prefersReducedMotion() ? 0 : 1100,
                   essential: true,
                 })
               }
@@ -1667,17 +1743,12 @@ export function GlobalRadarGlobe() {
         }
         if (cancelled) return
 
-        setLoading(false)
         scheduleOverlay()
-        try {
-          updateCelestialBodies(map)
-        } catch {
-          /* ignore */
-        }
       } catch (e) {
         if (cancelled) return
         setError(e instanceof Error ? e.message : te('globe.failed'))
         setLoading(false)
+        setMapInteractive(true)
       }
     }
 
@@ -2050,14 +2121,16 @@ export function GlobalRadarGlobe() {
   const progress = frames.length > 1 ? frameIdx / (frames.length - 1) : 0
 
   return (
-    <div className={`globe-stage globe-theme-${basemapId} globe-stage-space`}>
+    <div
+      className={`globe-stage globe-theme-${basemapId} globe-stage-space globe-mission-stage mode-${missionMode}`}
+    >
       {/* Deep space starfield behind the planet */}
       <canvas ref={spaceCanvasRef} className="globe-space-canvas" aria-hidden="true" />
       <div
         ref={containerRef}
         className="globe-canvas"
         role="img"
-        aria-label="3D Earth with global radar"
+        aria-label={te('globe.title')}
       />
       <canvas
         ref={dayNightCanvasRef}
@@ -2096,7 +2169,13 @@ export function GlobalRadarGlobe() {
         style={{ display: 'none' }}
       />
 
-      {loading && (
+      {loading && mapInteractive && (
+        <div className="globe-load-pill" role="status">
+          <div className="spinner" />
+          <span>{loadHint}</span>
+        </div>
+      )}
+      {loading && !mapInteractive && (
         <div className="globe-overlay-msg" role="status">
           <div className="spinner large" />
           <span>{loadHint}</span>
@@ -2106,8 +2185,57 @@ export function GlobalRadarGlobe() {
         <div className="globe-overlay-msg error" role="alert">
           <p>{error}</p>
           <button type="button" className="chip-btn" onClick={() => window.location.reload()}>
-            Retry
+            {te('globe.retry')}
           </button>
+        </div>
+      )}
+
+      {!loading && !error && (
+        <div className="globe-mini-legend" aria-hidden>
+          {showRadar && (
+            <span>
+              <i className="sw-radar" /> {te('globe.legendRadar')}
+            </span>
+          )}
+          {showDayNight && (
+            <span>
+              <i className="sw-night" /> {te('globe.legendNight')}
+            </span>
+          )}
+          {showTropical && storms.length > 0 && (
+            <span>
+              <i className="sw-fcst" /> {te('globe.legendFcst')}
+            </span>
+          )}
+          {showEclipses && (
+            <span>
+              <i className="sw-eclipse" /> {te('globe.eclipseTotality')}
+            </span>
+          )}
+        </div>
+      )}
+
+      {storms.length > 0 && (
+        <div className="globe-storm-dock" aria-label={te('globe.activeStorms')}>
+          {storms.slice(0, 8).map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => {
+                setSpinning(false)
+                mapRef.current?.easeTo({
+                  center: [s.lon, s.lat],
+                  zoom: Math.max(mapRef.current.getZoom(), 3.1),
+                  bearing: 0,
+                  pitch: 0,
+                  duration: 900,
+                  essential: true,
+                })
+              }}
+            >
+              {s.name}
+            </button>
+          ))}
         </div>
       )}
 
@@ -2119,9 +2247,9 @@ export function GlobalRadarGlobe() {
           aria-expanded={optionsOpen}
           aria-haspopup="menu"
           aria-controls="globe-options-menu"
-          disabled={loading}
+          disabled={!mapInteractive && loading}
         >
-          Options
+          ⚙ {te('globe.options')}
           <span className="globe-options-caret" aria-hidden="true">
             {optionsOpen ? '▴' : '▾'}
           </span>
@@ -2145,7 +2273,7 @@ export function GlobalRadarGlobe() {
                     className={`chip-btn globe-options-chip ${basemapId === id ? 'active' : ''}`}
                     onClick={() => setBasemapId(id)}
                   >
-                    {BASEMAPS[id].label}
+                    {te(BASEMAP_LABEL_KEYS[id] as 'globe.satellite')}
                   </button>
                 ))}
               </div>
@@ -2161,7 +2289,7 @@ export function GlobalRadarGlobe() {
                   onClick={() => setShowRadar((v) => !v)}
                   aria-checked={showRadar}
                 >
-                  {te('radar.layerRadar')}
+                  {te('globe.layerRadar')}
                 </button>
                 <button
                   type="button"
@@ -2169,9 +2297,8 @@ export function GlobalRadarGlobe() {
                   className={`chip-btn globe-options-chip ${showIR ? 'active' : ''}`}
                   onClick={() => setShowIR((v) => !v)}
                   aria-checked={showIR}
-                  title="Cloud tops / clean IR (NASA GIBS)"
                 >
-                  IR
+                  {te('globe.layerIR')}
                 </button>
                 <button
                   type="button"
@@ -2179,9 +2306,8 @@ export function GlobalRadarGlobe() {
                   className={`chip-btn globe-options-chip ${showDayNight ? 'active' : ''}`}
                   onClick={() => setShowDayNight((v) => !v)}
                   aria-checked={showDayNight}
-                  title="Day / night terminator"
                 >
-                  Day/Night
+                  {te('globe.layerDayNight')}
                 </button>
                 <button
                   type="button"
@@ -2189,9 +2315,8 @@ export function GlobalRadarGlobe() {
                   className={`chip-btn globe-options-chip ${showBodies ? 'active' : ''}`}
                   onClick={() => setShowBodies((v) => !v)}
                   aria-checked={showBodies}
-                  title="3D Sun and Moon in space at real directions from Earth"
                 >
-                  Sun/Moon
+                  {te('globe.layerBodies')}
                 </button>
                 <button
                   type="button"
@@ -2201,7 +2326,7 @@ export function GlobalRadarGlobe() {
                   aria-checked={showTropical}
                   disabled={!storms.length}
                 >
-                  Storms
+                  {te('globe.layerStorms')}
                 </button>
                 <button
                   type="button"
@@ -2220,7 +2345,7 @@ export function GlobalRadarGlobe() {
                   onClick={() => setShowLabels((v) => !v)}
                   aria-checked={showLabels}
                 >
-                  Labels
+                  {te('globe.layerLabels')}
                 </button>
                 <button
                   type="button"
@@ -2229,19 +2354,14 @@ export function GlobalRadarGlobe() {
                   onClick={() => setSpinning((v) => !v)}
                   aria-checked={spinning}
                   disabled={prefersReducedMotion()}
-                  title={
-                    prefersReducedMotion()
-                      ? 'Spin disabled (reduced motion preference)'
-                      : 'Rotate Earth around the poles (equator spins past)'
-                  }
                 >
-                  Spin
+                  {te('globe.layerSpin')}
                 </button>
               </div>
             </div>
 
-            <div className="globe-options-section" role="group" aria-label="Jump to region">
-              <div className="globe-options-heading">Jump to</div>
+            <div className="globe-options-section" role="group" aria-label={te('globe.region')}>
+              <div className="globe-options-heading">{te('globe.region')}</div>
               <div className="globe-options-chips">
                 {REGIONS.map((r) => (
                   <button
@@ -2254,7 +2374,7 @@ export function GlobalRadarGlobe() {
                       setOptionsOpen(false)
                     }}
                   >
-                    {r.label}
+                    {te(r.labelKey as 'globe.world')}
                   </button>
                 ))}
                 {storms.length > 0 && (
@@ -2267,122 +2387,16 @@ export function GlobalRadarGlobe() {
                       setOptionsOpen(false)
                     }}
                   >
-                    Active storms
+                    {te('globe.activeStorms')}
                   </button>
                 )}
               </div>
-            </div>
-
-            {upcomingEclipses.length > 0 && (
-              <div className="globe-options-section" role="group" aria-label={te('globe.eclipses')}>
-                <div className="globe-options-heading">{te('globe.eclipses')}</div>
-                <p className="globe-eclipse-hint">{te('globe.eclipsesHint')}</p>
-                <div className="globe-options-chips">
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={`chip-btn globe-options-chip ${showEclipses && !activeEclipseId ? 'active' : ''}`}
-                    onClick={() => {
-                      setShowEclipses(true)
-                      setActiveEclipseId(null)
-                      setActiveRegion('world')
-                      setSpinning(false)
-                      mapRef.current?.easeTo({
-                        center: GLOBE_WORLD_CENTER,
-                        zoom: GLOBE_WORLD_ZOOM,
-                        bearing: 0,
-                        pitch: 0,
-                        duration: 900,
-                        essential: true,
-                      })
-                      setOptionsOpen(false)
-                    }}
-                  >
-                    {te('globe.eclipseAll')}
-                  </button>
-                  {upcomingEclipses.map((ecl) => (
-                    <button
-                      key={ecl.id}
-                      type="button"
-                      role="menuitem"
-                      className={`chip-btn globe-options-chip ${activeEclipseId === ecl.id ? 'active' : ''}`}
-                      title={`${locale === 'fr' ? ecl.regionsFr : ecl.regions} · max ${ecl.maxDuration}`}
-                      onClick={() => {
-                        flyToEclipse(ecl)
-                        setOptionsOpen(false)
-                      }}
-                    >
-                      {ecl.date.slice(0, 7)} {ecl.type === 'total' ? '●' : '○'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="globe-options-section globe-options-legend" aria-hidden={loading}>
-              <div className="globe-options-heading">Legend</div>
-              <div className="globe-legend-item">
-                <span className="globe-legend-swatch globe-legend-radar" />
-                Global precip radar
-              </div>
-              {showIR && (
-                <div className="globe-legend-item">
-                  <span className="globe-legend-swatch globe-legend-ir" />
-                  Cloud IR
-                </div>
-              )}
-              {showDayNight && (
-                <div className="globe-legend-item">
-                  <span className="globe-legend-swatch globe-legend-night" />
-                  Night side
-                </div>
-              )}
-              {showBodies && (
-                <>
-                  <div className="globe-legend-item">
-                    <span className="globe-legend-swatch globe-legend-sun" />
-                    Sun (in space)
-                  </div>
-                  <div className="globe-legend-item">
-                    <span className="globe-legend-swatch globe-legend-moon" />
-                    Moon (in space)
-                  </div>
-                </>
-              )}
-              <div className="globe-legend-item">
-                <span className="globe-legend-swatch globe-legend-past" />
-                Past track
-              </div>
-              <div className="globe-legend-item">
-                <span className="globe-legend-swatch globe-legend-fcst" />
-                Forecast track
-              </div>
-              <div className="globe-legend-item">
-                <span className="globe-legend-swatch globe-legend-cone" />
-                Forecast cone
-              </div>
-              {showEclipses && (
-                <>
-                  <div className="globe-legend-item">
-                    <span className="globe-legend-swatch globe-legend-eclipse-partial" />
-                    {te('globe.eclipsePartial')}
-                  </div>
-                  <div className="globe-legend-item">
-                    <span className="globe-legend-swatch globe-legend-eclipse-total" />
-                    {te('globe.eclipseTotality')}
-                  </div>
-                  <div className="globe-legend-item">
-                    <span className="globe-legend-swatch globe-legend-eclipse-center" />
-                    {te('globe.eclipseCenter')}
-                  </div>
-                </>
-              )}
             </div>
           </div>
         )}
       </div>
 
-      {showEclipses && upcomingEclipses.length > 0 && !loading && (
+      {showEclipses && upcomingEclipses.length > 0 && !error && (
         <aside className="globe-eclipse-panel" aria-label={te('globe.eclipses')}>
           <div className="globe-eclipse-panel-head">
             <strong>🌑 {te('globe.eclipses')}</strong>
@@ -2467,16 +2481,16 @@ export function GlobalRadarGlobe() {
             max={Math.max(0, frames.length - 1)}
             step={1}
             value={frameIdx}
-            disabled={!frames.length || loading}
+            disabled={!frames.length}
             onChange={(e) => scrub(Number(e.target.value))}
             aria-label={te('globe.timeline')}
             style={{ ['--globe-progress' as string]: `${progress * 100}%` } as Record<string, string>}
           />
           <div className="globe-timeline-marks">
-            <span>Past</span>
-            <span className={isNow ? 'is-active' : ''}>Now</span>
+            <span>{te('globe.past')}</span>
+            <span className={isNow ? 'is-active' : ''}>{te('globe.now')}</span>
             {frames.length > nowIndex + 1 ? (
-              <span className={isForecast ? 'is-active' : ''}>Forecast</span>
+              <span className={isForecast ? 'is-active' : ''}>{te('globe.forecast')}</span>
             ) : (
               <span />
             )}
@@ -2488,65 +2502,71 @@ export function GlobalRadarGlobe() {
             type="button"
             className="chip-btn globe-play-btn"
             onClick={() => setPlaying((p) => !p)}
-            disabled={!frames.length || loading}
+            disabled={!frames.length}
             aria-pressed={playing}
           >
-            {playing ? '❚❚ Pause' : '▶ Play'}
+            {playing ? `❚❚ ${te('globe.pause')}` : `▶ ${te('globe.play')}`}
           </button>
-          <button type="button" className="chip-btn" onClick={() => step(-1)} disabled={!frames.length || loading}>
+          <button type="button" className="chip-btn" onClick={() => step(-1)} disabled={!frames.length}>
             ‹
           </button>
-          <button type="button" className="chip-btn" onClick={() => step(1)} disabled={!frames.length || loading}>
+          <button type="button" className="chip-btn" onClick={() => step(1)} disabled={!frames.length}>
             ›
           </button>
           <button
             type="button"
             className={`chip-btn ${isNow ? 'active' : ''}`}
             onClick={goNow}
-            disabled={!frames.length || loading}
+            disabled={!frames.length}
           >
-            Now
+            {te('globe.now')}
           </button>
-          <label className="globe-speed">
-            <span className="sr-only">Speed</span>
-            <select
-              value={speed}
-              onChange={(e) => setSpeed(e.target.value as SpeedKey)}
-              aria-label="Playback speed"
-            >
-              <option value="slow">Slow</option>
-              <option value="normal">Normal</option>
-              <option value="fast">Fast</option>
-            </select>
-          </label>
+          <button
+            type="button"
+            className={`chip-btn ${playerMore ? 'active' : ''}`}
+            onClick={() => setPlayerMore((v) => !v)}
+            aria-expanded={playerMore}
+            title={te('globe.moreControls')}
+          >
+            ···
+          </button>
           <span className="globe-frame-count">
             {frames.length ? `${frameIdx + 1}/${frames.length}` : '—'}
           </span>
         </div>
-        <div className="globe-controls-meta">
-          <span className="globe-time">
-            {frame ? formatRadarTime(frame.time) : '—'}
-            {isNow && <em> · now</em>}
-            {isForecast && <em> · forecast</em>}
-          </span>
-          <label className="globe-opacity">
-            Radar
-            <input
-              type="range"
-              min={0.2}
-              max={1}
-              step={0.05}
-              value={opacity}
-              onChange={(e) => setOpacity(Number(e.target.value))}
-              disabled={!showRadar}
-            />
-          </label>
-        </div>
-        <p className="globe-hint">
-          Drag to turn the globe · Spin = rotate around the poles (equator slides past) · white past ·
-          pink forecast
-          {storms.length ? ` · ${storms.length} storm${storms.length > 1 ? 's' : ''}` : ''}
-        </p>
+        {playerMore && (
+          <div className="globe-controls-meta">
+            <span className="globe-time">
+              {frame ? formatRadarTime(frame.time) : '—'}
+              {isNow && <em> · {te('globe.now').toLowerCase()}</em>}
+              {isForecast && <em> · {te('globe.forecast').toLowerCase()}</em>}
+            </span>
+            <label className="globe-speed">
+              <span className="sr-only">{te('globe.speed')}</span>
+              <select
+                value={speed}
+                onChange={(e) => setSpeed(e.target.value as SpeedKey)}
+                aria-label={te('globe.speed')}
+              >
+                <option value="slow">{te('globe.speedSlow')}</option>
+                <option value="normal">{te('globe.speedNormal')}</option>
+                <option value="fast">{te('globe.speedFast')}</option>
+              </select>
+            </label>
+            <label className="globe-opacity">
+              {te('globe.opacity')}
+              <input
+                type="range"
+                min={0.2}
+                max={1}
+                step={0.05}
+                value={opacity}
+                onChange={(e) => setOpacity(Number(e.target.value))}
+                disabled={!showRadar}
+              />
+            </label>
+          </div>
+        )}
       </div>
     </div>
   )
