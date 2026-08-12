@@ -1,8 +1,8 @@
 import { lazy, Suspense, useEffect, useLayoutEffect } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
+/* Legacy domain modules (split from App.css) → light residuals → redesign layers */
 import './App.css'
 import './theme-light.css'
-/* Redesign: tokens + atmospheric glass layer (must load after legacy CSS) */
 import './styles/tokens.css'
 import './styles/redesign.css'
 import './styles/redesign-m2m3.css'

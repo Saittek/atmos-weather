@@ -1,0 +1,524 @@
+/**
+ * Full-page radar, widget pages
+ * Split from App.css (legacy) — original lines 5580–6099
+ * Redesign layers (tokens + redesign*.css) load after this stack.
+ */
+/* ===== Full-page radar (/radar) ===== */
+/* Definite height is required so Leafletâ€™s 100% stage does not collapse to 0 */
+.radar-page {
+  height: 100vh;
+  height: 100dvh;
+  max-height: 100dvh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--page-bg, #0a0e18);
+  color: var(--text, #f1f5f9);
+  position: relative;
+}
+.radar-page-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid var(--page-bar-border, rgba(255, 255, 255, 0.1));
+  background: var(--page-bar-bg, rgba(10, 14, 24, 0.95));
+  color: var(--text);
+  backdrop-filter: blur(12px);
+  z-index: 20;
+  flex: 0 0 auto;
+}
+.radar-page-bar a {
+  text-decoration: none;
+}
+.radar-page-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+}
+.radar-page-title strong {
+  font-size: 0.95rem;
+  color: var(--text);
+}
+.radar-page-title span {
+  font-size: 0.78rem;
+  color: var(--page-muted, rgba(226, 232, 240, 0.65));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.radar-page-actions {
+  display: flex;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+.radar-page-map {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+.radar-panel.radar-page-mode {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  width: 100%;
+  border-radius: 0;
+  border: 0;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  background: var(--page-bg, #0a0e18);
+  color: var(--text);
+  padding: 0.5rem 0.65rem 0.65rem;
+  overflow: hidden;
+}
+.radar-panel.radar-page-mode .radar-header {
+  flex: 0 0 auto;
+  margin-bottom: 0.4rem;
+}
+.radar-panel.radar-page-mode .radar-header h2 {
+  font-size: 0.95rem;
+}
+.radar-panel.radar-page-mode .radar-stage {
+  /* flex-basis 0 + definite parent height â†’ fills leftover space (not 0) */
+  flex: 1 1 0;
+  min-height: 240px;
+  height: auto !important; /* override fixed min(520px, 62vh) */
+  position: relative;
+  border-radius: 12px;
+}
+.radar-panel.radar-page-mode .radar-controls {
+  flex: 0 0 auto;
+  max-height: min(38vh, 280px);
+  overflow: auto;
+  padding-top: 0.45rem;
+}
+.radar-panel.radar-page-mode .radar-map {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  z-index: 1;
+}
+.radar-panel.radar-page-mode .radar-legend,
+.radar-panel.radar-page-mode .radar-time-badge,
+.radar-panel.radar-page-mode .radar-overlay-msg,
+.radar-panel.radar-page-mode .radar-buffer-bar {
+  z-index: 500;
+}
+
+/* ===== Home screen widget guide ===== */
+.homescreen-widget-card {
+  border-color: rgba(56, 189, 248, 0.28);
+}
+.homescreen-widget-card.compact .homescreen-steps {
+  margin: 0.35rem 0 0.55rem;
+  padding-left: 1.15rem;
+  font-size: 0.82rem;
+}
+.homescreen-widget-lead {
+  margin: 0 0 0.55rem;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: var(--text-dim, rgba(226, 232, 240, 0.85));
+}
+.homescreen-steps {
+  margin: 0.35rem 0 0.75rem;
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.86rem;
+  line-height: 1.4;
+  color: var(--text, #f1f5f9);
+}
+.homescreen-steps li {
+  padding-left: 0.15rem;
+}
+.homescreen-widget-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+.homescreen-widget-cta {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.homescreen-url {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.82em;
+  word-break: break-all;
+}
+.homescreen-widget-card.is-installed {
+  border-color: rgba(34, 197, 94, 0.35);
+}
+
+/* ===== Rain widget page (/widget) ===== */
+.widget-page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
+  background: var(--page-bg-grad, linear-gradient(165deg, #0b1220 0%, #132238 50%, #0f1a2e 100%));
+  color: var(--text, #f1f5f9);
+  padding: 0 0 max(2rem, env(safe-area-inset-bottom, 0px));
+  font-family: var(--font);
+  box-sizing: border-box;
+}
+.widget-page.widget-standalone .widget-bar {
+  padding-top: max(0.65rem, env(safe-area-inset-top, 0px));
+}
+.widget-bar-spacer {
+  width: 2.5rem;
+  flex-shrink: 0;
+}
+.widget-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.65rem 0.85rem;
+  border-bottom: 1px solid var(--page-bar-border, rgba(255, 255, 255, 0.1));
+  background: var(--page-bar-bg, rgba(10, 14, 24, 0.9));
+  color: var(--text);
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  backdrop-filter: blur(12px);
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.widget-page .homescreen-widget-card {
+  margin: 0.65rem 0.75rem 0;
+}
+.widget-bar a {
+  text-decoration: none;
+}
+.widget-brand {
+  font-size: 0.95rem;
+  letter-spacing: -0.02em;
+}
+.widget-body {
+  max-width: 440px;
+  margin: 0 auto;
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.widget-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.25rem 0.15rem;
+}
+.widget-hero h1 {
+  margin: 0;
+  font-size: 1.35rem;
+  letter-spacing: -0.03em;
+}
+.widget-cond {
+  margin: 0.25rem 0 0;
+  color: var(--text-dim, rgba(226, 232, 240, 0.72));
+  font-size: 0.95rem;
+}
+.widget-alert {
+  margin: 0.65rem 0.85rem 0;
+  padding: 0.65rem 0.85rem;
+  border-radius: 12px;
+  background: rgba(14, 116, 144, 0.45);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  font-weight: 650;
+  font-size: 0.9rem;
+}
+.widget-empty {
+  max-width: 360px;
+  margin: 3rem auto;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 1rem;
+}
+.widget-pin-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.widget-pin-list button {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  padding: 0.65rem 0.75rem;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.widget-pin-list button:hover {
+  border-color: rgba(56, 189, 248, 0.4);
+}
+.widget-foot-note {
+  margin: 0;
+  text-align: center;
+  font-size: 0.85rem;
+  color: rgba(226, 232, 240, 0.55);
+}
+.widget-notify-btn {
+  width: 100%;
+}
+.widget-stamp {
+  margin: 0.25rem 0 0;
+  text-align: center;
+  font-size: 0.72rem;
+  color: rgba(226, 232, 240, 0.4);
+}
+
+/* Install prompt */
+.install-prompt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.85rem;
+  padding: 0.75rem 1rem;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.18), rgba(99, 102, 241, 0.2));
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  box-shadow: var(--shadow);
+}
+.install-prompt.compact {
+  margin: 0.65rem 0.85rem 0;
+  max-width: none;
+}
+.install-prompt-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+.install-prompt-text strong {
+  font-size: 0.95rem;
+}
+.install-prompt-text span {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+.install-prompt-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+.install-btn {
+  padding: 0.45rem 0.9rem;
+  font-size: 0.88rem;
+}
+
+.chip-btn {
+  text-decoration: none;
+}
+
+/* Story / comfort / climate / snow / moon */
+.story-text {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+
+.current-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.55rem;
+}
+.current-chip {
+  font-size: 0.72rem;
+  font-weight: 650;
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+.current-chip.alert {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(248, 113, 113, 0.4);
+  color: #fca5a5;
+}
+.current-chip.rain {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: rgba(56, 189, 248, 0.35);
+  color: #7dd3fc;
+}
+.current-chip.model-chip {
+  background: rgba(167, 139, 250, 0.14);
+  border-color: rgba(167, 139, 250, 0.35);
+  color: #c4b5fd;
+  letter-spacing: 0.02em;
+}
+
+.comfort-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.55rem;
+}
+.comfort-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.7rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.comfort-card .label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-mute);
+}
+.comfort-card strong {
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+}
+.comfort-card .sub {
+  font-size: 0.75rem;
+  color: var(--text-mute);
+  line-height: 1.3;
+}
+
+.climate-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.55rem;
+}
+@media (max-width: 560px) {
+  .climate-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.climate-grid > div {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.climate-grid .label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-mute);
+}
+.climate-grid strong {
+  font-size: 1rem;
+}
+.climate-grid .sub {
+  font-size: 0.75rem;
+  color: var(--text-mute);
+}
+.climate-note {
+  margin: 0.75rem 0 0;
+  font-size: 0.9rem;
+  font-weight: 650;
+  color: var(--accent);
+}
+
+.snow-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.snow-list li {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 0.35rem 0.65rem;
+  align-items: center;
+  padding: 0.55rem 0.65rem;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  font-size: 0.85rem;
+}
+.snow-day {
+  font-weight: 650;
+  grid-column: 1;
+}
+.snow-icon {
+  grid-column: 2;
+}
+.snow-amt {
+  grid-column: 3;
+  font-weight: 700;
+  color: #93c5fd;
+  font-variant-numeric: tabular-nums;
+}
+.snow-meta {
+  grid-column: 1 / -1;
+  font-size: 0.75rem;
+  color: var(--text-mute);
+}
+.snow-now {
+  margin: 0 0 0.55rem;
+  font-weight: 650;
+  color: #93c5fd;
+}
+.snow-panel.quiet {
+  opacity: 0.9;
+}
+
+.moon-row {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--border);
+}
+.moon-phase-icon,
+.moon-phase-visual {
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  filter: drop-shadow(0 2px 12px rgba(148, 163, 184, 0.4));
+}
+.moon-emoji {
+  font-size: 2rem;
+  line-height: 1;
+}
+.moon-row strong {
+  display: block;
+  font-size: 0.95rem;
+}
+.moon-row p {
+  margin: 0.15rem 0 0;
+  font-size: 0.8rem;
+  color: var(--text-mute);
+}
+.moon-row .moon-times-line {
+  font-variant-numeric: tabular-nums;
+}

@@ -1,0 +1,1103 @@
+/**
+ * Embedded + full-page radar (to mobile-perf)
+ * Split from App.css (legacy) — original lines 2714–3812
+ * Redesign layers (tokens + redesign*.css) load after this stack.
+ */
+/* ===== RADAR (WeatherWise-style) ===== */
+.wxwise-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.75rem;
+  align-items: center;
+  margin: 0 0 0.5rem;
+}
+.wxwise-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  align-items: center;
+}
+.wxwise-sites {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.3rem;
+  overflow-x: auto;
+  margin: 0 0 0.55rem;
+  padding-bottom: 0.15rem;
+  -webkit-overflow-scrolling: touch;
+}
+.wxwise-site-chip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.05rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(15, 23, 42, 0.65);
+  color: inherit;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 750;
+  cursor: pointer;
+  line-height: 1.15;
+}
+.wxwise-site-chip span {
+  font-size: 0.62rem;
+  font-weight: 500;
+  color: var(--text-mute, rgba(148, 163, 184, 0.9));
+  max-width: 5.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wxwise-site-chip.active {
+  border-color: rgba(34, 211, 238, 0.65);
+  background: rgba(34, 211, 238, 0.15);
+  color: #a5f3fc;
+}
+.radar-panel.radar-wxwise .radar-stage {
+  border-color: rgba(34, 211, 238, 0.15);
+}
+
+.radar-panel {
+  padding: 1rem;
+  overflow: hidden;
+}
+.radar-panel.is-fullscreen {
+  border-radius: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #0a0e18;
+}
+.radar-panel.is-fullscreen .radar-stage {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+.radar-header {
+  margin-bottom: 0.75rem;
+}
+.radar-sub {
+  margin: 0.2rem 0 0;
+  font-size: 0.75rem;
+  color: var(--text-mute);
+}
+.radar-header-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.radar-stage {
+  position: relative;
+  height: min(720px, 78vh);
+  min-height: 420px;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: #0a0e18;
+}
+/* Compact dashboard embeds still get a usable map */
+.radar-panel.radar-compact .radar-stage {
+  height: min(640px, 72vh);
+  min-height: 380px;
+}
+
+/* Quick layer chips above the map */
+.ventusky-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0 0 0.55rem;
+  align-items: center;
+}
+.ventusky-quick .chip-btn {
+  font-size: 0.78rem;
+  padding: 0.35rem 0.6rem;
+}
+
+/* Ventusky model embed â€” fills radar stage (small panel + mobile) */
+.radar-panel.has-ventusky .radar-stage {
+  height: min(640px, 72vh);
+  min-height: 360px;
+}
+.radar-panel.radar-compact.has-ventusky .radar-stage {
+  height: min(560px, 68vh);
+  min-height: 340px;
+}
+.radar-panel.is-fullscreen.has-ventusky .radar-stage {
+  height: 100%;
+  min-height: 0;
+  flex: 1;
+}
+
+.ventusky-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  background: #0b1220;
+  /* Allow iframe to receive touch on iOS */
+  touch-action: manipulation;
+}
+.ventusky-frame-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 280px;
+  width: 100%;
+  overflow: hidden;
+  background: #0b1220;
+}
+.ventusky-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #0b1220;
+  /* Critical for touch panning inside iframe */
+  touch-action: auto;
+  pointer-events: auto;
+}
+.ventusky-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.45rem 0.65rem;
+  padding-bottom: max(0.45rem, env(safe-area-inset-bottom, 0px));
+  background: rgba(11, 18, 32, 0.97);
+  border-top: 1px solid var(--border);
+  font-size: 0.78rem;
+  z-index: 2;
+}
+.ventusky-credit {
+  color: var(--text-mute);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ventusky-credit strong {
+  color: var(--text);
+  font-weight: 650;
+}
+.ventusky-by {
+  color: var(--text-mute);
+}
+.ventusky-bar-actions {
+  display: flex;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+.ventusky-open {
+  text-decoration: none;
+  font-size: 0.75rem;
+  padding: 0.3rem 0.6rem !important;
+}
+
+@media (max-width: 720px) {
+  .radar-panel.has-ventusky .radar-stage,
+  .radar-panel.radar-compact.has-ventusky .radar-stage {
+    height: min(70dvh, 560px);
+    min-height: 320px;
+  }
+  .ventusky-frame-wrap {
+    min-height: 260px;
+  }
+  .ventusky-quick {
+    gap: 0.3rem;
+  }
+  .ventusky-quick .chip-btn {
+    flex: 1 1 auto;
+    justify-content: center;
+    min-width: calc(20% - 0.3rem);
+  }
+}
+
+.radar-map {
+  width: 100%;
+  height: 100%;
+  background: #0a0e18;
+  font-family: var(--font);
+}
+
+.radar-map .leaflet-control-attribution {
+  background: rgba(0, 0, 0, 0.55) !important;
+  color: rgba(255, 255, 255, 0.65) !important;
+  font-size: 10px !important;
+}
+.radar-map .leaflet-control-attribution a {
+  color: #7dd3fc !important;
+}
+.radar-map .leaflet-control-zoom a {
+  background: rgba(12, 18, 32, 0.9) !important;
+  color: #fff !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+.radar-map .leaflet-control-zoom a:hover {
+  background: rgba(30, 40, 60, 0.95) !important;
+}
+
+/* Crisp radar tiles */
+.radar-tiles {
+  image-rendering: auto;
+  filter: contrast(1.08) saturate(1.12);
+}
+
+/* WeatherWise-style: punchy NEXRAD greens→yellow→red→magenta on a dim map */
+.radar-panel.radar-chaser-style .radar-tiles,
+.radar-panel.radar-chaser-style .radar-chaser-colors {
+  filter: contrast(1.22) saturate(1.45) brightness(1.06);
+}
+.radar-panel.radar-chaser-style .leaflet-tile-pane > .leaflet-layer:first-child {
+  /* Dim basemap so radar pops (like chaser apps) */
+  filter: brightness(0.78) contrast(1.08) saturate(0.85);
+}
+.radar-panel.radar-chaser-style .radar-stage {
+  box-shadow:
+    0 0 0 1px rgba(56, 189, 248, 0.12),
+    0 16px 48px rgba(0, 0, 0, 0.45);
+}
+.legend-gradient.legend-chaser {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+/* Frame stack layers â€” GPU-friendly compositing for video-like fades */
+.radar-frame-layer {
+  will-change: opacity;
+  transform: translateZ(0);
+}
+
+.radar-buffer-bar {
+  position: absolute;
+  top: 52px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 450;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  background: rgba(8, 12, 22, 0.88);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  padding: 0.55rem 0.9rem;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  backdrop-filter: blur(10px);
+  min-width: 180px;
+  pointer-events: none;
+}
+
+.radar-buffer-track {
+  width: 100%;
+  height: 4px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.radar-buffer-fill {
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #38bdf8, #818cf8);
+  transition: width 0.2s ease;
+}
+
+.frame-count {
+  font-size: 0.68rem;
+  color: var(--text-mute);
+  font-variant-numeric: tabular-nums;
+  margin-left: 0.15rem;
+}
+
+.radar-overlay-msg {
+  position: absolute;
+  inset: 0;
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  background: rgba(8, 12, 22, 0.75);
+  backdrop-filter: blur(4px);
+  font-size: 0.95rem;
+}
+.radar-overlay-msg.error {
+  color: var(--danger);
+}
+.radar-overlay-msg button {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  border-radius: 8px;
+  padding: 0.4rem 0.9rem;
+  cursor: pointer;
+}
+
+.radar-legend {
+  position: absolute;
+  left: 12px;
+  bottom: 28px;
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgba(8, 12, 22, 0.78);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.35rem 0.55rem;
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  backdrop-filter: blur(8px);
+}
+.legend-gradient {
+  width: 100px;
+  height: 8px;
+  border-radius: 4px;
+}
+.severe-map-legend {
+  position: absolute;
+  left: 12px;
+  bottom: 52px;
+  z-index: 400;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.65rem;
+  max-width: min(92%, 420px);
+  background: rgba(8, 12, 22, 0.82);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.65rem;
+  color: rgba(226, 232, 240, 0.85);
+  backdrop-filter: blur(8px);
+}
+.severe-map-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.sev-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 8px;
+  border-radius: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+}
+.sev-swatch.tor {
+  background: rgba(220, 38, 38, 0.75);
+  border-color: #ef4444;
+}
+.sev-swatch.svr {
+  background: rgba(245, 158, 11, 0.7);
+  border-color: #fbbf24;
+}
+.sev-swatch.ff {
+  background: rgba(22, 163, 74, 0.7);
+  border-color: #22c55e;
+}
+.sev-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #f472b6;
+  border: 1px solid #0f172a;
+}
+/* Velocity sits in a high pane; no screen blend (that hid dark/black tile backgrounds) */
+.radar-velocity-tiles {
+  image-rendering: auto;
+  mix-blend-mode: normal !important;
+}
+.leaflet-pane.solara-velocity {
+  z-index: 450 !important;
+}
+@media (max-width: 520px) {
+  .severe-map-legend {
+    bottom: 48px;
+    font-size: 0.6rem;
+    max-width: 70%;
+  }
+}
+
+.radar-time-badge {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: rgba(8, 12, 22, 0.82);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  padding: 0.4rem 0.85rem;
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  font-weight: 500;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+}
+.pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #64748b;
+}
+.pulse.on {
+  background: #22c55e;
+  box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.5);
+  animation: pulse 1.4s ease infinite;
+}
+.nowcast-tag {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.15);
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+}
+
+.radar-controls {
+  margin-top: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.radar-mapbox-hint {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+.radar-mapbox-hint code {
+  font-size: 0.72rem;
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.playback {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.play-btn {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 0;
+  background: linear-gradient(135deg, #38bdf8, #6366f1);
+  color: #fff;
+  font-size: 0.85rem;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: 0 4px 16px rgba(56, 189, 248, 0.35);
+}
+.play-btn:hover {
+  filter: brightness(1.08);
+}
+
+.step-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.timeline {
+  flex: 1;
+  min-width: 80px;
+  accent-color: var(--accent);
+  height: 6px;
+  cursor: pointer;
+}
+
+.speed-group {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.radar-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  font-size: 0.82rem;
+}
+
+.radar-options .opt {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--text-dim);
+}
+.radar-options .opt input[type='range'] {
+  width: 80px;
+  accent-color: var(--accent);
+}
+.radar-options select {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.3rem 0.45rem;
+  color: #fff;
+  outline: none;
+}
+.radar-options select option {
+  background: #121a2a;
+  color: #fff;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--text-dim);
+  cursor: pointer;
+  user-select: none;
+}
+.toggle input {
+  accent-color: var(--accent);
+}
+
+/* States */
+.banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-sm);
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+.banner.error {
+  background: rgba(127, 29, 29, 0.45);
+  border: 1px solid rgba(248, 113, 113, 0.4);
+}
+.banner button {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 0.35rem 0.7rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.empty-state,
+.loading-state {
+  text-align: center;
+  padding: 4rem 1.5rem;
+  background: var(--glass);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  backdrop-filter: blur(12px);
+}
+.empty-state h1 {
+  margin: 0 0 0.5rem;
+  font-size: 1.75rem;
+}
+.empty-state p {
+  color: var(--text-dim);
+  margin: 0 0 1.25rem;
+}
+
+.primary-btn {
+  border: 0;
+  background: linear-gradient(135deg, #38bdf8, #6366f1);
+  color: #fff;
+  font-weight: 650;
+  padding: 0.7rem 1.4rem;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 6px 24px rgba(56, 189, 248, 0.3);
+}
+.primary-btn:hover {
+  filter: brightness(1.08);
+}
+
+.spinner {
+  width: 22px;
+  height: 22px;
+  border: 2.5px solid rgba(255, 255, 255, 0.15);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+}
+.spinner.large {
+  width: 40px;
+  height: 40px;
+  margin: 0 auto 1rem;
+}
+
+.credits {
+  font-size: 0.75rem;
+  color: var(--text-mute);
+  line-height: 1.5;
+  padding: 0.25rem 0.5rem;
+}
+.credits p {
+  margin: 0 0 0.35rem;
+}
+.credits .tiny {
+  font-size: 0.68rem;
+  opacity: 0.8;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(34, 197, 94, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+  }
+}
+
+/* Responsive */
+@media (max-width: 1100px) {
+  .hide-md {
+    display: none !important;
+  }
+}
+
+@media (max-width: 980px) {
+  .app {
+    --topbar-h: 4.75rem; /* brand + search stack can wrap */
+  }
+  .topbar {
+    width: min(calc(100% - 1rem), 1280px);
+    max-width: calc(100% - 1rem);
+  }
+  .app-shell {
+    padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+    padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+    padding-bottom: max(2.25rem, calc(env(safe-area-inset-bottom, 0px) + 1rem));
+  }
+  .dashboard {
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+    max-width: 100%;
+  }
+  .panel,
+  .glance-modules,
+  .priority-stack,
+  .favorites-mobile-slot {
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+  .topbar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    border-radius: 16px;
+    gap: 0.4rem 0.5rem;
+    /* Keep fixed offset under alert bar — do not override to a bare rem */
+    top: calc(var(--alert-bar-h, 0px) + var(--topbar-offset, 0.4rem));
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+  .brand-tag {
+    display: none;
+  }
+  .brand strong {
+    font-size: 0.95rem;
+  }
+  .search-bar {
+    max-width: none;
+  }
+  .hide-sm {
+    display: none !important;
+  }
+}
+
+@media (max-width: 720px) {
+  .app {
+    /* Two-row mobile topbar: brand/actions + search */
+    --topbar-h: 6.1rem;
+  }
+  /* More screen for weather — tagline is desktop-only */
+  .brand-promise {
+    display: none;
+  }
+  .wet-decision-row {
+    gap: 0.65rem;
+  }
+  .wet-decision-icon {
+    width: 2.6rem;
+    height: 2.6rem;
+    font-size: 1.25rem;
+  }
+  .topbar {
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+    grid-template-areas:
+      'brand actions'
+      'search search';
+    gap: 0.45rem 0.4rem;
+    padding: 0.45rem 0.5rem;
+    align-items: center;
+    overflow: visible;
+  }
+  .topbar-left {
+    grid-area: brand;
+    padding-left: 0.05rem;
+    max-width: min(52%, 14rem);
+  }
+  .brand {
+    padding-left: 0.05rem;
+    gap: 0.3rem;
+    max-width: none;
+    min-width: 0;
+  }
+  .brand-mark {
+    width: 42px;
+    height: 42px;
+  }
+  .brand strong {
+    font-size: 0.92rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .topbar-right {
+    grid-area: actions;
+    gap: 0.2rem;
+    justify-self: end;
+    max-width: min(48%, 12rem);
+  }
+  .search-bar {
+    grid-area: search;
+    max-width: none;
+    width: 100%;
+    min-width: 0;
+    justify-self: stretch;
+  }
+  .search-input-wrap {
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .search-input {
+    font-size: 16px; /* avoid iOS zoom on focus */
+  }
+  /* Drop radar/stargaze chips from top bar — body modes row + Settings → Explore */
+  .quick-nav {
+    display: none !important;
+  }
+  .mobile-modes-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    align-items: center;
+    margin: 0.15rem 0 0.55rem;
+  }
+  .mobile-mode-chip {
+    text-decoration: none;
+    font-weight: 650;
+    font-size: 0.82rem;
+    padding: 0.45rem 0.7rem;
+    min-height: 2.4rem;
+  }
+  .mobile-mode-stargaze {
+    border-color: rgba(167, 139, 250, 0.45);
+    background: linear-gradient(
+      135deg,
+      rgba(99, 102, 241, 0.22),
+      rgba(167, 139, 250, 0.14)
+    );
+  }
+  /* Slim action strip: Account + â˜… + Refresh + âš™ */
+  .topbar-desktop-only {
+    display: none !important;
+  }
+  .topbar-mobile-only {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+  .settings-bar {
+    gap: 0.2rem;
+  }
+  .settings-bar .unit-toggle {
+    width: 100%;
+  }
+  /* Desktop dropdown off; use bottom sheet on phones */
+  .settings-more-desktop {
+    display: none !important;
+  }
+  .settings-sheet-root {
+    display: block;
+  }
+  .favorites-mobile-slot {
+    display: block;
+    margin: 0 0 0.75rem;
+  }
+  .favorites-desktop-slot {
+    display: none !important;
+  }
+  /* Keep multi-day + sun/AQI high in the mobile feed (not buried under sidebar stack) */
+  .daily-mobile-slot,
+  .outdoor-mobile-slot {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3, 1rem);
+  }
+  .daily-desktop-slot,
+  .outdoor-desktop-slot {
+    display: none !important;
+  }
+  .favorites-mobile-slot .favorites-panel {
+    margin-bottom: 0;
+  }
+  .favorites-list {
+    max-height: none;
+  }
+  /* Horizontal chip-style picks â€” faster than tall list on phones */
+  .favorites-mobile-slot .favorites-list {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 0.45rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 0.15rem;
+    scrollbar-width: thin;
+  }
+  .favorites-mobile-slot .favorites-list li {
+    flex: 0 0 auto;
+    min-width: 9.5rem;
+    max-width: 12rem;
+    border-radius: 12px;
+    margin: 0;
+  }
+  .favorites-mobile-slot .fav-main {
+    padding: 0.55rem 0.65rem;
+  }
+  .favorites-mobile-slot .fav-meta {
+    font-size: 0.68rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .favorites-mobile-slot .panel-header h2 {
+    font-size: 0.95rem;
+  }
+  .account-btn {
+    max-width: none;
+  }
+  .account-btn.account-signin {
+    padding: 0.35rem 0.55rem;
+    gap: 0.25rem;
+  }
+}
+
+@media (max-width: 560px) {
+  .app {
+    --topbar-h: 6rem;
+    --topbar-offset: 0.35rem;
+  }
+  .topbar {
+    width: min(calc(100% - 0.9rem), 1280px);
+    max-width: calc(100% - 0.9rem);
+    border-radius: 14px;
+  }
+  .app-shell {
+    padding-left: max(0.55rem, env(safe-area-inset-left, 0px));
+    padding-right: max(0.55rem, env(safe-area-inset-right, 0px));
+    padding-bottom: max(2rem, calc(env(safe-area-inset-bottom, 0px) + 1rem));
+    overflow-x: clip;
+  }
+  .panel {
+    padding: 0.75rem 0.7rem;
+    max-width: 100%;
+    overflow-x: clip;
+  }
+  .topbar {
+    padding: 0.4rem 0.45rem;
+    gap: 0.4rem;
+    border-radius: 14px;
+  }
+  /* Daily row: keep inside phone width */
+  .daily-row {
+    grid-template-columns: minmax(3rem, 3.8rem) 2.15rem 1.6rem 1.85rem minmax(1.5rem, 1fr) 2rem;
+    gap: 0.15rem;
+    padding: 0.35rem 0.1rem;
+    font-size: 0.82rem;
+  }
+  .daily-row .w3d-sm {
+    --w3d-size: 30px;
+  }
+  .daily-row .d-icon {
+    width: 2.15rem;
+    height: 2.15rem;
+  }
+  .d-day {
+    font-size: 0.78rem;
+  }
+  .d-day-sub {
+    font-size: 0.6rem;
+  }
+  .radar-options .opt {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .radar-options select {
+    max-width: min(100%, 11rem);
+  }
+  .radar-options .opt input[type='range'] {
+    width: min(80px, 28vw);
+  }
+  .current-weather,
+  .current-hero {
+    padding: 0.95rem 0.85rem 1rem;
+    max-width: 100%;
+  }
+  .current-main,
+  .current-top,
+  .temp-block {
+    max-width: 100%;
+    min-width: 0;
+  }
+  .glance-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0.45rem;
+  }
+  .glance-card {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+  }
+  .week-strip-row {
+    max-width: 100%;
+  }
+  .playback {
+    max-width: 100%;
+    flex-wrap: wrap;
+  }
+  .playback .timeline {
+    min-width: 0;
+    flex: 1 1 8rem;
+    max-width: 100%;
+  }
+  /* Avoid 100vw (includes scrollbar / causes sideways scroll on iOS) */
+  .settings-more-menu,
+  .settings-sheet {
+    max-width: min(100%, 100%) !important;
+  }
+  .account-label {
+    display: none;
+  }
+  .account-btn.account-signin {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    justify-content: center;
+  }
+  .account-signin-icon {
+    font-size: 1rem;
+    line-height: 1;
+  }
+  .icon-chip {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+  }
+  .settings-bar .unit-toggle button {
+    padding: 0.4rem 0.35rem;
+    font-size: 0.78rem;
+  }
+  .radar-stage {
+    height: min(560px, 70vh);
+    min-height: 360px;
+  }
+  .radar-panel.radar-compact .radar-stage {
+    height: min(520px, 68vh);
+    min-height: 340px;
+  }
+  .daily-row {
+    grid-template-columns: minmax(4.4rem, 4.9rem) 2.65rem 1.85rem 2.05rem minmax(3.2rem, 1fr) 2.2rem;
+    gap: 0.3rem;
+    font-size: 0.82rem;
+    min-height: 2.85rem;
+  }
+  .d-icon {
+    width: 2.65rem;
+    height: 2.65rem;
+  }
+  .daily-row .w3d-sm {
+    --w3d-size: 40px;
+  }
+  .temp-range {
+    max-width: 6rem;
+  }
+  .d-day {
+    font-size: 0.78rem;
+  }
+  .pollutant-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .radar-options {
+    gap: 0.55rem;
+  }
+  .playback {
+    flex-wrap: wrap;
+  }
+  .timeline {
+    order: 10;
+    width: 100%;
+    flex: 1 1 100%;
+  }
+  .settings-bar .chip-toggle {
+    display: none !important;
+  }
+  /* Do NOT hide inactive theme buttons â€” users need all settings on mobile */
+}
+
+@media (min-width: 721px) {
+  .topbar-mobile-only {
+    display: none !important;
+  }
+  .settings-sheet-root {
+    display: none !important;
+  }
+  .favorites-mobile-slot {
+    display: none !important;
+  }
+  .favorites-desktop-slot {
+    display: block !important;
+  }
+  .daily-mobile-slot,
+  .outdoor-mobile-slot {
+    display: none !important;
+  }
+  .daily-desktop-slot,
+  .outdoor-desktop-slot {
+    display: contents;
+  }
+}

@@ -1,0 +1,121 @@
+/**
+ * Mobile performance mode
+ * Split from App.css (legacy) — original lines 3813–3929
+ * Redesign layers (tokens + redesign*.css) load after this stack.
+ */
+/* ===== Mobile performance mode (class set in main.tsx) ===== */
+html.mobile-perf .bg-noise,
+html.mobile-perf .ambient-orbs,
+html.mobile-perf .bg-scrim {
+  display: none !important;
+}
+
+.radar-collapsed-hint {
+  margin: 0.35rem 0 0.75rem;
+  padding: 0.75rem;
+  font-size: 0.88rem;
+  border-radius: 12px;
+  border: 1px dashed var(--border);
+  background: rgba(15, 23, 42, 0.4);
+}
+
+/* Mobile radar gate â€” light panel with a clear View radar action */
+.radar-cta-panel {
+  text-align: center;
+}
+.radar-cta-copy {
+  margin: 0.15rem 0 0.85rem;
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+.radar-cta-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  justify-content: center;
+  align-items: center;
+}
+.radar-view-btn {
+  min-width: min(100%, 16rem);
+  padding: 0.9rem 1.25rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+html.mobile-perf .topbar,
+html.mobile-perf .panel,
+html.mobile-perf .settings-more-menu,
+html.mobile-perf .settings-sheet,
+html.mobile-perf .alert-top-bar,
+html.mobile-perf .chip-btn,
+html.mobile-perf .search-input-wrap {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html.mobile-perf .topbar {
+  background: rgba(11, 18, 32, 0.97);
+}
+
+html.mobile-perf[data-theme='light'] .topbar {
+  background: rgba(248, 250, 252, 0.97);
+}
+
+html.mobile-perf .panel {
+  animation: none !important;
+  transition: none !important;
+  box-shadow: none !important;
+  background: rgba(15, 23, 42, 0.92);
+}
+
+html.mobile-perf[data-theme='light'] .panel {
+  background: rgba(255, 255, 255, 0.94);
+}
+
+html.mobile-perf .app {
+  transition: none !important;
+}
+
+html.mobile-perf .hourly-scroll,
+html.mobile-perf .home-pins-scroll {
+  scroll-behavior: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Reduce paint cost while scrolling lists */
+html.mobile-perf .hourly-card,
+html.mobile-perf .pin-card {
+  box-shadow: none !important;
+  transition: none !important;
+}
+
+/* Kill continuous CSS animations that burn battery */
+html.mobile-perf .pulse,
+html.mobile-perf .pulse.on,
+html.mobile-perf .spinner:not(.large) {
+  animation: none !important;
+}
+
+html.mobile-perf .app {
+  /* Solid bg is cheaper than animated gradients */
+  background-attachment: scroll !important;
+}
+
+/* Reduce compositing layers while scrolling */
+html.mobile-perf .topbar {
+  will-change: auto;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background: #0b1220 !important;
+}
+
+html.mobile-perf[data-theme='light'] .topbar {
+  background: #f1f5f9 !important;
+}
+
+/* Radar crossfade layers â€” no CSS transition (opacity driven by rAF) */
+.radar-tiles.radar-fade-a,
+.radar-tiles.radar-fade-b {
+  transition: none !important;
+}

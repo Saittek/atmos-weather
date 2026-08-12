@@ -1,6 +1,9 @@
 /**
- * Solara light theme — surfaces, chips, text contrast.
- * Loaded after App.css so hard-coded dark leftovers get corrected.
+ * Solara light theme — residual overrides after token + redesign layers.
+ *
+ * Prefer CSS variables from styles/tokens.css. Avoid !important unless a
+ * legacy rule hard-codes dark colors (map chrome, globe HUD, hazard tiles).
+ * Loaded after legacy.css; redesign*.css still loads after this file.
  */
 
 [data-theme='light'] {
@@ -14,7 +17,7 @@
 }
 
 [data-theme='light'] body {
-  background: var(--bg-body, #e8eef7);
+  background: var(--bg-body);
 }
 
 [data-theme='light'] .bg-noise {
@@ -28,12 +31,13 @@
     linear-gradient(90deg, rgba(15, 23, 42, 0.12) 1px, transparent 1px);
 }
 
-/* Shell chrome */
+/* Shell chrome — tokens only */
 [data-theme='light'] .topbar,
 [data-theme='light'] .settings-more-menu,
 [data-theme='light'] .settings-sheet,
 [data-theme='light'] .search-results,
-[data-theme='light'] .auth-modal {
+[data-theme='light'] .auth-modal,
+[data-theme='light'] .account-popover {
   background: var(--glass-strong);
   color: var(--text);
   border-color: var(--border-strong);
@@ -45,8 +49,7 @@
 }
 
 [data-theme='light'] .settings-sheet {
-  background: var(--bg-elevated, #fff);
-  color: var(--text);
+  background: var(--bg-elevated);
   box-shadow: 0 -12px 40px rgba(15, 23, 42, 0.14);
 }
 
@@ -64,11 +67,10 @@
       rgba(248, 250, 252, 0.9) 100%
     ),
     var(--glass);
-  box-shadow:
-    0 4px 16px rgba(15, 23, 42, 0.07),
-    inset 0 1px 0 rgba(255, 255, 255, 1);
+  box-shadow: var(--shadow-2);
 }
 
+/* Typography that used white gradient text */
 [data-theme='light'] .panel-header h2,
 [data-theme='light'] .panel strong,
 [data-theme='light'] .condition,
@@ -79,10 +81,14 @@
 [data-theme='light'] .settings-sheet-head strong,
 [data-theme='light'] .settings-more-row strong {
   color: var(--text);
+  background: none;
+  -webkit-background-clip: unset;
+  background-clip: unset;
 }
 
 [data-theme='light'] .temp-big {
   text-shadow: 0 2px 12px rgba(15, 23, 42, 0.08);
+  filter: none;
 }
 
 [data-theme='light'] .place-name {
@@ -103,7 +109,7 @@
   filter: drop-shadow(0 10px 18px rgba(15, 23, 42, 0.12));
 }
 
-/* Chips / buttons / inputs */
+/* Chips — token-driven, no !important (redesign cascade handles most) */
 [data-theme='light'] .chip-btn,
 [data-theme='light'] .chip-toggle,
 [data-theme='light'] .unit-toggle,
@@ -112,25 +118,25 @@
 [data-theme='light'] .search-input-wrap,
 [data-theme='light'] .theme-toggle button,
 [data-theme='light'] .density-toggle button {
-  background: var(--chip-bg) !important;
-  color: var(--text) !important;
-  border-color: var(--border) !important;
+  background: var(--chip-bg);
+  color: var(--text);
+  border-color: var(--border);
 }
 
 [data-theme='light'] .chip-btn:hover,
 [data-theme='light'] .icon-chip:hover,
 [data-theme='light'] .unit-toggle button:hover,
 [data-theme='light'] .theme-toggle button:hover {
-  background: var(--chip-bg-hover) !important;
+  background: var(--chip-bg-hover);
 }
 
 [data-theme='light'] .chip-btn.active,
 [data-theme='light'] .unit-toggle button.active,
 [data-theme='light'] .theme-toggle button.active,
 [data-theme='light'] .density-toggle button.active {
-  background: var(--chip-active-bg) !important;
-  border-color: rgba(3, 105, 161, 0.45) !important;
-  color: #0c4a6e !important;
+  background: var(--chip-active-bg);
+  border-color: var(--border-accent);
+  color: #0c4a6e;
   font-weight: 700;
 }
 
@@ -144,11 +150,8 @@
 [data-theme='light'] select,
 [data-theme='light'] textarea {
   color: var(--text);
-}
-
-[data-theme='light'] .auth-form input {
   background: var(--input-bg);
-  color: var(--text);
+  border-color: var(--border);
 }
 
 [data-theme='light'] .search-input::placeholder,
@@ -161,26 +164,30 @@
   border-top-color: var(--accent);
 }
 
-[data-theme='light'] .settings-more-row {
+[data-theme='light'] .settings-more-row,
+[data-theme='light'] .module-prefs-row {
   background: var(--surface);
   border-color: var(--border);
   color: var(--text);
 }
 
-[data-theme='light'] .settings-more-row:hover {
+[data-theme='light'] .settings-more-row:hover,
+[data-theme='light'] .module-prefs-row:hover {
   background: var(--surface-2);
 }
 
-/* Cards / lists */
+/* Lists / cards */
 [data-theme='light'] .hourly-card,
 [data-theme='light'] .pin-card,
 [data-theme='light'] .wxwise-site-chip,
-[data-theme='light'] .allergy-risk-pill {
+[data-theme='light'] .allergy-risk-pill,
+[data-theme='light'] .favorites-list li {
   background: var(--surface);
   border-color: var(--border);
   color: var(--text);
 }
 
+[data-theme='light'] .hourly-card.is-now,
 [data-theme='light'] .hourly-card:first-child {
   background: linear-gradient(180deg, rgba(3, 105, 161, 0.12), rgba(3, 105, 161, 0.04));
   border-color: rgba(3, 105, 161, 0.35);
@@ -201,7 +208,9 @@
   background: rgba(3, 105, 161, 0.06);
 }
 
-[data-theme='light'] .skeleton {
+[data-theme='light'] .skeleton,
+[data-theme='light'] .skel,
+[data-theme='light'] .skeleton-line {
   background: linear-gradient(
     90deg,
     rgba(15, 23, 42, 0.05) 0%,
@@ -232,7 +241,10 @@
 [data-theme='light'] .settings-more-label,
 [data-theme='light'] .settings-more-row em,
 [data-theme='light'] .empty-lead,
-[data-theme='light'] .empty-state-rich {
+[data-theme='light'] .empty-state-rich,
+[data-theme='light'] .module-prefs-row em,
+[data-theme='light'] .current-source-line,
+[data-theme='light'] .today-hero-source {
   color: var(--text-mute);
 }
 
@@ -246,7 +258,7 @@
 }
 
 [data-theme='light'] .rain-hour-amt.snow {
-  color: #0369a1 !important;
+  color: #0369a1;
 }
 
 [data-theme='light'] a {
@@ -255,7 +267,7 @@
 
 [data-theme='light'] .install-widget-link,
 [data-theme='light'] .onboard-ios-hint a {
-  color: #0369a1;
+  color: var(--accent);
 }
 
 [data-theme='light'] .auth-error {
@@ -264,52 +276,55 @@
   color: #991b1b;
 }
 
-/* Map embeds on dashboard keep readable toolbar chips */
+/* Dashboard radar toolbar (not full-page map stage) */
 [data-theme='light'] .radar-panel:not(.is-fullscreen):not(.radar-page-mode) {
   color: var(--text);
 }
 
 [data-theme='light'] .radar-panel:not(.is-fullscreen):not(.radar-page-mode) .chip-btn {
-  background: var(--chip-bg) !important;
-  color: var(--text) !important;
+  background: var(--chip-bg);
+  color: var(--text);
 }
 
-/* Full-page radar — light chrome; map stage keeps map-chrome for contrast */
+/* Full-page radar chrome — keep map stage dark for contrast */
 [data-theme='light'] .radar-page {
-  background: var(--page-bg) !important;
-  color: var(--text) !important;
+  background: var(--page-bg);
+  color: var(--text);
 }
 
 [data-theme='light'] .radar-page-bar,
 [data-theme='light'] .radar-panel.radar-page-mode {
-  background: var(--page-bar-bg) !important;
-  color: var(--text) !important;
+  background: var(--page-bar-bg);
+  color: var(--text);
   border-color: var(--page-bar-border);
 }
 
 [data-theme='light'] .radar-page-title strong,
 [data-theme='light'] .radar-panel.radar-page-mode .radar-header h2 {
-  color: var(--text) !important;
+  color: var(--text);
+  background: none;
+  -webkit-background-clip: unset;
+  background-clip: unset;
 }
 
 [data-theme='light'] .radar-page-title span,
 [data-theme='light'] .radar-panel.radar-page-mode .radar-sub {
-  color: var(--page-muted) !important;
+  color: var(--page-muted);
 }
 
 [data-theme='light'] .radar-page .chip-btn,
 [data-theme='light'] .radar-page-bar .chip-btn,
 [data-theme='light'] .radar-panel.radar-page-mode .chip-btn {
-  background: var(--chip-bg) !important;
-  color: var(--text) !important;
-  border-color: var(--border) !important;
+  background: var(--chip-bg);
+  color: var(--text);
+  border-color: var(--border);
 }
 
 [data-theme='light'] .radar-page .chip-btn.active,
 [data-theme='light'] .radar-panel.radar-page-mode .chip-btn.active {
-  background: var(--chip-active-bg) !important;
-  color: #0c4a6e !important;
-  border-color: rgba(3, 105, 161, 0.45) !important;
+  background: var(--chip-active-bg);
+  color: #0c4a6e;
+  border-color: var(--border-accent);
 }
 
 [data-theme='light'] .radar-panel.radar-page-mode .radar-stage,
@@ -317,20 +332,19 @@
   background: #0f172a;
 }
 
+/* Leaflet zoom (map libs hard-code dark styles) */
 [data-theme='light'] .radar-map .leaflet-control-zoom a {
-  background: rgba(255, 255, 255, 0.95) !important;
-  color: #0f172a !important;
-  border-color: rgba(15, 23, 42, 0.15) !important;
+  background: rgba(255, 255, 255, 0.95);
+  color: #0f172a;
+  border-color: rgba(15, 23, 42, 0.15);
 }
 
-/* Storm mode */
 [data-theme='light'] .storm-chip.storm-on {
-  color: #991b1b !important;
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.16), rgba(168, 85, 247, 0.12)) !important;
-  border-color: rgba(185, 28, 28, 0.45) !important;
+  color: #991b1b;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.16), rgba(168, 85, 247, 0.12));
+  border-color: rgba(185, 28, 28, 0.45);
 }
 
-/* Rain strip */
 [data-theme='light'] .rain-hour-track {
   background: rgba(15, 23, 42, 0.08);
 }
@@ -339,7 +353,6 @@
   background: rgba(15, 23, 42, 0.06);
 }
 
-/* Chat FAB when open */
 [data-theme='light'] .area-chat-fab.is-open {
   background: #ffffff;
   color: #0f172a;
@@ -351,12 +364,13 @@
   border-color: #ffffff;
 }
 
-/* Onboarding */
-[data-theme='light'] .onboard-backdrop {
+[data-theme='light'] .onboard-backdrop,
+[data-theme='light'] .first-run-coach {
   background: rgba(15, 23, 42, 0.45);
 }
 
-[data-theme='light'] .onboard-card {
+[data-theme='light'] .onboard-card,
+[data-theme='light'] .first-run-coach-card {
   background:
     linear-gradient(160deg, rgba(3, 105, 161, 0.08), transparent 45%),
     #ffffff;
@@ -365,15 +379,16 @@
   box-shadow: 0 20px 48px rgba(15, 23, 42, 0.15);
 }
 
-[data-theme='light'] .onboard-card p {
+[data-theme='light'] .onboard-card p,
+[data-theme='light'] .first-run-coach-card p {
   color: var(--text-dim);
 }
 
-[data-theme='light'] .onboard-progress span {
+[data-theme='light'] .onboard-progress span,
+[data-theme='light'] .first-run-step-dot {
   background: rgba(15, 23, 42, 0.12);
 }
 
-/* Scrollbars */
 [data-theme='light'] ::-webkit-scrollbar-thumb {
   background: rgba(15, 23, 42, 0.22);
 }
@@ -386,76 +401,70 @@
   scrollbar-color: rgba(15, 23, 42, 0.28) transparent;
 }
 
-/* Mobile perf solids */
-html.mobile-perf[data-theme='light'] .panel {
-  background: #ffffff !important;
-  color: #0f172a;
-}
-
+/* Mobile perf: solid white surfaces (blur is expensive) */
+html.mobile-perf[data-theme='light'] .panel,
 html.mobile-perf[data-theme='light'] .topbar {
-  background: #ffffff !important;
+  background: #ffffff;
   color: #0f172a;
 }
 
-/* Brand mark */
 [data-theme='light'] .brand-mark {
   box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.1), 0 2px 10px rgba(15, 23, 42, 0.12);
 }
 
-/* Select controls */
 [data-theme='light'] select {
   background-color: var(--surface-solid);
   color: var(--text);
   border-color: var(--border);
 }
 
-/* Map chunk fallback */
 [data-theme='light'] .map-chunk-fallback {
   background: var(--surface);
   color: var(--text-dim);
   border-color: var(--border);
 }
 
-/* Wxwise chips */
 [data-theme='light'] .wxwise-site-chip.active {
   color: #0e7490;
   background: rgba(8, 145, 178, 0.12);
   border-color: rgba(8, 145, 178, 0.4);
 }
 
-/* ===== Globe page (light chrome; canvas can stay vivid) ===== */
+/* ===== Globe page light chrome ===== */
 [data-theme='light'] .globe-page {
-  background: linear-gradient(180deg, #dbeafe 0%, #e2e8f0 40%, #cbd5e1 100%) !important;
-  color: #0f172a !important;
+  background: linear-gradient(180deg, #dbeafe 0%, #e2e8f0 40%, #cbd5e1 100%);
+  color: #0f172a;
 }
 
 [data-theme='light'] .globe-page-bar {
-  background: rgba(255, 255, 255, 0.92) !important;
-  border-bottom-color: rgba(15, 23, 42, 0.12) !important;
-  color: #0f172a !important;
+  background: rgba(255, 255, 255, 0.92);
+  border-bottom-color: rgba(15, 23, 42, 0.12);
+  color: #0f172a;
 }
 
 [data-theme='light'] .globe-page-brand strong {
-  color: #0f172a !important;
+  color: #0f172a;
+  background: none;
+  -webkit-background-clip: unset;
+  background-clip: unset;
 }
 
 [data-theme='light'] .globe-page-brand span {
-  color: rgba(15, 23, 42, 0.6) !important;
+  color: rgba(15, 23, 42, 0.6);
 }
 
 [data-theme='light'] .globe-page .chip-btn {
-  background: rgba(15, 23, 42, 0.05) !important;
-  color: #0f172a !important;
-  border-color: rgba(15, 23, 42, 0.14) !important;
+  background: rgba(15, 23, 42, 0.05);
+  color: #0f172a;
+  border-color: rgba(15, 23, 42, 0.14);
 }
 
 [data-theme='light'] .globe-page .chip-btn.active {
-  background: rgba(3, 105, 161, 0.14) !important;
-  color: #0c4a6e !important;
-  border-color: rgba(3, 105, 161, 0.4) !important;
+  background: rgba(3, 105, 161, 0.14);
+  color: #0c4a6e;
+  border-color: rgba(3, 105, 161, 0.4);
 }
 
-/* Floating globe HUD panels — light glass */
 [data-theme='light'] .globe-controls,
 [data-theme='light'] .globe-storm-panel,
 [data-theme='light'] .globe-legend,
@@ -463,10 +472,11 @@ html.mobile-perf[data-theme='light'] .topbar {
 [data-theme='light'] .globe-side-tools .chip-btn,
 [data-theme='light'] .globe-options-trigger,
 [data-theme='light'] .globe-options-menu,
-[data-theme='light'] .globe-options-chip {
-  background: rgba(255, 255, 255, 0.92) !important;
-  color: #0f172a !important;
-  border-color: rgba(15, 23, 42, 0.14) !important;
+[data-theme='light'] .globe-options-chip,
+[data-theme='light'] .globe-eclipse-panel {
+  background: rgba(255, 255, 255, 0.92);
+  color: #0f172a;
+  border-color: rgba(15, 23, 42, 0.14);
   box-shadow: 0 10px 28px rgba(15, 23, 42, 0.1);
 }
 
@@ -475,39 +485,35 @@ html.mobile-perf[data-theme='light'] .topbar {
 [data-theme='light'] .globe-options-heading,
 [data-theme='light'] .globe-timeline-marks,
 [data-theme='light'] .globe-frame-count {
-  color: rgba(15, 23, 42, 0.62) !important;
+  color: rgba(15, 23, 42, 0.62);
 }
 
 [data-theme='light'] .today-hero {
-  background: linear-gradient(155deg, rgba(14, 165, 233, 0.1), rgba(255, 255, 255, 0.92)) !important;
+  background: linear-gradient(155deg, rgba(14, 165, 233, 0.1), rgba(255, 255, 255, 0.92));
 }
+
 [data-theme='light'] .today-chip,
 [data-theme='light'] .outdoor-stat,
-[data-theme='light'] .outdoor-glance-tips li,
-[data-theme='light'] .module-prefs-row {
-  background: rgba(15, 23, 42, 0.04) !important;
-  color: #0f172a !important;
+[data-theme='light'] .outdoor-glance-tips li {
+  background: rgba(15, 23, 42, 0.04);
+  color: #0f172a;
 }
-[data-theme='light'] .today-hero-source,
-[data-theme='light'] .current-source-line,
-[data-theme='light'] .module-prefs-row em {
-  color: rgba(15, 23, 42, 0.55) !important;
-}
+
 [data-theme='light'] .outdoor-verdict-go {
-  color: #15803d !important;
+  color: #15803d;
 }
 [data-theme='light'] .outdoor-verdict-caution {
-  color: #a16207 !important;
+  color: #a16207;
 }
 [data-theme='light'] .outdoor-verdict-avoid {
-  color: #b91c1c !important;
+  color: #b91c1c;
 }
 
 [data-theme='light'] .globe-options-chip.active,
 [data-theme='light'] .globe-options-trigger.active {
-  background: linear-gradient(135deg, rgba(14, 165, 233, 0.28), rgba(56, 189, 248, 0.18)) !important;
-  border-color: rgba(3, 105, 161, 0.45) !important;
-  color: #0c4a6e !important;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.28), rgba(56, 189, 248, 0.18));
+  border-color: rgba(3, 105, 161, 0.45);
+  color: #0c4a6e;
 }
 
 [data-theme='light'] .globe-options-section + .globe-options-section {
@@ -517,16 +523,16 @@ html.mobile-perf[data-theme='light'] .topbar {
 [data-theme='light'] .globe-time,
 [data-theme='light'] .globe-storm-card,
 [data-theme='light'] .globe-storm-panel-head strong {
-  color: #0f172a !important;
+  color: #0f172a;
 }
 
 [data-theme='light'] .globe-storm-card {
-  background: rgba(15, 23, 42, 0.04) !important;
-  border-color: rgba(15, 23, 42, 0.1) !important;
+  background: rgba(15, 23, 42, 0.04);
+  border-color: rgba(15, 23, 42, 0.1);
 }
 
 [data-theme='light'] .globe-storm-card-meta {
-  color: rgba(15, 23, 42, 0.65) !important;
+  color: rgba(15, 23, 42, 0.65);
 }
 
 [data-theme='light'] .globe-speed select {
@@ -541,78 +547,49 @@ html.mobile-perf[data-theme='light'] .topbar {
 }
 
 [data-theme='light'] .globe-canvas .maplibregl-ctrl-group {
-  background: rgba(255, 255, 255, 0.92) !important;
-  border-color: rgba(15, 23, 42, 0.14) !important;
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(15, 23, 42, 0.14);
 }
 
-/* ===== Widget page ===== */
-[data-theme='light'] .widget-page {
-  background: var(--page-bg-grad) !important;
-  color: var(--text) !important;
-}
-
-[data-theme='light'] .widget-bar {
-  background: var(--page-bar-bg) !important;
-  border-bottom-color: var(--page-bar-border) !important;
-  color: var(--text) !important;
-}
-
-[data-theme='light'] .widget-brand,
-[data-theme='light'] .widget-hero h1 {
-  color: var(--text) !important;
-}
-
-[data-theme='light'] .widget-cond {
-  color: var(--text-dim) !important;
-}
-
-[data-theme='light'] .widget-page .chip-btn {
-  background: var(--chip-bg) !important;
-  color: var(--text) !important;
-  border-color: var(--border) !important;
-}
-
-[data-theme='light'] .widget-page .panel {
+/* Widget / chaser / stargaze pages */
+[data-theme='light'] .widget-page,
+[data-theme='light'] .chaser-page {
+  background: var(--page-bg-grad);
   color: var(--text);
 }
 
-[data-theme='light'] .widget-alert {
-  background: rgba(3, 105, 161, 0.12);
-  border-color: rgba(3, 105, 161, 0.35);
-  color: #0c4a6e;
+[data-theme='light'] .widget-bar {
+  background: var(--page-bar-bg);
+  border-bottom-color: var(--page-bar-border);
+  color: var(--text);
 }
 
-/* ===== Storm chaser page ===== */
-[data-theme='light'] .chaser-page {
-  background: var(--page-bg-grad) !important;
-  color: var(--text) !important;
-}
-
+[data-theme='light'] .widget-brand,
+[data-theme='light'] .widget-hero h1,
 [data-theme='light'] .chaser-brand strong {
-  color: var(--text) !important;
+  color: var(--text);
+  background: none;
+  -webkit-background-clip: unset;
+  background-clip: unset;
 }
 
+[data-theme='light'] .widget-cond,
 [data-theme='light'] .chaser-brand span {
-  color: var(--page-muted) !important;
+  color: var(--page-muted);
 }
 
+[data-theme='light'] .widget-page .chip-btn,
 [data-theme='light'] .chaser-page .chip-btn,
 [data-theme='light'] .chaser-page .unit-toggle button {
-  background: var(--chip-bg) !important;
-  color: var(--text) !important;
-  border-color: var(--border) !important;
+  background: var(--chip-bg);
+  color: var(--text);
+  border-color: var(--border);
 }
 
 [data-theme='light'] .chaser-page .chip-btn.active,
 [data-theme='light'] .chaser-page .unit-toggle button.active {
-  background: var(--chip-active-bg) !important;
-  color: #0c4a6e !important;
-}
-
-[data-theme='light'] .chaser-page .panel,
-[data-theme='light'] .chaser-hazard,
-[data-theme='light'] .chaser-section {
-  color: var(--text);
+  background: var(--chip-active-bg);
+  color: #0c4a6e;
 }
 
 [data-theme='light'] .chaser-disclaimer {
@@ -622,363 +599,69 @@ html.mobile-perf[data-theme='light'] .topbar {
 }
 
 [data-theme='light'] .chaser-hazard {
-  background: #ffffff !important;
-  border-color: rgba(15, 23, 42, 0.12) !important;
-  color: #0f172a !important;
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, 0.12);
+  color: #0f172a;
   box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
 }
 
-[data-theme='light'] .chaser-hazard.chaser-level-high {
-  background: rgba(254, 226, 226, 0.85) !important;
-  border-color: rgba(185, 28, 28, 0.35) !important;
+[data-theme='light'] .chaser-hazard.chaser-level-high,
+[data-theme='light'] .chaser-hazard.chaser-level-extreme {
+  background: rgba(254, 226, 226, 0.85);
+  border-color: rgba(185, 28, 28, 0.35);
 }
 
 [data-theme='light'] .chaser-hazard.chaser-level-moderate,
 [data-theme='light'] .chaser-hazard.chaser-level-enhanced {
-  background: rgba(255, 237, 213, 0.9) !important;
-  border-color: rgba(194, 65, 12, 0.3) !important;
+  background: rgba(255, 237, 213, 0.9);
+  border-color: rgba(194, 65, 12, 0.3);
 }
 
 [data-theme='light'] .chaser-hazard.chaser-level-slight {
-  background: rgba(254, 249, 195, 0.85) !important;
-  border-color: rgba(161, 98, 7, 0.28) !important;
+  background: rgba(254, 249, 195, 0.85);
+  border-color: rgba(161, 98, 7, 0.28);
 }
 
 [data-theme='light'] .chaser-hazard-summary,
 [data-theme='light'] .chaser-factor-list,
 [data-theme='light'] .chaser-hazard-one-factor {
-  color: rgba(15, 23, 42, 0.72) !important;
-}
-
-[data-theme='light'] .chaser-level-pill {
-  background: rgba(15, 23, 42, 0.08);
-  color: #0f172a;
-}
-
-[data-theme='light'] .chaser-score-bar {
-  background: rgba(15, 23, 42, 0.1);
-}
-
-[data-theme='light'] .chaser-overall {
-  background: linear-gradient(135deg, rgba(237, 233, 254, 0.95), rgba(255, 255, 255, 0.95));
-  border-color: rgba(15, 23, 42, 0.12);
-  color: #0f172a;
-}
-
-[data-theme='light'] .chaser-overall.chaser-level-high {
-  background: linear-gradient(135deg, rgba(254, 226, 226, 0.95), rgba(255, 255, 255, 0.95));
-  border-color: rgba(185, 28, 28, 0.35);
-}
-
-[data-theme='light'] .chaser-kicker {
-  color: #b91c1c;
-}
-
-[data-theme='light'] .chaser-overall h1,
-[data-theme='light'] .chaser-section h2 {
-  color: #0f172a;
-}
-
-[data-theme='light'] .chaser-loading {
-  color: rgba(15, 23, 42, 0.65);
-}
-
-[data-theme='light'] .chaser-nav-btn {
-  color: #991b1b !important;
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.12), rgba(168, 85, 247, 0.1)) !important;
-  border-color: rgba(185, 28, 28, 0.35) !important;
-}
-
-[data-theme='light'] .earth-nav-btn {
-  color: #0c4a6e !important;
-  background: linear-gradient(145deg, rgba(14, 165, 233, 0.15), rgba(255, 255, 255, 0.9)) !important;
-  border-color: rgba(3, 105, 161, 0.35) !important;
-}
-
-/* Route fallback / error boundary */
-[data-theme='light'] .route-fallback {
-  background: var(--page-bg-grad);
-  color: var(--text);
-}
-
-[data-theme='light'] .error-boundary {
-  background: #e8eef7 !important;
-  color: #0f172a !important;
-}
-
-[data-theme='light'] .error-boundary p {
-  color: rgba(15, 23, 42, 0.7) !important;
-}
-
-/* Map chrome status badges */
-[data-theme='light'] .map-layer-status {
-  background: rgba(255, 255, 255, 0.92);
-  color: #0f172a;
-  border-color: rgba(15, 23, 42, 0.12);
-}
-
-[data-theme='light'] .fire-map-loading {
-  background: rgba(248, 250, 252, 0.75);
-  color: #0f172a;
-}
-
-/* ===== Area chat (light) ===== */
-[data-theme='light'] .area-chat-panel {
-  background: rgba(255, 255, 255, 0.97) !important;
-  border-color: rgba(15, 23, 42, 0.12) !important;
-  color: #0f172a !important;
-  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
-}
-
-[data-theme='light'] .area-chat-head {
-  border-bottom-color: rgba(15, 23, 42, 0.1);
-}
-
-[data-theme='light'] .area-chat-head strong,
-[data-theme='light'] .area-chat-msg p {
-  color: #0f172a !important;
-}
-
-[data-theme='light'] .area-chat-head span,
-[data-theme='light'] .area-chat-meta,
-[data-theme='light'] .area-chat-meta time,
-[data-theme='light'] .area-chat-empty {
-  color: rgba(15, 23, 42, 0.6) !important;
-}
-
-[data-theme='light'] .area-chat-msg {
-  background: rgba(15, 23, 42, 0.04);
-  border-color: rgba(15, 23, 42, 0.08);
-}
-
-[data-theme='light'] .area-chat-msg.mine {
-  background: rgba(3, 105, 161, 0.1);
-  border-color: rgba(3, 105, 161, 0.2);
-}
-
-[data-theme='light'] .area-chat-compose {
-  border-top-color: rgba(15, 23, 42, 0.1);
-  background: rgba(248, 250, 252, 0.95);
-}
-
-[data-theme='light'] .area-chat-compose input {
-  background: #fff;
-  color: #0f172a;
-  border-color: rgba(15, 23, 42, 0.15);
-}
-
-[data-theme='light'] .area-chat-error {
-  background: rgba(254, 226, 226, 0.9);
-  color: #991b1b;
-  border-color: rgba(185, 28, 28, 0.3);
-}
-
-[data-theme='light'] .area-chat-signin p {
-  color: rgba(15, 23, 42, 0.7);
-}
-
-/* Map overlays / radar chrome on light dashboard embeds */
-[data-theme='light'] .radar-time-badge,
-[data-theme='light'] .radar-legend,
-[data-theme='light'] .radar-buffer-bar {
-  background: rgba(255, 255, 255, 0.92) !important;
-  color: #0f172a !important;
-  border-color: rgba(15, 23, 42, 0.12) !important;
-}
-
-[data-theme='light'] .radar-overlay-msg {
-  background: rgba(248, 250, 252, 0.75);
-  color: #0f172a;
-}
-
-[data-theme='light'] .ventusky-bar {
-  background: rgba(255, 255, 255, 0.95);
-  color: #0f172a;
-  border-top-color: rgba(15, 23, 42, 0.1);
-}
-
-[data-theme='light'] .settings-quiet-hours {
-  color: rgba(15, 23, 42, 0.7);
-}
-
-[data-theme='light'] .settings-quiet-hours input[type='time'] {
-  background: #fff;
-  color: #0f172a;
-  border-color: rgba(15, 23, 42, 0.15);
-}
-
-/* Empty / error states */
-[data-theme='light'] .empty-state-rich,
-[data-theme='light'] .muted-center {
   color: rgba(15, 23, 42, 0.72);
 }
 
-/* What matters now — light */
-[data-theme='light'] .what-matters-now {
-  background: #ffffff;
-  border-color: rgba(15, 23, 42, 0.12);
-  color: #0f172a;
-  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
-}
-[data-theme='light'] .what-matters-now.wmn-extreme {
-  background: linear-gradient(135deg, rgba(254, 226, 226, 0.95), #fff);
-  border-color: rgba(185, 28, 28, 0.4);
-}
-[data-theme='light'] .what-matters-now.wmn-severe {
-  background: linear-gradient(135deg, rgba(255, 237, 213, 0.95), #fff);
-  border-color: rgba(194, 65, 12, 0.35);
-}
-[data-theme='light'] .what-matters-now.wmn-moderate {
-  background: linear-gradient(135deg, rgba(254, 249, 195, 0.9), #fff);
-  border-color: rgba(161, 98, 7, 0.3);
-}
-[data-theme='light'] .wmn-kicker,
-[data-theme='light'] .wmn-when {
-  color: rgba(15, 23, 42, 0.58);
-}
-[data-theme='light'] .wmn-event,
-[data-theme='light'] .wmn-action {
-  color: #0f172a;
-}
-[data-theme='light'] .wmn-sev {
-  background: rgba(15, 23, 42, 0.06);
-  border-color: rgba(15, 23, 42, 0.12);
-  color: #0f172a;
-}
-[data-theme='light'] .wmn-action strong {
-  color: #0369a1;
-}
-
-[data-theme='light'] .next-hour-hero {
-  background: linear-gradient(145deg, rgba(224, 242, 254, 0.95), #ffffff);
-  border-color: rgba(3, 105, 161, 0.2);
-  color: #0f172a;
-}
-[data-theme='light'] .next-hour-hero.is-dry {
-  background: linear-gradient(145deg, rgba(220, 252, 231, 0.9), #fff);
-  border-color: rgba(22, 163, 74, 0.25);
-}
-[data-theme='light'] .nh-bar-track {
-  background: rgba(15, 23, 42, 0.08);
-}
-[data-theme='light'] .nh-kicker,
-[data-theme='light'] .nh-label,
-[data-theme='light'] .nh-meta {
-  color: rgba(15, 23, 42, 0.6);
-}
-[data-theme='light'] .model-confidence {
-  background: #fff;
-  border-color: rgba(15, 23, 42, 0.12);
-  color: #0f172a;
-}
-[data-theme='light'] .mc-item {
-  background: rgba(15, 23, 42, 0.04);
-}
-[data-theme='light'] .trip-city-card,
-[data-theme='light'] .trip-day-strip li {
-  background: #fff;
-  border-color: rgba(15, 23, 42, 0.1);
-  color: #0f172a;
-}
-[data-theme='light'] .trip-add-city input {
-  background: #fff;
-  color: #0f172a;
-}
-[data-theme='light'] .trip-city-hits {
-  background: #fff;
-  border-color: rgba(15, 23, 42, 0.12);
-}
-[data-theme='light'] .conf-high .mc-badge {
-  color: #15803d;
-}
-[data-theme='light'] .conf-moderate .mc-badge {
-  color: #a16207;
-}
-[data-theme='light'] .conf-low .mc-badge {
-  color: #b91c1c;
-}
-[data-theme='light'] .search-section-label {
-  color: rgba(15, 23, 42, 0.55);
-}
-[data-theme='light'] .globe-svg-night {
-  fill: rgba(15, 23, 42, 0.28);
-}
-
-[data-theme='light'] .error-banner,
-[data-theme='light'] .status-toast {
-  color: #0f172a;
-}
-
-/* Soften wet-decision icons if any forced dark filters */
-[data-theme='light'] .wet-decision-icon {
+[data-theme='light'] .sg-page {
+  background:
+    radial-gradient(ellipse 90% 55% at 50% -15%, rgba(99, 102, 241, 0.12), transparent 55%),
+    #eef2ff;
   color: var(--text);
 }
 
-/* Ensure primary interactive chips stay dark-on-light */
-[data-theme='light'] button.chip-btn,
-[data-theme='light'] button.icon-chip {
-  color: var(--text) !important;
+[data-theme='light'] .sg-topbar {
+  background: rgba(255, 255, 255, 0.9);
+  border-bottom-color: rgba(15, 23, 42, 0.1);
 }
 
-/* Avoid pure white text on light panels from leftover rules */
-[data-theme='light'] .panel .chip-btn.active {
-  color: #0c4a6e !important;
+[data-theme='light'] .sg-title {
+  color: var(--text);
+  background: none;
+  -webkit-background-clip: unset;
+  background-clip: unset;
 }
 
-/* ===== At a glance — was hard-coded dark slate ===== */
-[data-theme='light'] .glance-modules,
-[data-theme='light'] .glance-header h2 {
-  color: #0f172a;
+[data-theme='light'] .sg-page .panel {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(15, 23, 42, 0.1);
+  color: var(--text);
 }
 
-[data-theme='light'] .glance-card {
-  background: #ffffff !important;
-  border: 1px solid rgba(15, 23, 42, 0.12) !important;
-  color: #0f172a !important;
-  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
+[data-theme='light'] .widget-alert {
+  background: rgba(3, 105, 161, 0.12);
+  border-color: rgba(3, 105, 161, 0.35);
+  color: #0c4a6e;
 }
 
-[data-theme='light'] .glance-title {
-  color: rgba(15, 23, 42, 0.58) !important;
-}
-
-[data-theme='light'] .glance-value {
-  color: #0f172a !important;
-}
-
-[data-theme='light'] .glance-sub {
-  color: rgba(15, 23, 42, 0.72) !important;
-}
-
-[data-theme='light'] .glance-compass {
-  border-color: rgba(15, 23, 42, 0.15);
-  color: #0369a1;
-  background: rgba(3, 105, 161, 0.06);
-}
-
-[data-theme='light'] .glance-meter {
-  background: rgba(15, 23, 42, 0.1);
-}
-
-[data-theme='light'] .summary-wet-pill {
-  background: rgba(15, 23, 42, 0.06);
-  color: #0f172a;
-}
-
-[data-theme='light'] .summary-wet-pill.wet-wet {
-  background: rgba(3, 105, 161, 0.14);
-  color: #0369a1;
-}
-
-[data-theme='light'] .summary-wet-pill.wet-maybe {
-  background: rgba(180, 83, 9, 0.12);
-  color: #b45309;
-}
-
-[data-theme='light'] .forecast-summary-text {
-  color: #0f172a;
-}
-
-[data-theme='light'] .forecast-summary-wet {
-  color: rgba(15, 23, 42, 0.65);
+/* Severe mode light tint */
+[data-theme='light'] .app-severe {
+  --accent: #e11d48;
+  --border-accent: rgba(225, 29, 72, 0.35);
+  --chip-active-bg: rgba(225, 29, 72, 0.12);
 }

@@ -1,0 +1,16 @@
+/**
+ * Legacy App.css domain modules (split for maintainability).
+ * Import order is load order. App.tsx still imports redesign after theme-light.
+ */
+@import './legacy/00-base.css';
+@import './legacy/01-alerts-settings.css';
+@import './legacy/02-auth-dashboard.css';
+@import './legacy/03-radar.css';
+@import './legacy/04-mobile-perf.css';
+@import './legacy/05-feature-panels.css';
+@import './legacy/06-mode-radar-widget.css';
+@import './legacy/07-core-modules.css';
+@import './legacy/08-chase-videos-glance.css';
+@import './legacy/09-globe.css';
+@import './legacy/10-home-extras.css';
+@import './legacy/11-globe-bodies-stargaze.css';
