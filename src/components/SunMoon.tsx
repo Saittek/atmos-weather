@@ -129,7 +129,7 @@ export function SunMoon({ weather }: Props) {
   const fr = locale === 'fr'
 
   return (
-    <section className="panel sun-panel">
+    <section className="panel sun-panel redesign-feed">
       <div className="panel-header">
         <h2>☀️🌙 {t('panel.sunMoon')}</h2>
       </div>

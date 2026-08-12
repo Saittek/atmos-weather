@@ -64,7 +64,7 @@ export function Favorites({
 
   return (
     <section
-      className={`panel favorites-panel favorites-with-home ${minimized ? 'is-minimized' : ''}`}
+      className={`panel favorites-panel favorites-with-home redesign-feed ${minimized ? 'is-minimized' : ''}`}
     >
       <div className="panel-header favorites-header-row">
         <h2>{t('fav.title')}</h2>

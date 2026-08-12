@@ -58,7 +58,7 @@ export function DailyForecast({ weather, units }: Props) {
   const title = expanded ? t('panel.daily') : t('panel.daily7')
 
   return (
-    <section className="panel daily-panel">
+    <section className="panel daily-panel redesign-feed">
       <div className="panel-header">
         <h2>{title}</h2>
         {canExpand && (

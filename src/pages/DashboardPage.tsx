@@ -483,7 +483,7 @@ export default function DashboardPage() {
 
   return (
     <div
-      className={`app solara-redesign-m1 ${severe ? 'app-severe' : ''} ${stormMode ? 'app-storm' : ''} ${refreshing || pull.refreshing ? 'is-refreshing' : ''} ${activeAlerts.length ? 'has-alerts' : ''} ${alertsMinimized ? 'alerts-minimized' : ''}`}
+      className={`app solara-redesign-m1 solara-redesign-m2 ${severe ? 'app-severe' : ''} ${stormMode ? 'app-storm' : ''} ${refreshing || pull.refreshing ? 'is-refreshing' : ''} ${activeAlerts.length ? 'has-alerts' : ''} ${alertsMinimized ? 'alerts-minimized' : ''}`}
       style={bg ? { background: bg } : undefined}
       data-theme-active={theme}
       data-density={density}

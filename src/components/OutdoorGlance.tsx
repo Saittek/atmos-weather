@@ -54,7 +54,7 @@ export function OutdoorGlance({ weather, units, air = null }: Props) {
     outdoor.verdict === 'go' ? 'go' : outdoor.verdict === 'caution' ? 'caution' : 'avoid'
 
   return (
-    <section className="panel outdoor-glance" aria-label="Go outside">
+    <section className="panel outdoor-glance redesign-feed" aria-label="Go outside">
       <div className="panel-header outdoor-glance-head">
         <h2>Go outside?</h2>
         <span className={`outdoor-verdict outdoor-verdict-${verdictClass}`}>

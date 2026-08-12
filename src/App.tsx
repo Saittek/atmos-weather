@@ -5,6 +5,7 @@ import './theme-light.css'
 /* Redesign: tokens + atmospheric glass layer (must load after legacy CSS) */
 import './styles/tokens.css'
 import './styles/redesign.css'
+import './styles/redesign-m2m3.css'
 import { applyTheme, bootstrapTheme, readStoredTheme } from './lib/theme'
 import { trackPageView } from './lib/analytics'
 import { detectLocale, t as translate } from './i18n/messages'

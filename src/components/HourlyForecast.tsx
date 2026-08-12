@@ -75,7 +75,7 @@ export function HourlyForecast({ weather, units }: Props) {
   const nowLbl = t('panel.now')
 
   return (
-    <section className="panel hourly-panel">
+    <section className="panel hourly-panel redesign-feed">
       <div className="panel-header">
         <h2>{t('panel.hourly')}</h2>
         <span className="panel-hint">
@@ -84,7 +84,7 @@ export function HourlyForecast({ weather, units }: Props) {
             : `→ · ${unit}`}
         </span>
       </div>
-      <div className="hourly-scroll" role="list">
+      <div className="hourly-scroll" role="list" tabIndex={0}>
         {items.map((i) => {
           const temp = hourly.temperature_2m[i]
           const code = hourly.weather_code[i]
@@ -111,6 +111,7 @@ export function HourlyForecast({ weather, units }: Props) {
               className={`hourly-card ${wet ? 'is-wet' : ''} ${i === idx ? 'is-now' : ''}`}
               key={hourly.time[i]}
               role="listitem"
+              aria-current={i === idx ? 'true' : undefined}
               title={`${timeLbl}: ${formatTemp(temp, units)} · ${info.label} · ${rainLabel}`}
             >
               <span className="h-time">{timeLbl}</span>

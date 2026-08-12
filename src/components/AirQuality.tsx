@@ -8,7 +8,7 @@ interface Props {
 export function AirQuality({ air }: Props) {
   if (!air?.current) {
     return (
-      <section className="panel aqi-panel">
+      <section className="panel aqi-panel redesign-feed">
         <div className="panel-header">
           <h2>Air Quality</h2>
         </div>
@@ -31,7 +31,7 @@ export function AirQuality({ air }: Props) {
   ]
 
   return (
-    <section className="panel aqi-panel">
+    <section className="panel aqi-panel redesign-feed" data-aqi-level={info.label}>
       <div className="panel-header">
         <h2>Air Quality</h2>
         <span className="aqi-badge" style={{ background: info.color }}>
