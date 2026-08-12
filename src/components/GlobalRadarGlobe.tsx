@@ -777,8 +777,17 @@ export function GlobalRadarGlobe({
         kind: 'sun' | 'moon',
       ) => {
         const cosC = frontCosC(lon, lat, disk.cLng, disk.cLat)
-        // Behind the planet from camera → hide
-        if (cosC < -0.12) {
+        /**
+         * Bodies sit outside Earth at ~spaceMul radii from the center.
+         * A surface-limb test (cosC < 0) hides them too early — they should
+         * stay visible beside the planet until Earth truly occludes them.
+         * Orthographic occlusion for a point at radius f·R:
+         *   hide when cosC < −√(1 − 1/f²)
+         */
+        const f = Math.max(1.05, spaceMul)
+        const occludeCos = -Math.sqrt(Math.max(0, 1 - 1 / (f * f)))
+        // Small hysteresis so they don't flicker at the threshold
+        if (cosC < occludeCos - 0.04) {
           el.style.opacity = '0'
           el.style.visibility = 'hidden'
           return
@@ -790,39 +799,41 @@ export function GlobalRadarGlobe({
         let dy = surf.y - disk.cy
         let len = Math.hypot(dx, dy)
         if (len < 8) {
-          // Nearly face-on: nudge along a projected offset so we don't stick to center
-          const [ol, oa] = destinationPoint(disk.cLng, disk.cLat, 25, 40)
-          const mid = map.project([ol, oa])
-          // Blend toward body azimuth using lon/lat deltas
-          const [blon, blat] = destinationPoint(disk.cLng, disk.cLat, 20, 0)
-          // Use body-relative sample
+          // Nearly face-on: nudge so we don't stick to the disk center
           const sample = map.project([
-            disk.cLng + (lon - disk.cLng) * 0.2,
-            disk.cLat + (lat - disk.cLat) * 0.2,
+            disk.cLng + (((lon - disk.cLng + 540) % 360) - 180) * 0.25,
+            disk.cLat + (lat - disk.cLat) * 0.25,
           ])
+          const [ol, oa] = destinationPoint(disk.cLng, disk.cLat, 28, 55)
+          const mid = map.project([ol, oa])
           dx = sample.x - disk.cx || mid.x - disk.cx
           dy = sample.y - disk.cy || mid.y - disk.cy
           len = Math.hypot(dx, dy) || 1
-          void blon
-          void blat
         }
         const ux = dx / len
         const uy = dy / len
-        // Outside the limb: farther for sun, slightly closer for moon
-        const dist = disk.R * spaceMul
+        // Place outside the limb; as the body goes far-side, pull slightly toward the limb
+        // so it visually slides behind the planet rather than vanishing mid-space.
+        const behind = Math.max(0, -cosC)
+        const dist = disk.R * (spaceMul - behind * 0.35)
         const x = disk.cx + ux * dist
         const y = disk.cy + uy * dist
-        // Perspective scale: larger when facing camera
-        const scale = 0.7 + 0.55 * Math.max(0, cosC)
+        // Scale: larger when toward camera; soft fade only near true occlusion
+        const fade =
+          cosC > occludeCos + 0.12
+            ? 1
+            : Math.max(0.15, (cosC - (occludeCos - 0.04)) / 0.16)
+        const scale = 0.72 + 0.5 * Math.max(0, cosC)
         const base = kind === 'sun' ? 72 : 48
         const size = Math.round(base * scale)
 
         el.style.visibility = 'visible'
-        el.style.opacity = '1'
+        el.style.opacity = String(fade)
         el.style.width = `${size}px`
         el.style.height = `${size}px`
         el.style.transform = `translate3d(${Math.round(x - size / 2)}px, ${Math.round(y - size / 2)}px, 0)`
-        el.style.zIndex = cosC > 0.2 ? '8' : '6'
+        // Keep above Earth disk while visible beside it
+        el.style.zIndex = cosC > occludeCos + 0.08 ? '8' : '5'
         el.title = title
         el.setAttribute('aria-label', title)
         if (kind === 'moon') {
