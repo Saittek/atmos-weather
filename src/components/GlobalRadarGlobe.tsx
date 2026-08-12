@@ -20,6 +20,11 @@ import {
 } from '../utils/sunTerminator'
 import { moonPhase } from '../utils/moon'
 import { useI18n } from '../i18n/I18nProvider'
+import {
+  eclipsesToGeoJSON,
+  upcomingSolarEclipses,
+  type SolarEclipse,
+} from '../data/solarEclipses'
 
 const SPEED_MS = { slow: 900, normal: 520, fast: 300 } as const
 type SpeedKey = keyof typeof SPEED_MS
@@ -27,6 +32,21 @@ type SpeedKey = keyof typeof SPEED_MS
 /** Single radar layer — dual-buffer remove/add was a major source of flicker. */
 const RADAR_ID = 'radar-live'
 const RADAR_MAXZOOM = 7
+
+/** Solar eclipse path layers (NASA Espenak path tables). */
+const ECLIPSE_SOURCE = 'globe-eclipses'
+const ECLIPSE_PARTIAL_FILL = 'globe-eclipse-partial-fill'
+const ECLIPSE_PARTIAL_LINE = 'globe-eclipse-partial-line'
+const ECLIPSE_TOTALITY_FILL = 'globe-eclipse-totality-fill'
+const ECLIPSE_TOTALITY_LINE = 'globe-eclipse-totality-line'
+const ECLIPSE_CENTER = 'globe-eclipse-centerline'
+const ECLIPSE_LAYER_IDS = [
+  ECLIPSE_PARTIAL_FILL,
+  ECLIPSE_PARTIAL_LINE,
+  ECLIPSE_TOTALITY_FILL,
+  ECLIPSE_TOTALITY_LINE,
+  ECLIPSE_CENTER,
+] as const
 
 /** Camera zoom range — high max keeps sharp tiles available when zooming in. */
 const GLOBE_MIN_ZOOM = 0.7
@@ -323,7 +343,7 @@ async function warmGlobeTiles(
 }
 
 export function GlobalRadarGlobe() {
-  const { te } = useI18n()
+  const { te, locale } = useI18n()
   const containerRef = useRef<HTMLDivElement>(null)
   const trackSvgRef = useRef<SVGSVGElement>(null)
   const dayNightCanvasRef = useRef<HTMLCanvasElement>(null)
@@ -384,17 +404,37 @@ export function GlobalRadarGlobe() {
   const [showDayNight, setShowDayNight] = useState(true)
   /** Real-time Sun + Moon at subsolar / sublunar points */
   const [showBodies, setShowBodies] = useState(true)
+  /** Solar eclipse paths + partial visibility (NASA) */
+  const [showEclipses, setShowEclipses] = useState(true)
+  /** null = all upcoming; else focus one eclipse path */
+  const [activeEclipseId, setActiveEclipseId] = useState<string | null>(null)
+  const [eclipsePopup, setEclipsePopup] = useState<{
+    title: string
+    regions: string
+    date: string
+    maxDuration: string
+    kind: string
+    nasaUrl: string
+    x: number
+    y: number
+  } | null>(null)
   const [spinning, setSpinning] = useState(false)
   const [basemapId, setBasemapId] = useState<BasemapId>('satellite')
   const [activeRegion, setActiveRegion] = useState('world')
   const [optionsOpen, setOptionsOpen] = useState(false)
   const optionsMenuRef = useRef<HTMLDivElement>(null)
+  const showEclipsesRef = useRef(true)
+  const activeEclipseIdRef = useRef<string | null>(null)
+
+  const upcomingEclipses = upcomingSolarEclipses()
 
   opacityRef.current = opacity
   showRadarRef.current = showRadar
   showTropicalRef.current = showTropical
   showDayNightRef.current = showDayNight
   showBodiesRef.current = showBodies
+  showEclipsesRef.current = showEclipses
+  activeEclipseIdRef.current = activeEclipseId
   spinningRef.current = spinning
   basemapIdRef.current = basemapId
 
@@ -402,6 +442,144 @@ export function GlobalRadarGlobe() {
     for (const m of markersRef.current) m.remove()
     markersRef.current = []
   }, [])
+
+  const removeEclipseLayers = useCallback((map: MapLibreMap) => {
+    for (const id of ECLIPSE_LAYER_IDS) {
+      try {
+        if (map.getLayer(id)) map.removeLayer(id)
+      } catch {
+        /* ignore */
+      }
+    }
+    try {
+      if (map.getSource(ECLIPSE_SOURCE)) map.removeSource(ECLIPSE_SOURCE)
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
+  /**
+   * Draw NASA solar eclipse paths: partial visibility band, path of totality,
+   * and central line. Filterable to one event.
+   */
+  const syncEclipseLayers = useCallback(
+    (map: MapLibreMap, visible: boolean, focusId: string | null) => {
+      if (swappingBasemapRef.current) return
+      try {
+        if (!visible) {
+          for (const id of ECLIPSE_LAYER_IDS) {
+            if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'none')
+          }
+          return
+        }
+
+        let list = upcomingSolarEclipses()
+        if (focusId) list = list.filter((e) => e.id === focusId)
+        const fc = eclipsesToGeoJSON(list)
+
+        if (!map.getSource(ECLIPSE_SOURCE)) {
+          map.addSource(ECLIPSE_SOURCE, { type: 'geojson', data: fc })
+        } else {
+          const src = map.getSource(ECLIPSE_SOURCE) as maplibregl.GeoJSONSource
+          src.setData(fc)
+        }
+
+        // Insert under labels/radar when possible so paths sit on the basemap
+        const before =
+          map.getLayer(IR_LAYER) ? IR_LAYER
+          : map.getLayer(RADAR_ID) ? RADAR_ID
+          : map.getLayer('labels') ? 'labels'
+          : undefined
+
+        const add = (layer: maplibregl.LayerSpecification) => {
+          if (map.getLayer(layer.id)) {
+            map.setLayoutProperty(layer.id, 'visibility', 'visible')
+            return
+          }
+          if (before && map.getLayer(before)) map.addLayer(layer, before)
+          else map.addLayer(layer)
+        }
+
+        add({
+          id: ECLIPSE_PARTIAL_FILL,
+          type: 'fill',
+          source: ECLIPSE_SOURCE,
+          filter: ['==', ['get', 'kind'], 'partial'],
+          paint: {
+            'fill-color': '#fbbf24',
+            'fill-opacity': 0.12,
+          },
+        })
+        add({
+          id: ECLIPSE_PARTIAL_LINE,
+          type: 'line',
+          source: ECLIPSE_SOURCE,
+          filter: ['==', ['get', 'kind'], 'partial'],
+          paint: {
+            'line-color': '#f59e0b',
+            'line-width': 1.2,
+            'line-opacity': 0.55,
+            'line-dasharray': [2, 2],
+          },
+        })
+        add({
+          id: ECLIPSE_TOTALITY_FILL,
+          type: 'fill',
+          source: ECLIPSE_SOURCE,
+          filter: ['==', ['get', 'kind'], 'totality'],
+          paint: {
+            'fill-color': '#ef4444',
+            'fill-opacity': 0.42,
+          },
+        })
+        add({
+          id: ECLIPSE_TOTALITY_LINE,
+          type: 'line',
+          source: ECLIPSE_SOURCE,
+          filter: ['==', ['get', 'kind'], 'totality'],
+          paint: {
+            'line-color': '#fca5a5',
+            'line-width': 1.8,
+            'line-opacity': 0.95,
+          },
+        })
+        add({
+          id: ECLIPSE_CENTER,
+          type: 'line',
+          source: ECLIPSE_SOURCE,
+          filter: ['==', ['get', 'kind'], 'centerline'],
+          paint: {
+            'line-color': '#fef08a',
+            'line-width': 2.4,
+            'line-opacity': 0.95,
+          },
+        })
+      } catch (e) {
+        console.warn('[globe] eclipse layers', e)
+      }
+    },
+    [],
+  )
+
+  const flyToEclipse = useCallback(
+    (e: SolarEclipse) => {
+      const map = mapRef.current
+      if (!map || !readyRef.current) return
+      setSpinning(false)
+      setShowEclipses(true)
+      setActiveEclipseId(e.id)
+      setActiveRegion('eclipse')
+      map.easeTo({
+        center: e.focus,
+        zoom: e.zoom,
+        bearing: 0,
+        pitch: 0,
+        duration: 1100,
+        essential: true,
+      })
+    },
+    [],
+  )
 
   /** Estimate Earth disk center + radius in CSS pixels (same approach as day/night). */
   const earthDiskPx = useCallback((map: MapLibreMap) => {
@@ -1331,6 +1509,43 @@ export function GlobalRadarGlobe() {
     }
     map.on('wheel', onWheel)
 
+    // Solar eclipse path clicks → info card
+    const onEclipseClick = (
+      e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] },
+    ) => {
+      const f = e.features?.[0]
+      if (!f?.properties) return
+      const p = f.properties
+      const isFr = locale === 'fr'
+      setEclipsePopup({
+        title: String(isFr && p.titleFr ? p.titleFr : p.title || ''),
+        regions: String(isFr && p.regionsFr ? p.regionsFr : p.regions || ''),
+        date: String(p.date || ''),
+        maxDuration: String(p.maxDuration || ''),
+        kind: String(p.kind || ''),
+        nasaUrl: String(p.nasaUrl || ''),
+        x: e.point.x,
+        y: e.point.y,
+      })
+      if (p.id) setActiveEclipseId(String(p.id))
+    }
+    const onEclipseEnter = () => {
+      map.getCanvas().style.cursor = 'pointer'
+    }
+    const onEclipseLeave = () => {
+      map.getCanvas().style.cursor = ''
+    }
+    for (const lid of [
+      ECLIPSE_TOTALITY_FILL,
+      ECLIPSE_PARTIAL_FILL,
+      ECLIPSE_CENTER,
+      ECLIPSE_TOTALITY_LINE,
+    ]) {
+      map.on('click', lid, onEclipseClick)
+      map.on('mouseenter', lid, onEclipseEnter)
+      map.on('mouseleave', lid, onEclipseLeave)
+    }
+
     const ro = new ResizeObserver(() => {
       try {
         map.resize()
@@ -1384,6 +1599,7 @@ export function GlobalRadarGlobe() {
         setFrameIdx(ni)
         readyRef.current = true
         scheduleOverlay()
+        syncEclipseLayers(map, showEclipsesRef.current, activeEclipseIdRef.current)
 
         // Paint radar at world view, then briefly re-warm radar tiles at high zoom
         applyFrame(ni, true)
@@ -1518,6 +1734,16 @@ export function GlobalRadarGlobe() {
         map.off('touchstart', markInteractStart)
         map.off('touchend', markInteractEnd)
         map.off('wheel', onWheel)
+        for (const lid of [
+          ECLIPSE_TOTALITY_FILL,
+          ECLIPSE_PARTIAL_FILL,
+          ECLIPSE_CENTER,
+          ECLIPSE_TOTALITY_LINE,
+        ]) {
+          map.off('click', lid, onEclipseClick)
+          map.off('mouseenter', lid, onEclipseEnter)
+          map.off('mouseleave', lid, onEclipseLeave)
+        }
       } catch {
         /* ignore */
       }
@@ -1625,6 +1851,14 @@ export function GlobalRadarGlobe() {
     }
   }, [showIR])
 
+  // Solar eclipse paths
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !readyRef.current) return
+    syncEclipseLayers(map, showEclipses, activeEclipseId)
+    if (!showEclipses) setEclipsePopup(null)
+  }, [showEclipses, activeEclipseId, syncEclipseLayers])
+
   useEffect(() => {
     showDayNightRef.current = showDayNight
     scheduleDayNight(true)
@@ -1688,6 +1922,7 @@ export function GlobalRadarGlobe() {
     radarKeyRef.current = null
 
     try {
+      removeEclipseLayers(map)
       if (map.getLayer(IR_LAYER)) map.removeLayer(IR_LAYER)
       if (map.getSource(IR_SOURCE)) map.removeSource(IR_SOURCE)
       if (map.getLayer(RADAR_ID)) map.removeLayer(RADAR_ID)
@@ -1763,10 +1998,11 @@ export function GlobalRadarGlobe() {
         /* ignore */
       }
     }
+    syncEclipseLayers(map, showEclipsesRef.current, activeEclipseIdRef.current)
     scheduleOverlay()
     if (wasSpinning) setSpinning(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- showLabels/showIR at swap time
-  }, [basemapId, applyFrame, scheduleOverlay, showLabels, showIR])
+  }, [basemapId, applyFrame, scheduleOverlay, showLabels, showIR, removeEclipseLayers, syncEclipseLayers])
 
   useEffect(() => {
     if (!optionsOpen) return
@@ -1970,6 +2206,16 @@ export function GlobalRadarGlobe() {
                 <button
                   type="button"
                   role="menuitemcheckbox"
+                  className={`chip-btn globe-options-chip ${showEclipses ? 'active' : ''}`}
+                  onClick={() => setShowEclipses((v) => !v)}
+                  aria-checked={showEclipses}
+                  title={te('globe.eclipsesHint')}
+                >
+                  {te('globe.eclipses')}
+                </button>
+                <button
+                  type="button"
+                  role="menuitemcheckbox"
                   className={`chip-btn globe-options-chip ${showLabels ? 'active' : ''}`}
                   onClick={() => setShowLabels((v) => !v)}
                   aria-checked={showLabels}
@@ -2027,6 +2273,52 @@ export function GlobalRadarGlobe() {
               </div>
             </div>
 
+            {upcomingEclipses.length > 0 && (
+              <div className="globe-options-section" role="group" aria-label={te('globe.eclipses')}>
+                <div className="globe-options-heading">{te('globe.eclipses')}</div>
+                <p className="globe-eclipse-hint">{te('globe.eclipsesHint')}</p>
+                <div className="globe-options-chips">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={`chip-btn globe-options-chip ${showEclipses && !activeEclipseId ? 'active' : ''}`}
+                    onClick={() => {
+                      setShowEclipses(true)
+                      setActiveEclipseId(null)
+                      setActiveRegion('world')
+                      setSpinning(false)
+                      mapRef.current?.easeTo({
+                        center: GLOBE_WORLD_CENTER,
+                        zoom: GLOBE_WORLD_ZOOM,
+                        bearing: 0,
+                        pitch: 0,
+                        duration: 900,
+                        essential: true,
+                      })
+                      setOptionsOpen(false)
+                    }}
+                  >
+                    {te('globe.eclipseAll')}
+                  </button>
+                  {upcomingEclipses.map((ecl) => (
+                    <button
+                      key={ecl.id}
+                      type="button"
+                      role="menuitem"
+                      className={`chip-btn globe-options-chip ${activeEclipseId === ecl.id ? 'active' : ''}`}
+                      title={`${locale === 'fr' ? ecl.regionsFr : ecl.regions} · max ${ecl.maxDuration}`}
+                      onClick={() => {
+                        flyToEclipse(ecl)
+                        setOptionsOpen(false)
+                      }}
+                    >
+                      {ecl.date.slice(0, 7)} {ecl.type === 'total' ? '●' : '○'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="globe-options-section globe-options-legend" aria-hidden={loading}>
               <div className="globe-options-heading">Legend</div>
               <div className="globe-legend-item">
@@ -2069,10 +2361,102 @@ export function GlobalRadarGlobe() {
                 <span className="globe-legend-swatch globe-legend-cone" />
                 Forecast cone
               </div>
+              {showEclipses && (
+                <>
+                  <div className="globe-legend-item">
+                    <span className="globe-legend-swatch globe-legend-eclipse-partial" />
+                    {te('globe.eclipsePartial')}
+                  </div>
+                  <div className="globe-legend-item">
+                    <span className="globe-legend-swatch globe-legend-eclipse-total" />
+                    {te('globe.eclipseTotality')}
+                  </div>
+                  <div className="globe-legend-item">
+                    <span className="globe-legend-swatch globe-legend-eclipse-center" />
+                    {te('globe.eclipseCenter')}
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
       </div>
+
+      {showEclipses && upcomingEclipses.length > 0 && !loading && (
+        <aside className="globe-eclipse-panel" aria-label={te('globe.eclipses')}>
+          <div className="globe-eclipse-panel-head">
+            <strong>🌑 {te('globe.eclipses')}</strong>
+            <button
+              type="button"
+              className="globe-eclipse-close"
+              onClick={() => setShowEclipses(false)}
+              title={te('globe.eclipseHide')}
+            >
+              ×
+            </button>
+          </div>
+          <ul className="globe-eclipse-list">
+            {upcomingEclipses.map((ecl) => {
+              const title = locale === 'fr' ? ecl.titleFr : ecl.title
+              const regions = locale === 'fr' ? ecl.regionsFr : ecl.regions
+              const active = activeEclipseId === ecl.id
+              return (
+                <li key={ecl.id}>
+                  <button
+                    type="button"
+                    className={`globe-eclipse-item ${active ? 'active' : ''}`}
+                    onClick={() => flyToEclipse(ecl)}
+                  >
+                    <span className="globe-eclipse-date">{ecl.date}</span>
+                    <span className="globe-eclipse-name">{title}</span>
+                    <span className="globe-eclipse-regions">
+                      {regions} · max {ecl.maxDuration}
+                    </span>
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+          <p className="globe-eclipse-credit">{te('globe.eclipseCredit')}</p>
+        </aside>
+      )}
+
+      {eclipsePopup && (
+        <div
+          className="globe-eclipse-popup"
+          style={{ left: Math.min(eclipsePopup.x + 12, (typeof window !== 'undefined' ? window.innerWidth : 400) - 280), top: Math.max(8, eclipsePopup.y - 8) }}
+          role="dialog"
+          aria-label={eclipsePopup.title}
+        >
+          <button
+            type="button"
+            className="globe-eclipse-popup-x"
+            onClick={() => setEclipsePopup(null)}
+            aria-label="Close"
+          >
+            ×
+          </button>
+          <strong>{eclipsePopup.title}</strong>
+          <p>
+            {eclipsePopup.kind === 'totality'
+              ? te('globe.eclipseTotality')
+              : eclipsePopup.kind === 'partial'
+                ? te('globe.eclipsePartial')
+                : te('globe.eclipseCenter')}
+          </p>
+          <p>{eclipsePopup.regions}</p>
+          {eclipsePopup.maxDuration && (
+            <p>
+              {te('globe.eclipseMaxDur')}: {eclipsePopup.maxDuration}
+            </p>
+          )}
+          {eclipsePopup.nasaUrl && (
+            <a href={eclipsePopup.nasaUrl} target="_blank" rel="noreferrer">
+              {te('globe.eclipseNasa')}
+            </a>
+          )}
+        </div>
+      )}
 
       <div className="globe-controls" role="toolbar" aria-label={te('globe.playback')}>
         <div className="globe-timeline-wrap">

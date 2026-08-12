@@ -58,7 +58,7 @@ const en = {
   // Globe
   'globe.back': '← Solara',
   'globe.title': 'Earth',
-  'globe.subtitle': 'Live global radar · hurricanes · 3D globe',
+  'globe.subtitle': 'Radar · storms · solar eclipse paths · 3D globe',
   'globe.flatRadar': 'Flat radar',
   'globe.stormChaser': 'Storm chaser',
   'globe.loading': 'Loading globe…',
@@ -82,6 +82,17 @@ const en = {
   'globe.color': 'Color',
   'globe.light': 'Light',
   'globe.dark': 'Dark',
+  'globe.eclipses': 'Solar eclipses',
+  'globe.eclipsesHint':
+    'Path of totality (red) and approximate partial visibility (gold). Tap a path for details.',
+  'globe.eclipseAll': 'All paths',
+  'globe.eclipsePartial': 'Partial eclipse (approx.)',
+  'globe.eclipseTotality': 'Path of totality',
+  'globe.eclipseCenter': 'Central line',
+  'globe.eclipseHide': 'Hide eclipse paths',
+  'globe.eclipseMaxDur': 'Max duration',
+  'globe.eclipseNasa': 'NASA interactive map',
+  'globe.eclipseCredit': 'Paths: Fred Espenak, NASA GSFC · partial band approximate',
 
   // Stargaze
   'sg.title': 'Stargaze',
@@ -204,7 +215,7 @@ const fr: Record<ModeKey, string> = {
 
   'globe.back': '← Solara',
   'globe.title': 'Terre',
-  'globe.subtitle': 'Radar mondial · ouragans · globe 3D',
+  'globe.subtitle': 'Radar · tempêtes · éclipses solaires · globe 3D',
   'globe.flatRadar': 'Radar plat',
   'globe.stormChaser': 'Chasseurs d’orages',
   'globe.loading': 'Chargement du globe…',
@@ -228,6 +239,17 @@ const fr: Record<ModeKey, string> = {
   'globe.color': 'Couleur',
   'globe.light': 'Clair',
   'globe.dark': 'Sombre',
+  'globe.eclipses': 'Éclipses solaires',
+  'globe.eclipsesHint':
+    'Bande de totalité (rouge) et visibilité partielle approximative (or). Touchez une trajectoire pour les détails.',
+  'globe.eclipseAll': 'Toutes les trajectoires',
+  'globe.eclipsePartial': 'Éclipse partielle (approx.)',
+  'globe.eclipseTotality': 'Bande de totalité',
+  'globe.eclipseCenter': 'Ligne centrale',
+  'globe.eclipseHide': 'Masquer les éclipses',
+  'globe.eclipseMaxDur': 'Durée max',
+  'globe.eclipseNasa': 'Carte interactive NASA',
+  'globe.eclipseCredit': 'Trajectoires : Fred Espenak, NASA GSFC · bande partielle approximative',
 
   'sg.title': 'Ciel étoilé',
   'sg.red': '🔴 Rouge',
