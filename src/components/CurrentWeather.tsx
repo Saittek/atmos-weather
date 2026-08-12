@@ -157,9 +157,25 @@ export function CurrentWeather({
     el.style.setProperty('--glow-y', '40%')
   }
 
+  // Condition family for redesign hero wash (data-wx)
+  const wxFamily = (() => {
+    const code = displayCode
+    if (code === 0) return isDay ? 'clear-day' : 'clear-night'
+    if (code === 1 || code === 2 || code === 3) return 'cloud'
+    if (code === 45 || code === 48) return 'fog'
+    if (code === 44) return 'smoke'
+    if (code >= 71 && code <= 77) return 'snow'
+    if (code >= 85 && code <= 86) return 'snow'
+    if (code >= 95 && code <= 99) return 'storm'
+    if (code >= 51 && code <= 67) return 'rain'
+    if (code >= 80 && code <= 82) return 'rain'
+    return isDay ? 'clear-day' : 'clear-night'
+  })()
+
   return (
     <section
       className="panel current-weather current-hero"
+      data-wx={wxFamily}
       ref={cardRef}
       onMouseMove={onMove}
       onMouseLeave={onLeave}

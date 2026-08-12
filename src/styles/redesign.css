@@ -1,0 +1,778 @@
+/**
+ * Solara redesign M1 — Atmospheric glass shell, hero, panels, motion
+ * Loaded after App.css + theme-light.css so these rules win.
+ */
+
+/* ===== Motion utilities ===== */
+@keyframes solara-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes solara-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes solara-shimmer {
+  0% {
+    background-position: 120% 0;
+  }
+  100% {
+    background-position: -40% 0;
+  }
+}
+
+@keyframes solara-glow-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes solara-sheet-up {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Staggered enter for home priority stack */
+.priority-stack > * {
+  animation: solara-fade-up var(--dur-slow) var(--ease-out) both;
+}
+.priority-stack > *:nth-child(1) {
+  animation-delay: 0ms;
+}
+.priority-stack > *:nth-child(2) {
+  animation-delay: 55ms;
+}
+.priority-stack > *:nth-child(3) {
+  animation-delay: 100ms;
+}
+.priority-stack > *:nth-child(4) {
+  animation-delay: 140ms;
+}
+.priority-stack > *:nth-child(5) {
+  animation-delay: 175ms;
+}
+.priority-stack > *:nth-child(n + 6) {
+  animation-delay: 200ms;
+}
+
+.main-col > .panel,
+.main-col > .deferred-wrap,
+.side-col > .panel,
+.side-col > .favorites-panel,
+.side-col > .outdoor-desktop-slot > .panel {
+  animation: solara-fade-up var(--dur-slow) var(--ease-out) both;
+  animation-delay: 120ms;
+}
+
+/* ===== Shell / background ===== */
+.app {
+  background: var(--app-fallback-bg);
+  transition: background var(--dur-slow) var(--ease-out);
+}
+
+.app-shell {
+  padding-top: calc(var(--topbar-h, 4.5rem) + var(--alert-bar-h, 0px) + 0.85rem);
+}
+
+/* ===== Glass app bar ===== */
+.topbar {
+  padding: 0.42rem 0.55rem 0.42rem 0.65rem !important;
+  border-radius: var(--radius-lg) !important;
+  background: color-mix(in srgb, var(--glass-strong) 88%, transparent) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--shadow-2), 0 0 0 1px rgba(56, 189, 248, 0.04) !important;
+  backdrop-filter: blur(22px) saturate(1.4) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(1.4) !important;
+  min-height: 56px;
+  transition:
+    border-color var(--dur-med) var(--ease-out),
+    box-shadow var(--dur-med) var(--ease-out),
+    background var(--dur-med) var(--ease-out);
+}
+
+.topbar:hover {
+  border-color: var(--border-strong) !important;
+}
+
+.brand-mark {
+  width: 42px !important;
+  height: 42px !important;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.14),
+    0 4px 16px rgba(56, 189, 248, 0.25) !important;
+  transition: transform var(--dur-med) var(--ease-spring);
+}
+
+.brand:hover .brand-mark {
+  transform: scale(1.05) rotate(-3deg);
+}
+
+.brand strong {
+  font-size: 1.05rem !important;
+  font-weight: 800;
+  letter-spacing: var(--tracking-tight);
+  background: linear-gradient(105deg, #fff 20%, #7dd3fc 90%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+[data-theme='light'] .brand strong {
+  background: none;
+  -webkit-background-clip: unset;
+  background-clip: unset;
+  color: var(--text);
+}
+
+.brand-tag {
+  letter-spacing: 0.08em !important;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+/* Icon buttons — soft glass circles */
+.icon-chip,
+.topbar .chip-btn.icon-chip,
+.topbar .nav-chip.icon-chip,
+.topbar .alert-topbar-circle,
+.topbar .account-btn.icon-chip,
+.topbar .earth-nav-btn {
+  background: var(--chip-bg) !important;
+  border: 1px solid var(--border) !important;
+  transition:
+    transform var(--dur-fast) var(--ease-spring),
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out) !important;
+}
+
+.icon-chip:hover,
+.topbar .chip-btn.icon-chip:hover,
+.topbar .nav-chip.icon-chip:hover,
+.topbar .account-btn.icon-chip:hover,
+.topbar .earth-nav-btn:hover {
+  background: var(--chip-bg-hover) !important;
+  border-color: var(--border-accent) !important;
+  transform: translateY(-1px) scale(1.04);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+}
+
+.icon-chip:active,
+.topbar .chip-btn.icon-chip:active {
+  transform: scale(0.96);
+}
+
+/* Explore / mode chips */
+.chip-btn,
+.nav-chip,
+.quick-nav a,
+.mobile-modes-row a,
+.mobile-modes-row .chip-btn {
+  border-radius: var(--radius-pill) !important;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-spring),
+    box-shadow var(--dur-fast) var(--ease-out) !important;
+}
+
+.chip-btn:hover,
+.nav-chip:hover {
+  transform: translateY(-1px);
+}
+
+.chip-btn.active,
+.nav-chip.active {
+  background: var(--chip-active-bg) !important;
+  border-color: var(--border-accent) !important;
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.12), 0 4px 14px rgba(56, 189, 248, 0.12);
+}
+
+.primary-btn {
+  border: none !important;
+  border-radius: var(--radius-pill) !important;
+  background: linear-gradient(135deg, #38bdf8 0%, #6366f1 100%) !important;
+  color: #fff !important;
+  font-weight: 700 !important;
+  padding: 0.65rem 1.25rem !important;
+  box-shadow: 0 10px 28px rgba(56, 189, 248, 0.35) !important;
+  transition:
+    transform var(--dur-fast) var(--ease-spring),
+    box-shadow var(--dur-med) var(--ease-out) !important;
+}
+
+.primary-btn:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 14px 36px rgba(56, 189, 248, 0.45) !important;
+  text-decoration: none !important;
+}
+
+.primary-btn:active {
+  transform: scale(0.98);
+}
+
+/* Settings sheet / menus */
+.settings-more-menu,
+.settings-sheet,
+.settings-more-panel {
+  border-radius: var(--radius-lg) !important;
+  border: 1px solid var(--border) !important;
+  background: var(--glass-strong) !important;
+  backdrop-filter: blur(24px) saturate(1.35) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.35) !important;
+  box-shadow: var(--shadow-3) !important;
+  animation: solara-sheet-up var(--dur-med) var(--ease-out);
+}
+
+/* ===== Panels ===== */
+.panel {
+  border-radius: var(--radius-lg) !important;
+  background: var(--glass) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--shadow-2) !important;
+  backdrop-filter: blur(24px) saturate(1.4) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.4) !important;
+  padding: 1.2rem 1.3rem !important;
+  transition:
+    transform var(--dur-med) var(--ease-out),
+    border-color var(--dur-med) var(--ease-out),
+    box-shadow var(--dur-med) var(--ease-out) !important;
+}
+
+.panel::before {
+  opacity: 0.75 !important;
+  background: var(--glass-shine) !important;
+}
+
+.panel:hover {
+  border-color: var(--border-strong) !important;
+  box-shadow: var(--shadow-2), 0 0 0 1px rgba(56, 189, 248, 0.06) !important;
+  transform: translateY(-1px);
+}
+
+.panel-header h2 {
+  font-size: 0.95rem !important;
+  font-weight: 750 !important;
+  letter-spacing: -0.02em;
+}
+
+/* ===== Hero ===== */
+.current-weather.current-hero,
+.panel.current-hero {
+  padding: 1.45rem 1.5rem 1.55rem !important;
+  border-radius: var(--radius-xl) !important;
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border)) !important;
+  background:
+    radial-gradient(
+      900px 320px at var(--glow-x, 70%) var(--glow-y, 15%),
+      var(--hero-tint, var(--wx-clear-day)),
+      transparent 55%
+    ),
+    linear-gradient(
+      155deg,
+      color-mix(in srgb, var(--hero-tint, var(--wx-clear-day)) 55%, transparent),
+      transparent 48%
+    ),
+    var(--glass) !important;
+  box-shadow: var(--shadow-3) !important;
+  overflow: hidden;
+}
+
+/* Condition-driven tints */
+.current-hero[data-wx='clear-day'] {
+  --hero-tint: var(--wx-clear-day);
+}
+.current-hero[data-wx='clear-night'] {
+  --hero-tint: var(--wx-clear-night);
+}
+.current-hero[data-wx='cloud'] {
+  --hero-tint: var(--wx-cloud);
+}
+.current-hero[data-wx='rain'] {
+  --hero-tint: var(--wx-rain);
+}
+.current-hero[data-wx='snow'] {
+  --hero-tint: var(--wx-snow);
+}
+.current-hero[data-wx='storm'] {
+  --hero-tint: var(--wx-storm);
+}
+.current-hero[data-wx='fog'] {
+  --hero-tint: var(--wx-fog);
+}
+.current-hero[data-wx='smoke'] {
+  --hero-tint: var(--wx-smoke);
+}
+
+.hero-glow {
+  background: radial-gradient(
+    circle at var(--glow-x) var(--glow-y),
+    var(--hero-tint, rgba(56, 189, 248, 0.28)),
+    transparent 48%
+  ) !important;
+  opacity: 0.9;
+  animation: solara-glow-pulse 6s var(--ease-in-out) infinite;
+}
+
+.hero-grid {
+  opacity: 0.04 !important;
+  background-size: 32px 32px !important;
+}
+
+.hero-kicker {
+  font-size: 0.68rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase !important;
+  color: var(--accent) !important;
+  margin: 0 0 0.35rem !important;
+}
+
+.place-name {
+  font-size: clamp(1.65rem, 3.5vw, 2.25rem) !important;
+  font-weight: 850 !important;
+  letter-spacing: var(--tracking-display) !important;
+  background: linear-gradient(180deg, #fff 10%, rgba(186, 230, 253, 0.88) 100%) !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  color: transparent !important;
+}
+
+[data-theme='light'] .place-name {
+  background: none !important;
+  -webkit-background-clip: unset !important;
+  background-clip: unset !important;
+  color: var(--text) !important;
+}
+
+.place-meta,
+.local-time,
+.current-source-line {
+  font-size: 0.82rem !important;
+  color: var(--text-mute) !important;
+}
+
+.current-precip-timing {
+  margin-top: 0.55rem !important;
+  padding: 0.45rem 0.7rem !important;
+  border-radius: var(--radius-sm) !important;
+  background: rgba(0, 0, 0, 0.18) !important;
+  border: 1px solid var(--border) !important;
+  font-size: 0.88rem !important;
+  font-weight: 550;
+  line-height: 1.35;
+}
+
+.current-precip-timing.wet-wet {
+  border-color: rgba(56, 189, 248, 0.4) !important;
+  background: rgba(56, 189, 248, 0.12) !important;
+}
+.current-precip-timing.wet-maybe {
+  border-color: rgba(251, 191, 36, 0.35) !important;
+  background: rgba(251, 191, 36, 0.1) !important;
+}
+
+.temp-big {
+  font-size: var(--text-display) !important;
+  font-weight: 850 !important;
+  letter-spacing: var(--tracking-display) !important;
+  line-height: 0.9 !important;
+  background: linear-gradient(180deg, #fff 0%, #bae6fd 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: none !important;
+  filter: drop-shadow(0 10px 28px rgba(56, 189, 248, 0.25));
+}
+
+[data-theme='light'] .temp-big {
+  background: none;
+  -webkit-background-clip: unset;
+  background-clip: unset;
+  color: var(--text);
+  filter: none;
+}
+
+.condition {
+  font-size: 1.25rem !important;
+  font-weight: 750 !important;
+}
+
+.feels,
+.hi-lo {
+  font-size: 0.92rem !important;
+  color: var(--text-dim) !important;
+}
+
+.current-3d-wrap {
+  filter: drop-shadow(0 18px 36px rgba(0, 0, 0, 0.4)) !important;
+  transition: transform var(--dur-med) var(--ease-spring);
+}
+
+.current-hero:hover .current-3d-wrap {
+  transform: translateZ(32px) scale(1.03);
+}
+
+/* Chips under hero */
+.current-chip {
+  border-radius: var(--radius-pill) !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid var(--border) !important;
+  padding: 0.32rem 0.7rem !important;
+  font-size: 0.78rem !important;
+  font-weight: 550;
+  transition:
+    transform var(--dur-fast) var(--ease-spring),
+    background var(--dur-fast) var(--ease-out);
+}
+
+.current-chip:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  transform: translateY(-1px);
+}
+
+.current-chip.alert {
+  border-color: rgba(248, 113, 113, 0.45) !important;
+  background: rgba(248, 113, 113, 0.12) !important;
+  color: #fecaca !important;
+}
+
+.current-chip.rain {
+  border-color: rgba(56, 189, 248, 0.4) !important;
+  background: rgba(56, 189, 248, 0.12) !important;
+}
+
+.fav-inline {
+  transition: transform var(--dur-fast) var(--ease-spring) !important;
+}
+.fav-inline:hover {
+  transform: scale(1.12);
+}
+.fav-inline:active {
+  transform: scale(0.94);
+}
+
+/* ===== Today hero / story cards ===== */
+.today-hero,
+.what-matters,
+.weekend-brief,
+.what-changed {
+  border-radius: var(--radius-lg) !important;
+}
+
+/* ===== Hourly rail ===== */
+.hourly-card {
+  border-radius: var(--radius-md, 16px) !important;
+  border: 1px solid var(--border) !important;
+  background: var(--surface) !important;
+  transition:
+    transform var(--dur-fast) var(--ease-spring),
+    border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out) !important;
+}
+
+.hourly-card:hover,
+.hourly-card.is-now,
+.hourly-card.active {
+  transform: translateY(-3px) scale(1.03);
+  border-color: var(--border-accent) !important;
+  background: var(--accent-soft) !important;
+  box-shadow: 0 8px 22px rgba(56, 189, 248, 0.15);
+}
+
+/* ===== Daily rows ===== */
+.daily-row,
+.day-row,
+.daily-item {
+  border-radius: var(--radius-sm) !important;
+  transition: background var(--dur-fast) var(--ease-out) !important;
+}
+
+.daily-row:hover,
+.day-row:hover,
+.daily-item:hover {
+  background: var(--row-hover) !important;
+}
+
+/* ===== Mobile modes row ===== */
+.mobile-modes-row {
+  gap: 0.45rem !important;
+  padding: 0.15rem 0 !important;
+}
+
+.mobile-modes-row a,
+.mobile-modes-row .chip-btn {
+  background: var(--chip-bg) !important;
+  border: 1px solid var(--border) !important;
+  font-weight: 650 !important;
+  box-shadow: var(--shadow-1);
+}
+
+.mobile-modes-row a:hover,
+.mobile-modes-row .chip-btn:hover {
+  border-color: var(--border-accent) !important;
+  background: var(--accent-soft) !important;
+}
+
+/* ===== Alerts ===== */
+.alert-top-bar:not(.alert-top-bar-mini) {
+  border-radius: 0 0 var(--radius) var(--radius) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+}
+
+.banner {
+  border-radius: var(--radius-sm) !important;
+  border: 1px solid var(--border) !important;
+  animation: solara-fade-up var(--dur-med) var(--ease-out);
+}
+
+.banner.error {
+  border-color: rgba(248, 113, 113, 0.4) !important;
+  background: rgba(127, 29, 29, 0.35) !important;
+}
+
+.toast-banner {
+  animation: solara-fade-up var(--dur-med) var(--ease-spring) !important;
+}
+
+/* ===== Empty / skeleton ===== */
+.empty-state-rich {
+  border-radius: var(--radius-xl) !important;
+  border: 1px solid var(--border) !important;
+  background: var(--glass) !important;
+  backdrop-filter: blur(20px) !important;
+  padding: 2.5rem 1.5rem !important;
+  box-shadow: var(--shadow-2) !important;
+  animation: solara-fade-up var(--dur-slow) var(--ease-out);
+}
+
+.empty-state-rich h1 {
+  letter-spacing: var(--tracking-tight);
+  font-weight: 800;
+}
+
+.skeleton,
+.skel,
+.skeleton-line,
+.skeleton-block {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(255, 255, 255, 0.1) 45%,
+    rgba(255, 255, 255, 0.04) 100%
+  ) !important;
+  background-size: 200% 100% !important;
+  animation: solara-shimmer 1.4s linear infinite !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+/* ===== Search ===== */
+.search-bar input,
+.search-input,
+.topbar input[type='search'],
+.topbar input[type='text'] {
+  border-radius: var(--radius-pill) !important;
+  background: var(--input-bg) !important;
+  border: 1px solid var(--border) !important;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out) !important;
+}
+
+.search-bar input:focus,
+.search-input:focus,
+.topbar input:focus {
+  outline: none !important;
+  border-color: var(--border-accent) !important;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15) !important;
+}
+
+/* ===== Mode page chrome ===== */
+.globe-page-bar,
+.radar-page-bar,
+.stargaze-bar,
+.chase-bar,
+.widget-bar {
+  background: var(--page-bar-bg) !important;
+  border-bottom: 1px solid var(--page-bar-border) !important;
+  backdrop-filter: blur(18px) !important;
+  -webkit-backdrop-filter: blur(18px) !important;
+}
+
+/* ===== Pull to refresh ===== */
+.ptr-indicator {
+  color: var(--accent) !important;
+}
+
+/* ===== Dashboard spacing ===== */
+.dashboard {
+  gap: var(--space-4) !important;
+}
+
+/* Redesign flag on shell for future scoped tweaks */
+.app.solara-redesign-m1 .priority-stack {
+  gap: var(--space-3);
+}
+
+/* Hourly panel header polish */
+.hourly-panel .panel-header h2,
+.daily-panel .panel-header h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* Favorites chip polish */
+.favorites-list button,
+.fav-chip {
+  transition:
+    transform var(--dur-fast) var(--ease-spring),
+    border-color var(--dur-fast) var(--ease-out) !important;
+}
+.favorites-list button:hover,
+.fav-chip:hover {
+  transform: translateY(-1px);
+}
+
+/* Auth / modal glass */
+.auth-overlay,
+.auth-modal,
+.coach-modal,
+.first-run-coach,
+.modal-card {
+  animation: solara-fade-in var(--dur-med) var(--ease-out);
+}
+
+.col {
+  gap: var(--space-3) !important;
+}
+
+.priority-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* ===== Scrollbars (webkit) ===== */
+.app ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.app ::-webkit-scrollbar-thumb {
+  background: var(--scrollbar);
+  border-radius: 999px;
+}
+.app ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ===== Reduced motion ===== */
+@media (prefers-reduced-motion: reduce) {
+  .priority-stack > *,
+  .main-col > .panel,
+  .main-col > .deferred-wrap,
+  .side-col > .panel,
+  .banner,
+  .empty-state-rich,
+  .settings-more-menu,
+  .settings-sheet,
+  .toast-banner,
+  .skeleton,
+  .skel,
+  .skeleton-line,
+  .skeleton-block,
+  .hero-glow {
+    animation: none !important;
+  }
+
+  .panel:hover,
+  .hourly-card:hover,
+  .hourly-card.is-now,
+  .chip-btn:hover,
+  .primary-btn:hover,
+  .icon-chip:hover,
+  .current-hero:hover .current-3d-wrap {
+    transform: none !important;
+  }
+}
+
+/* ===== Mobile performance ===== */
+html.mobile-perf .panel,
+html.mobile-perf .topbar,
+html.mobile-perf .current-hero {
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+}
+
+html.mobile-perf .hero-glow {
+  animation: none !important;
+}
+
+html.mobile-perf .priority-stack > * {
+  animation-duration: 200ms !important;
+}
+
+/* ===== Mobile polish ===== */
+@media (max-width: 720px) {
+  .topbar {
+    width: min(calc(100% - 0.85rem), 1280px) !important;
+    max-width: calc(100% - 0.85rem) !important;
+    border-radius: var(--radius) !important;
+    padding: 0.35rem 0.4rem 0.35rem 0.5rem !important;
+  }
+
+  .current-weather.current-hero {
+    padding: 1.2rem 1.15rem 1.25rem !important;
+    border-radius: var(--radius-lg) !important;
+  }
+
+  .panel:hover {
+    transform: none;
+  }
+
+  .temp-big {
+    font-size: clamp(3.4rem, 16vw, 4.6rem) !important;
+  }
+}
+
+/* Light theme fine-tunes */
+[data-theme='light'] .current-precip-timing {
+  background: rgba(15, 23, 42, 0.04) !important;
+}
+
+[data-theme='light'] .current-chip {
+  background: rgba(15, 23, 42, 0.04) !important;
+}
+
+[data-theme='light'] .current-chip.alert {
+  color: #991b1b !important;
+  background: rgba(220, 38, 38, 0.08) !important;
+}
+
+[data-theme='light'] .hourly-card {
+  background: rgba(15, 23, 42, 0.03) !important;
+}
