@@ -149,9 +149,11 @@ export function formatWeekday(iso: string, timezone?: string): string {
   }
 }
 
-export function formatDuration(seconds: number): string {
+export function formatDuration(seconds: number | null | undefined): string {
+  if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return '—'
   const h = Math.floor(seconds / 3600)
   const m = Math.round((seconds % 3600) / 60)
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return '—'
   return `${h}h ${m}m`
 }
 
@@ -165,13 +167,25 @@ export function formatRadarTime(unix: number): string {
 /**
  * Parse Open-Meteo wall-clock strings (e.g. "2026-07-11T21:15") as time
  * in a specific IANA timezone, returning UTC milliseconds.
+ *
+ * Absolute instants (…Z or ±offset) — common from ECCC City Page riseSet —
+ * must use Date.parse. Never treat "11:44:00Z" as 11:44 local wall clock.
  */
 export function parseWeatherLocal(isoLocal: string, timeZone?: string): number {
-  const m = isoLocal.match(
+  const raw = String(isoLocal || '').trim()
+  if (!raw) return Date.now()
+
+  // Absolute UTC / offset timestamps (ECCC, ISO with Z)
+  if (/[zZ]$/.test(raw) || /[+-]\d{2}:?\d{2}$/.test(raw)) {
+    const t = Date.parse(raw)
+    return Number.isFinite(t) ? t : Date.now()
+  }
+
+  const m = raw.match(
     /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/,
   )
   if (!m) {
-    const t = new Date(isoLocal).getTime()
+    const t = new Date(raw).getTime()
     return Number.isNaN(t) ? Date.now() : t
   }
 
