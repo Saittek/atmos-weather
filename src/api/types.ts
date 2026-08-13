@@ -104,6 +104,23 @@ export interface WeatherData {
     shortModel?: string
     longModel?: string
   }
+  /** Nearest airport METAR surface observation (when available) */
+  solara_obs?: {
+    icao: string
+    name: string
+    lat: number
+    lon: number
+    tempC: number | null
+    dewpC: number | null
+    windDir: number | null
+    windKt: number | null
+    visSm: string | null
+    altimHpa: number | null
+    cover: string | null
+    raw: string
+    obsTime: number
+    distanceKm: number
+  } | null
 }
 
 export interface AirQualityData {

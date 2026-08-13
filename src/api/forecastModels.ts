@@ -1,16 +1,37 @@
 /**
  * Region-aware Open-Meteo model selection + short/long blend.
  *
- * Strategy:
- * - US CONUS: HRRR (gfs_hrrr) for ~next 24h, ECMWF IFS for the rest
- * - Canada: GEM seamless (HRDPS where available) short, ECMWF long
- * - Europe: ICON seamless + ECMWF long
- * - Elsewhere: Open-Meteo best_match (highest-res available)
+ * Strategy (free NWS-class sources via Open-Meteo):
+ * - US CONUS: HRRR short + NBM when useful, ECMWF long
+ * - Canada: GEM seamless short, ECMWF long (+ ECCC City Page in weather.ts)
+ * - UK/Ireland: UKMO UK 2 km short, UKMO seamless / ECMWF long
+ * - France: AROME short, Météo-France seamless long
+ * - Central Europe: ICON-D2 / ICON seamless + ECMWF
+ * - Nordics: MET Norway Nordic + ECMWF
+ * - Benelux: KNMI seamless + ECMWF
+ * - Japan: JMA MSM short, JMA seamless long
+ * - Korea: KMA seamless + ECMWF
+ * - Australia/NZ: best_match (BOM ACCESS when available) + ECMWF
+ * - China: CMA GRAPES + ECMWF
+ * - Elsewhere: best_match + ECMWF backbone
  */
 
 import type { DailyWeather, HourlyWeather, Minutely15, WeatherData } from './types'
 
-export type ForecastRegion = 'us_conus' | 'canada' | 'europe' | 'global'
+export type ForecastRegion =
+  | 'us_conus'
+  | 'canada'
+  | 'uk'
+  | 'france'
+  | 'nordic'
+  | 'benelux'
+  | 'central_europe'
+  | 'europe'
+  | 'japan'
+  | 'korea'
+  | 'australia'
+  | 'china'
+  | 'global'
 
 export interface ModelPick {
   region: ForecastRegion
@@ -27,10 +48,31 @@ export interface ModelPick {
 export function detectForecastRegion(lat: number, lon: number): ForecastRegion {
   // Contiguous US + nearby
   if (lat >= 24 && lat <= 50 && lon >= -125 && lon <= -66) return 'us_conus'
-  // Canada (and AK panhandle-ish) — prefer GEM/HRDPS family
+  // Canada (and AK panhandle-ish)
   if (lat > 41 && lat <= 84 && lon >= -141 && lon <= -52) return 'canada'
-  // Western/central Europe where ICON/AROME ecosystem is strong
+
+  // UK + Ireland
+  if (lat >= 49 && lat <= 61 && lon >= -11 && lon <= 2) return 'uk'
+  // France (metropolitan-ish)
+  if (lat >= 41 && lat <= 51.5 && lon >= -5.5 && lon <= 10) return 'france'
+  // Benelux
+  if (lat >= 49 && lat <= 54 && lon >= 2.5 && lon <= 7.5) return 'benelux'
+  // Nordics
+  if (lat >= 54 && lat <= 72 && lon >= 4 && lon <= 32) return 'nordic'
+  // DACH / Central Europe high-res ICON-D2 zone
+  if (lat >= 45 && lat <= 56 && lon >= 5 && lon <= 18) return 'central_europe'
+  // Broader Europe
   if (lat >= 35 && lat <= 72 && lon >= -12 && lon <= 40) return 'europe'
+
+  // Japan
+  if (lat >= 24 && lat <= 46 && lon >= 123 && lon <= 146) return 'japan'
+  // South Korea
+  if (lat >= 33 && lat <= 39 && lon >= 124 && lon <= 132) return 'korea'
+  // Australia + NZ
+  if (lat >= -48 && lat <= -10 && lon >= 112 && lon <= 180) return 'australia'
+  // Mainland China-ish
+  if (lat >= 18 && lat <= 54 && lon >= 73 && lon <= 135) return 'china'
+
   return 'global'
 }
 
@@ -41,9 +83,10 @@ export function pickModels(lat: number, lon: number): ModelPick {
       return {
         region,
         shortModel: 'gfs_hrrr',
-        longModel: 'ecmwf_ifs025',
+        // NBM is the US multi-day consensus; ECMWF still in fallback chain
+        longModel: 'ncep_nbm_conus',
         shortPreferHours: 24,
-        label: 'HRRR + ECMWF',
+        label: 'HRRR + NBM',
       }
     case 'canada':
       return {
@@ -51,8 +94,47 @@ export function pickModels(lat: number, lon: number): ModelPick {
         shortModel: 'gem_seamless',
         longModel: 'ecmwf_ifs025',
         shortPreferHours: 36,
-        // ECCC City Page overlays this in fetchWeather for official current/hourly
         label: 'ECCC + GEM + ECMWF',
+      }
+    case 'uk':
+      return {
+        region,
+        shortModel: 'ukmo_uk_deterministic_2km',
+        longModel: 'ukmo_seamless',
+        shortPreferHours: 36,
+        label: 'UKMO UKV + UKMO/ECMWF',
+      }
+    case 'france':
+      return {
+        region,
+        shortModel: 'arome_france',
+        longModel: 'meteofrance_seamless',
+        shortPreferHours: 36,
+        label: 'AROME + Météo-France',
+      }
+    case 'nordic':
+      return {
+        region,
+        shortModel: 'metno_nordic',
+        longModel: 'ecmwf_ifs025',
+        shortPreferHours: 36,
+        label: 'MET Norway + ECMWF',
+      }
+    case 'benelux':
+      return {
+        region,
+        shortModel: 'knmi_seamless',
+        longModel: 'ecmwf_ifs025',
+        shortPreferHours: 36,
+        label: 'KNMI + ECMWF',
+      }
+    case 'central_europe':
+      return {
+        region,
+        shortModel: 'icon_d2',
+        longModel: 'icon_seamless',
+        shortPreferHours: 36,
+        label: 'ICON-D2 + ICON/ECMWF',
       }
     case 'europe':
       return {
@@ -61,6 +143,38 @@ export function pickModels(lat: number, lon: number): ModelPick {
         longModel: 'ecmwf_ifs025',
         shortPreferHours: 48,
         label: 'ICON + ECMWF',
+      }
+    case 'japan':
+      return {
+        region,
+        shortModel: 'jma_msm',
+        longModel: 'jma_seamless',
+        shortPreferHours: 36,
+        label: 'JMA MSM + JMA',
+      }
+    case 'korea':
+      return {
+        region,
+        shortModel: 'kma_seamless',
+        longModel: 'ecmwf_ifs025',
+        shortPreferHours: 36,
+        label: 'KMA + ECMWF',
+      }
+    case 'australia':
+      return {
+        region,
+        // best_match pulls BOM ACCESS when Open-Meteo has coverage
+        longModel: 'best_match',
+        shortPreferHours: 0,
+        label: 'Best match · Australia (BOM/ECMWF)',
+      }
+    case 'china':
+      return {
+        region,
+        shortModel: 'cma_grapes_global',
+        longModel: 'ecmwf_ifs025',
+        shortPreferHours: 48,
+        label: 'CMA GRAPES + ECMWF',
       }
     default:
       return {
@@ -74,9 +188,20 @@ export function pickModels(lat: number, lon: number): ModelPick {
 
 /** Fallback chain if a preferred model 404s / errors */
 export function fallbackModels(pick: ModelPick): string[] {
-  const chain = [pick.longModel, 'best_match', 'gfs_seamless', 'icon_seamless', 'ecmwf_ifs025']
+  const chain = [
+    pick.longModel,
+    'best_match',
+    'ecmwf_ifs025',
+    'gfs_seamless',
+    'icon_seamless',
+  ]
   if (pick.shortModel) chain.unshift(pick.shortModel)
-  return [...new Set(chain)]
+  // Region-specific extras
+  if (pick.region === 'us_conus') chain.push('ncep_nbm_conus', 'gfs_hrrr')
+  if (pick.region === 'uk') chain.push('ukmo_seamless', 'ukmo_uk_deterministic_2km')
+  if (pick.region === 'japan') chain.push('jma_seamless', 'jma_msm')
+  if (pick.region === 'france') chain.push('meteofrance_seamless', 'arome_france')
+  return [...new Set(chain.filter(Boolean))]
 }
 
 function isFiniteNum(v: unknown): v is number {
@@ -169,7 +294,6 @@ export function blendDaily(short: DailyWeather | undefined, long: DailyWeather):
     'wind_direction_10m_dominant',
   ]
 
-  // Prefer short-model values for every day both series share (usually today + tomorrow)
   for (let si = 0; si < short.time.length; si++) {
     const day = short.time[si]?.slice(0, 10)
     if (!day) continue
@@ -202,7 +326,6 @@ export function blendWeatherData(
 
   return {
     ...long,
-    // Prefer short-range "now" when present
     current: short.current ?? long.current,
     minutely_15: (short.minutely_15?.time?.length
       ? short.minutely_15

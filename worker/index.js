@@ -674,6 +674,7 @@ export default {
             'metrics',
             'sky-kp',
             'sky-iss',
+            'metar',
           ],
           runtime: 'cloudflare-worker',
           pushConfigured: Boolean(getVapidConfig(env)),
@@ -865,6 +866,33 @@ export default {
           return json({ days, rows: rows.results || [] })
         } catch (e) {
           return err('Metrics unavailable — run migrations', 503)
+        }
+      }
+
+      // ── Nearest METAR surface observation (proxy AWC — CORS + cache) ──
+      if (path === '/api/metar' && method === 'GET') {
+        try {
+          const url = new URL(request.url)
+          const lat = parseFloat(url.searchParams.get('lat') || '')
+          const lon = parseFloat(url.searchParams.get('lon') || '')
+          if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+            return err('lat and lon required', 400)
+          }
+          const metar = await fetchNearestMetarProxy(lat, lon)
+          return json(
+            { metar },
+            200,
+            {
+              'Cache-Control': 'public, max-age=120',
+              'Access-Control-Allow-Origin': '*',
+            },
+          )
+        } catch (e) {
+          console.error('metar', e)
+          return json({ metar: null }, 200, {
+            'Cache-Control': 'public, max-age=60',
+            'Access-Control-Allow-Origin': '*',
+          })
         }
       }
 
@@ -1353,6 +1381,80 @@ export default {
       })(),
     )
   },
+}
+
+/** Haversine km for METAR station pick */
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371
+  const toR = (d) => (d * Math.PI) / 180
+  const dLat = toR(lat2 - lat1)
+  const dLon = toR(lon2 - lon1)
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toR(lat1)) * Math.cos(toR(lat2)) * Math.sin(dLon / 2) ** 2
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)))
+}
+
+/**
+ * Proxy nearest METAR from aviationweather.gov (browser CORS-safe).
+ */
+async function fetchNearestMetarProxy(lat, lon) {
+  const boxes = [0.6, 1.2, 2.0]
+  for (const d of boxes) {
+    const bbox = `${lat - d},${lon - d},${lat + d},${lon + d}`
+    const url = `https://aviationweather.gov/api/data/metar?bbox=${encodeURIComponent(bbox)}&format=json&hours=2`
+    try {
+      const res = await fetch(url, {
+        headers: { Accept: 'application/json', 'User-Agent': 'SolaraWeather/1.0' },
+        cf: { cacheTtl: 120, cacheEverything: true },
+      })
+      if (!res.ok) continue
+      const data = await res.json()
+      const rows = Array.isArray(data) ? data : data?.data
+      if (!Array.isArray(rows) || !rows.length) continue
+
+      let best = null
+      const nowSec = Date.now() / 1000
+      for (const r of rows) {
+        if (typeof r.lat !== 'number' || typeof r.lon !== 'number') continue
+        if (typeof r.temp !== 'number' || !Number.isFinite(r.temp)) continue
+        const icao = typeof r.icaoId === 'string' ? r.icaoId : ''
+        if (!icao) continue
+        const dist = haversineKm(lat, lon, r.lat, r.lon)
+        if (dist > 120) continue
+        let obsTime =
+          typeof r.obsTime === 'number'
+            ? r.obsTime > 1e12
+              ? Math.floor(r.obsTime / 1000)
+              : r.obsTime
+            : r.reportTime
+              ? Math.floor(new Date(r.reportTime).getTime() / 1000)
+              : 0
+        if (obsTime && nowSec - obsTime > 3 * 3600) continue
+        const cand = {
+          icao,
+          name: typeof r.name === 'string' ? r.name : icao,
+          lat: r.lat,
+          lon: r.lon,
+          tempC: r.temp,
+          dewpC: typeof r.dewp === 'number' ? r.dewp : null,
+          windDir: typeof r.wdir === 'number' ? r.wdir : null,
+          windKt: typeof r.wspd === 'number' ? r.wspd : null,
+          visSm: r.visib != null ? String(r.visib) : null,
+          altimHpa: typeof r.altim === 'number' ? r.altim : null,
+          cover: typeof r.cover === 'string' ? r.cover : null,
+          raw: typeof r.rawOb === 'string' ? r.rawOb : '',
+          obsTime,
+          distanceKm: dist,
+        }
+        if (!best || cand.distanceKm < best.distanceKm) best = cand
+      }
+      if (best) return best
+    } catch (e) {
+      console.error('metar-fetch', e)
+    }
+  }
+  return null
 }
 
 /** Optional Resend.com transactional email for password reset links. */

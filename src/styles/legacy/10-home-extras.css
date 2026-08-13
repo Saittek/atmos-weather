@@ -742,6 +742,13 @@ a.today-chip-link:hover {
   font-size: 0.68rem;
   color: var(--text-mute, rgba(226, 232, 240, 0.5));
 }
+.current-obs-line {
+  margin: 0.15rem 0 0;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-soft, rgba(186, 230, 253, 0.78));
+  letter-spacing: 0.01em;
+}
 .share-inline {
   font-weight: 700;
   letter-spacing: 0.02em;

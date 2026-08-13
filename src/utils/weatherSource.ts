@@ -2,6 +2,8 @@
  * Human-readable forecast source line for trust UI.
  */
 import type { WeatherData } from '../api/types'
+import { formatMetarLine } from '../api/metar'
+import type { Units } from './format'
 
 /** e.g. "Sources · Environment Canada City Page + GEM/ECMWF · Open-Meteo" */
 export function formatWeatherSource(weather: WeatherData | null | undefined): string {
@@ -19,8 +21,12 @@ export function formatWeatherSource(weather: WeatherData | null | undefined): st
       : `Sources · ${strategy} · Open-Meteo`
   }
 
-  // US / Europe blends
-  if (/HRRR|ECMWF|ICON|GEM|blend|Best/i.test(strategy)) {
+  // Named national blends (UKMO, JMA, AROME, KMA, CMA, KNMI, MET Norway, ICON…)
+  if (
+    /HRRR|ECMWF|ICON|GEM|UKMO|JMA|AROME|KMA|CMA|KNMI|MET Norway|Météo|Best|blend|NBM/i.test(
+      strategy,
+    )
+  ) {
     const bits = [strategy]
     if (s.shortModel) bits.push(`near-term ${s.shortModel}`)
     if (s.longModel && s.longModel !== s.shortModel) bits.push(`longer ${s.longModel}`)
@@ -30,6 +36,16 @@ export function formatWeatherSource(weather: WeatherData | null | undefined): st
   const short = s.shortModel ? ` · ${s.shortModel}` : ''
   const long = s.longModel && s.longModel !== s.shortModel ? ` · ${s.longModel}` : ''
   return `Sources · Solara blend (${strategy}${short}${long}) · Open-Meteo`
+}
+
+/** Surface observation line when METAR is attached */
+export function formatObsSource(
+  weather: WeatherData | null | undefined,
+  units: Units = 'metric',
+): string | null {
+  const m = weather?.solara_obs
+  if (!m?.icao) return null
+  return formatMetarLine(m, units)
 }
 
 /** One-line “what do H/L mean” for the hero */

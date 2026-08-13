@@ -13,8 +13,14 @@ import type {
 } from './types'
 import { filterActiveAlerts } from '../utils/activeAlerts'
 import { isDaytimeNow } from '../utils/daylight'
-import { blendWeatherData, pickModels, detectForecastRegion } from './forecastModels'
+import {
+  blendWeatherData,
+  pickModels,
+  detectForecastRegion,
+  fallbackModels,
+} from './forecastModels'
 import { fetchNearestEcccCityPage, mergeEcccIntoWeather } from './ecccCityPage'
+import { fetchNearestMetar } from './metar'
 import { getApiBase } from '../lib/native'
 import { todayDailyIndex } from '../utils/weatherStory'
 
@@ -223,7 +229,19 @@ export async function fetchWeather(
   const region = detectForecastRegion(lat, lon)
   const key = cacheKey(lat, lon, `${lite ? 'lite' : 'full'}:${pick.label}:eccc`)
   const hit = forecastCache.get(key)
-  if (hit && Date.now() - hit.at < FORECAST_TTL_MS) return hit.data
+  if (hit && Date.now() - hit.at < FORECAST_TTL_MS) {
+    // Keep forecast cache; refresh surface obs lightly
+    try {
+      const metar = await Promise.race([
+        fetchNearestMetar(lat, lon),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 1600)),
+      ])
+      if (metar) return { ...hit.data, solara_obs: metar }
+    } catch {
+      /* ignore */
+    }
+    return hit.data
+  }
 
   if (forecastCache.size > 24) {
     const first = forecastCache.keys().next().value
@@ -237,31 +255,69 @@ export async function fetchWeather(
       : Promise.resolve(null)
 
   let data: WeatherData | null = null
+  const chain = fallbackModels(pick)
+
+  async function tryModel(
+    model: string,
+    mode: 'short' | 'long' | 'single',
+  ): Promise<WeatherData | null> {
+    return fetchForecastRaw(buildForecastParams(lat, lon, { lite, model, mode }))
+  }
 
   if (pick.shortModel) {
-    const [short, long, eccc] = await Promise.all([
-      fetchForecastRaw(
-        buildForecastParams(lat, lon, { lite, model: pick.shortModel, mode: 'short' }),
-      ),
-      fetchForecastRaw(
-        buildForecastParams(lat, lon, { lite, model: pick.longModel, mode: 'long' }),
-      ),
+    const [short0, long0, eccc] = await Promise.all([
+      tryModel(pick.shortModel, 'short'),
+      tryModel(pick.longModel, 'long'),
       ecccPromise,
     ])
 
-    if (long && short) {
-      data = blendWeatherData(short, long, pick)
-    } else if (long) {
-      data = blendWeatherData(null, long, pick)
-    } else if (short) {
-      const fallback = await fetchForecastRaw(
-        buildForecastParams(lat, lon, { lite, model: 'best_match', mode: 'single' }),
-      )
-      if (fallback) data = blendWeatherData(short, fallback, { ...pick, longModel: 'best_match' })
-      else data = { ...short, solara_source: { strategy: pick.label, shortModel: pick.shortModel } }
+    let short = short0
+    let long = long0
+    let longModelUsed = pick.longModel
+    let shortModelUsed = pick.shortModel
+
+    // If preferred long failed, walk fallback chain
+    if (!long) {
+      for (const m of chain) {
+        if (m === pick.shortModel || m === pick.longModel) continue
+        long = await tryModel(m, 'long')
+        if (long) {
+          longModelUsed = m
+          break
+        }
+      }
+    }
+    if (!short) {
+      for (const m of chain) {
+        if (m === pick.shortModel) continue
+        short = await tryModel(m, 'short')
+        if (short) {
+          shortModelUsed = m
+          break
+        }
+      }
     }
 
-    // Official ECCC City Page overlays model backbone for Canadian locations
+    const usedPick = {
+      ...pick,
+      shortModel: shortModelUsed,
+      longModel: longModelUsed,
+    }
+
+    if (long && short) {
+      data = blendWeatherData(short, long, usedPick)
+    } else if (long) {
+      data = blendWeatherData(null, long, usedPick)
+    } else if (short) {
+      data = {
+        ...short,
+        solara_source: {
+          strategy: pick.label,
+          shortModel: shortModelUsed,
+        },
+      }
+    }
+
     if (data && eccc) {
       try {
         data = mergeEcccIntoWeather(data, eccc)
@@ -270,38 +326,31 @@ export async function fetchWeather(
       }
     }
   } else {
-    // Non-blended path still checks ECCC if somehow canada without shortModel
     const eccc = await ecccPromise
-    data = await fetchForecastRaw(
-      buildForecastParams(lat, lon, {
-        lite,
-        model: pick.longModel || 'best_match',
-        mode: 'single',
-      }),
-    )
-    if (data) {
-      data = {
-        ...data,
-        solara_source: {
-          strategy: pick.label,
-          longModel: pick.longModel || 'best_match',
-        },
-      }
-      if (eccc) {
-        try {
-          data = mergeEcccIntoWeather(data, eccc)
-        } catch {
-          /* ignore */
+    for (const m of chain) {
+      data = await tryModel(m, 'single')
+      if (data) {
+        data = {
+          ...data,
+          solara_source: {
+            strategy: pick.label,
+            longModel: m,
+          },
         }
+        break
+      }
+    }
+    if (data && eccc) {
+      try {
+        data = mergeEcccIntoWeather(data, eccc)
+      } catch {
+        /* ignore */
       }
     }
   }
 
   if (!data) {
-    // Last resort: bare default Open-Meteo
-    data = await fetchForecastRaw(
-      buildForecastParams(lat, lon, { lite, model: 'best_match', mode: 'single' }),
-    )
+    data = await tryModel('best_match', 'single')
     if (data) {
       data = {
         ...data,
@@ -311,6 +360,18 @@ export async function fetchWeather(
   }
 
   if (!data) throw new Error('Weather forecast failed')
+
+  // Surface obs (METAR) — best-effort, don't block forever
+  try {
+    const metar = await Promise.race([
+      fetchNearestMetar(lat, lon),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 2800)),
+    ])
+    if (metar) data = { ...data, solara_obs: metar }
+  } catch {
+    /* forecast is enough */
+  }
+
   forecastCache.set(key, { at: Date.now(), data })
   return data
 }

@@ -23,7 +23,7 @@ import { vsNormalLine } from '../utils/severeTimeline'
 import { formatUpdatedAgo, isWeatherStale } from '../utils/relativeTime'
 import { isMobileViewport } from '../utils/device'
 import { precipTiming } from '../utils/precipTiming'
-import { formatWeatherSource, todayRangeHint } from '../utils/weatherSource'
+import { formatObsSource, formatWeatherSource, todayRangeHint } from '../utils/weatherSource'
 import { useI18n } from '../i18n/I18nProvider'
 import { trAqi, trUv, trWeatherLabel } from '../i18n/messages'
 import { WeatherIcon3D } from './WeatherIcon3D'
@@ -134,6 +134,7 @@ export function CurrentWeather({
   const stale = isWeatherStale(updatedAt, nowTick)
 
   const sourceLine = formatWeatherSource(weather)
+  const obsLine = formatObsSource(weather, units)
 
   const onMove = (e: MouseEvent<HTMLElement>) => {
     if (mobile) return
@@ -248,6 +249,11 @@ export function CurrentWeather({
             {sourceLine}
             {updatedLabel ? ` · ${refreshing ? t('app.refreshing') : updatedLabel}` : ''}
           </p>
+          {obsLine && (
+            <p className="current-obs-line" title={weather.solara_obs?.raw || undefined}>
+              {obsLine}
+            </p>
+          )}
           <p
             className={`current-precip-timing wet-${timing.level}`}
             role="status"

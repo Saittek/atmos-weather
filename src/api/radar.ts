@@ -117,7 +117,7 @@ export const RADAR_SOURCES: RadarSourceMeta[] = [
   {
     id: 'global_loop',
     name: 'Global radar (loop)',
-    desc: 'Worldwide precip mosaic with forecast frames',
+    desc: 'Worldwide precip mosaic (RainViewer) — best free global/Europe coverage + short nowcast',
     coverage: 'Global',
     animated: true,
     maxNativeZoom: 7,
@@ -204,9 +204,20 @@ export function isCanadaRadarRegion(lat?: number, lon?: number): boolean {
   return false
 }
 
-/** Default: worldwide animated mosaic (user can switch to Storm chaser / regional layers) */
-export function defaultSourceForLocation(_lat?: number, _lon?: number): RadarSourceId {
-  return 'global_loop'
+/**
+ * Pick the strongest free radar for the user’s region:
+ * - Canada → official ECCC rain composite
+ * - CONUS NEXRAD domain → national mosaic loop
+ * - Elsewhere (incl. Europe) → Storm chaser (region-aware RainViewer/ECCC/NEXRAD)
+ */
+export function defaultSourceForLocation(lat?: number, lon?: number): RadarSourceId {
+  if (lat == null || lon == null || !Number.isFinite(lat) || !Number.isFinite(lon)) {
+    return 'storm_chaser'
+  }
+  if (isCanadaRadarRegion(lat, lon)) return 'eccc_radar'
+  if (isNexradMosaicRegion(lat, lon)) return 'us_nexrad_loop'
+  // Europe / Asia / rest — RainViewer via storm chaser palette + global fallbacks
+  return 'storm_chaser'
 }
 
 /** Prefer Mapbox dark basemap for chaser-style sources when token exists */
