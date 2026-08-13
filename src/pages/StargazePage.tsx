@@ -42,6 +42,7 @@ import {
   removeDarkSite,
   type DarkSite,
 } from '../utils/darkSites'
+import { ModePageShell } from '../components/ModePageShell'
 
 const StargazeCloudMap = lazy(() =>
   import('../components/StargazeCloudMap').then((m) => ({ default: m.StargazeCloudMap })),
@@ -499,36 +500,35 @@ export default function StargazePage() {
   }, [location?.latitude])
 
   return (
-    <div className={`sg-page app${redMode ? ' sg-red' : ''}`} data-page="stargaze">
-      <header className="sg-topbar">
-        <div className="sg-topbar-row">
-          <Link to="/" className="chip-btn" title={te('common.dashboard')}>
-            ← Solara
-          </Link>
-          <h1 className="sg-title">
-            <span aria-hidden>✨</span> {te('sg.title')}
-          </h1>
-          <div className="sg-top-actions">
-            <button
-              type="button"
-              className={`chip-btn${redMode ? ' on' : ''}`}
-              onClick={toggleRed}
-              title={te('sg.redTitle')}
-            >
-              {te('sg.red')}
-            </button>
-            <UnitToggle units={units} onChange={setUnits} />
-            <button
-              type="button"
-              className="chip-btn"
-              onClick={() => refresh()}
-              disabled={refreshing || loading}
-            >
-              {refreshing ? '…' : '↻'}
-            </button>
-          </div>
-        </div>
-        <div className="sg-search-row">
+    <ModePageShell
+      mode="stargaze"
+      title={te('sg.title')}
+      subtitle={location?.name}
+      emoji="✨"
+      className={`sg-page app${redMode ? ' sg-red' : ''}`}
+      actions={
+        <>
+          <button
+            type="button"
+            className={`chip-btn${redMode ? ' on' : ''}`}
+            onClick={toggleRed}
+            title={te('sg.redTitle')}
+          >
+            {te('sg.red')}
+          </button>
+          <UnitToggle units={units} onChange={setUnits} />
+          <button
+            type="button"
+            className="chip-btn"
+            onClick={() => refresh()}
+            disabled={refreshing || loading}
+          >
+            {refreshing ? '…' : '↻'}
+          </button>
+        </>
+      }
+      belowBar={
+        <div className="sg-search-row mode-page-search">
           <SearchBar
             onSelect={onSelect}
             onUseLocation={() => void requestMyLocation()}
@@ -537,8 +537,8 @@ export default function StargazePage() {
             onGoHome={() => goHome()}
           />
         </div>
-      </header>
-
+      }
+    >
       <main className="sg-main">
         {error && (
           <div className="panel sg-error" role="alert">
@@ -1128,6 +1128,6 @@ export default function StargazePage() {
           </div>
         )}
       </main>
-    </div>
+    </ModePageShell>
   )
 }

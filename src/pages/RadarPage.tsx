@@ -1,9 +1,10 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { reverseGeocode } from '../api/weather'
 import type { LocationResult } from '../api/types'
 import type { Units } from '../utils/format'
 import { useI18n } from '../i18n/I18nProvider'
+import { ModePageShell } from '../components/ModePageShell'
 
 const RadarMap = lazy(() =>
   import('../components/RadarMap').then((m) => ({ default: m.RadarMap })),
@@ -71,7 +72,6 @@ export default function RadarPage() {
         ? 'imperial'
         : stored.units
 
-  // Keep place in sync when navigating /radar?lat=… from dashboard links
   useEffect(() => {
     const next = placeFromParams(params)
     if (next) {
@@ -91,7 +91,6 @@ export default function RadarPage() {
     if (s.lastLocation) setPlace(s.lastLocation)
   }, [params])
 
-  // Resolve a friendly name if only coords were provided
   useEffect(() => {
     const lat = parseFloat(params.get('lat') ?? '')
     const lon = parseFloat(params.get('lon') ?? '')
@@ -119,43 +118,36 @@ export default function RadarPage() {
   }, [place])
 
   return (
-    <div className="radar-page">
-      <header className="radar-page-bar">
-        <Link to={backQuery} className="chip-btn">
-          {t('page.back')}
-        </Link>
-        <div className="radar-page-title">
-          <strong>📡 {t('page.radar')}</strong>
-          <span>{place.name}</span>
-        </div>
-        <div className="radar-page-actions">
-          <Link to="/" className="chip-btn hide-sm">
-            {t('search.home')}
-          </Link>
-        </div>
-      </header>
-      <div className="radar-page-map">
-        <Suspense
-          fallback={
-            <div className="map-chunk-fallback radar-page-fallback" role="status">
-              <div className="spinner large" />
-              <span>Loading radar…</span>
-            </div>
-          }
-        >
-          <RadarMap
-            lat={place.latitude}
-            lon={place.longitude}
-            placeName={place.name}
-            units={units}
-            severeMode
-            chaserOverlays
-            mapId="radar-page-map"
-            pageMode
-            homeLocation={homeLocation}
-          />
-        </Suspense>
-      </div>
-    </div>
+    <ModePageShell
+      mode="radar"
+      title={t('page.radar')}
+      subtitle={place.name}
+      emoji="📡"
+      backTo={backQuery}
+      backLabel={t('page.back')}
+      fullViewport
+      className="radar-page"
+    >
+      <Suspense
+        fallback={
+          <div className="map-chunk-fallback radar-page-fallback mode-page-loading" role="status">
+            <div className="spinner large" />
+            <span>Loading radar…</span>
+          </div>
+        }
+      >
+        <RadarMap
+          lat={place.latitude}
+          lon={place.longitude}
+          placeName={place.name}
+          units={units}
+          severeMode
+          chaserOverlays
+          mapId="radar-page-map"
+          pageMode
+          homeLocation={homeLocation}
+        />
+      </Suspense>
+    </ModePageShell>
   )
 }

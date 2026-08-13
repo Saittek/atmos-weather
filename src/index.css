@@ -55,15 +55,10 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb:hover {
   overflow-x: clip;
 }
 
-/* Full-page radar needs a definite height chain for Leaflet */
-#root:has(.radar-page) {
-  height: 100vh;
-  height: 100dvh;
-  overflow: hidden;
-}
-
-/* Full-page 3D Earth radar */
-#root:has(.globe-page) {
+/* Full-page map modes need a definite height chain (Leaflet / MapLibre) */
+#root:has(.radar-page),
+#root:has(.globe-page),
+#root:has(.mode-page--map) {
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
@@ -98,6 +93,7 @@ body.native-ios .app.has-alerts.alerts-minimized {
 }
 
 body.native-ios .radar-page-bar,
+body.native-ios .mode-page-bar,
 body.native-ios .widget-bar {
   padding-top: max(0.55rem, var(--sat));
   padding-left: max(0.75rem, var(--sal));

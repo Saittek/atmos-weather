@@ -22,6 +22,7 @@ import {
 } from '../utils/stormChaser'
 import { shareBriefingCard } from '../utils/shareBriefingCard'
 import { filterActiveAlerts } from '../utils/activeAlerts'
+import { ModePageShell } from '../components/ModePageShell'
 
 const RadarMap = lazy(() =>
   import('../components/RadarMap').then((m) => ({ default: m.RadarMap })),
@@ -294,16 +295,16 @@ export default function StormChaserPage() {
   }
 
   return (
-    <div className="chaser-page app" data-storm-mode="true">
-      <header className="chaser-topbar">
-        <Link to={homeLink} className="chip-btn">
-          ← Solara
-        </Link>
-        <div className="chaser-brand">
-          <strong>🌪 Storm Chasers</strong>
-          <span>{place?.name || 'Search a location to begin'}</span>
-        </div>
-        <div className="chaser-top-actions">
+    <ModePageShell
+      mode="chase"
+      title="Storm Chasers"
+      subtitle={place?.name || 'Search a location to begin'}
+      emoji="🌪"
+      backTo={homeLink}
+      className="chaser-page app"
+      fullViewport={false}
+      actions={
+        <>
           {homeLocation && (
             <button
               type="button"
@@ -331,27 +332,27 @@ export default function StormChaserPage() {
             disabled={!brief}
             title="Share chase pack image + text"
           >
-            {shareMsg ?? '📦 Chase pack'}
+            {shareMsg ?? '📦 Pack'}
           </button>
-          <Link to={radarLink} className="chip-btn">
-            📡 Full
-          </Link>
-        </div>
-      </header>
-
-      <div className="chaser-search-row">
-        <SearchBar
-          onSelect={onSelect}
-          onUseLocation={() => void requestMyLocation()}
-          geoLoading={geoLoading}
-        />
-      </div>
-
-      <p className="chaser-disclaimer">
-        Decision support for awareness only — not a chase briefing. Always use{' '}
-        <strong>NWS / ECCC alerts</strong> and <strong>SPC</strong> products. Never drive into a
-        core or floodwater.
-      </p>
+        </>
+      }
+      belowBar={
+        <>
+          <div className="chaser-search-row mode-page-search">
+            <SearchBar
+              onSelect={onSelect}
+              onUseLocation={() => void requestMyLocation()}
+              geoLoading={geoLoading}
+            />
+          </div>
+          <p className="chaser-disclaimer mode-page-disclaimer">
+            Decision support for awareness only — not a chase briefing. Always use{' '}
+            <strong>NWS / ECCC alerts</strong> and <strong>SPC</strong> products. Never drive into a
+            core or floodwater.
+          </p>
+        </>
+      }
+    >
 
       {place && (
         <ThreatBanner
@@ -611,6 +612,6 @@ export default function StormChaserPage() {
           )}
         </main>
       )}
-    </div>
+    </ModePageShell>
   )
 }

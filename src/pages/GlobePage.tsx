@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { useI18n } from '../i18n/I18nProvider'
+import { ModePageShell } from '../components/ModePageShell'
 import {
   type GlobeMode,
   loadGlobePrefs,
@@ -32,55 +32,41 @@ export default function GlobePage() {
   }, [])
 
   return (
-    <div className="globe-page globe-mission">
-      <header className="globe-page-bar">
-        <Link to="/" className="chip-btn globe-back" title={te('common.dashboard')}>
-          {te('globe.back')}
-        </Link>
-        <div className="globe-page-brand">
-          <span className="globe-page-earth" aria-hidden>
-            🌍
-          </span>
-          <div>
-            <strong>{te('globe.title')}</strong>
-            <span>{te('globe.subtitle')}</span>
-          </div>
-        </div>
-        <div className="globe-page-actions">
-          <Link to="/radar" className="chip-btn hide-sm" title={te('globe.flatRadar')}>
-            📡
-          </Link>
-          <Link to="/chase" className="chip-btn hide-sm" title={te('globe.stormChaser')}>
-            🌪
-          </Link>
-        </div>
-        <div className="globe-mode-segment" role="tablist" aria-label={te('globe.modeAria')}>
+    <ModePageShell
+      mode="globe"
+      title={te('globe.title')}
+      subtitle={te('globe.subtitle')}
+      emoji="🌍"
+      backLabel={te('globe.back')}
+      fullViewport
+      className="globe-page globe-mission"
+      center={
+        <div className="globe-mode-segment mode-segment" role="tablist" aria-label={te('globe.modeAria')}>
           {MODES.map((m) => (
             <button
               key={m.id}
               type="button"
               role="tab"
               aria-selected={mode === m.id}
-              className={`globe-mode-chip ${mode === m.id ? 'is-active' : ''}`}
+              className={`globe-mode-chip mode-segment-chip ${mode === m.id ? 'is-active' : ''}`}
               onClick={() => onMode(m.id)}
             >
               {te(m.labelKey as 'globe.modeRadar')}
             </button>
           ))}
         </div>
-      </header>
-      <div className="globe-page-map">
-        <Suspense
-          fallback={
-            <div className="globe-overlay-msg" role="status">
-              <div className="spinner large" />
-              <span>{te('globe.loading')}</span>
-            </div>
-          }
-        >
-          <GlobalRadarGlobe missionMode={mode} onMissionModeChange={onMode} />
-        </Suspense>
-      </div>
-    </div>
+      }
+    >
+      <Suspense
+        fallback={
+          <div className="globe-overlay-msg mode-page-loading" role="status">
+            <div className="spinner large" />
+            <span>{te('globe.loading')}</span>
+          </div>
+        }
+      >
+        <GlobalRadarGlobe missionMode={mode} onMissionModeChange={onMode} />
+      </Suspense>
+    </ModePageShell>
   )
 }

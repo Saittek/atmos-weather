@@ -3,40 +3,9 @@
  * Loaded after redesign layers.
  */
 
-/* Page shell */
-.globe-page.globe-mission {
-  background: #020617;
-}
-
-.globe-page.globe-mission .globe-page-bar {
-  position: relative;
-  z-index: 8;
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: 0.55rem 0.75rem;
-  padding: max(0.5rem, env(safe-area-inset-top, 0px)) max(0.65rem, env(safe-area-inset-right, 0px))
-    0.5rem max(0.65rem, env(safe-area-inset-left, 0px));
-  background: linear-gradient(180deg, rgba(6, 10, 20, 0.92), rgba(6, 10, 20, 0.72));
-  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
-  backdrop-filter: blur(20px) saturate(1.35);
-  -webkit-backdrop-filter: blur(20px) saturate(1.35);
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.35);
-}
-
-.globe-page.globe-mission .globe-page-brand strong {
-  font-size: 1rem;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  background: linear-gradient(105deg, #fff 20%, #7dd3fc 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
-.globe-page.globe-mission .globe-page-brand span {
-  font-size: 0.7rem;
-  color: rgba(186, 230, 253, 0.75);
+/* Page shell — defers to unified mode-pages.css; keep mission-only HUD tweaks */
+.globe-page.globe-mission.mode-page {
+  /* background from mode-page tokens */
 }
 
 .globe-mode-segment {

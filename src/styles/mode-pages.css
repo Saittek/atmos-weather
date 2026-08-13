@@ -1,0 +1,484 @@
+/**
+ * Unified mode-page chrome — Radar · Earth · Chase · Stargaze
+ * Matches dashboard atmospheric glass (tokens + redesign).
+ * Loaded last so it wins over legacy per-page bars.
+ */
+
+/* ----- Shell ----- */
+.mode-page {
+  min-height: 100dvh;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  color: var(--text, #f1f5f9);
+  background: var(
+    --app-fallback-bg,
+    radial-gradient(1200px 600px at 10% -10%, rgba(56, 189, 248, 0.14), transparent 55%),
+    radial-gradient(900px 500px at 90% 0%, rgba(167, 139, 250, 0.12), transparent 50%),
+    linear-gradient(165deg, #05080f 0%, #0b1424 42%, #0a101c 100%)
+  );
+  isolation: isolate;
+}
+
+.mode-page--map {
+  height: 100dvh;
+  height: 100svh;
+  max-height: 100dvh;
+  overflow: hidden;
+}
+
+.mode-page--desk {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+/* Soft noise / scrim so desk pages feel like dashboard */
+.mode-page--desk::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.35;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(56, 189, 248, 0.08), transparent 60%),
+    radial-gradient(ellipse 60% 40% at 100% 20%, rgba(167, 139, 250, 0.06), transparent 50%);
+}
+
+.mode-page--desk > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ----- Top bar (shared) ----- */
+.mode-page-bar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem 0.65rem;
+  padding: max(0.5rem, env(safe-area-inset-top, 0px)) max(0.7rem, env(safe-area-inset-right, 0px))
+    0.55rem max(0.7rem, env(safe-area-inset-left, 0px));
+  background: color-mix(in srgb, var(--glass-strong, rgba(8, 12, 24, 0.88)) 94%, transparent);
+  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+  backdrop-filter: blur(22px) saturate(1.4);
+  -webkit-backdrop-filter: blur(22px) saturate(1.4);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.28);
+}
+
+.mode-page-bar-start {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+  justify-self: start;
+}
+
+.mode-page-bar-center {
+  justify-self: center;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.mode-page-bar-end {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  min-width: 0;
+  justify-self: end;
+}
+
+.mode-page-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.mode-page-emoji {
+  font-size: 1.35rem;
+  line-height: 1;
+  flex-shrink: 0;
+  filter: drop-shadow(0 2px 8px rgba(56, 189, 248, 0.35));
+}
+
+.mode-page-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  min-width: 0;
+}
+
+.mode-page-titles strong {
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  background: linear-gradient(105deg, #fff 18%, #7dd3fc 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mode-page-titles span {
+  font-size: 0.72rem;
+  color: var(--text-mute, rgba(148, 163, 184, 0.9));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: min(42vw, 16rem);
+}
+
+.mode-page-back {
+  flex-shrink: 0;
+}
+
+.mode-page-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.mode-page-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  padding: 0.18rem;
+  border-radius: var(--radius-pill, 999px);
+  background: var(--chip-bg, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+}
+
+.mode-page-nav .chip-btn,
+.mode-page-bar .chip-btn {
+  border-radius: var(--radius-pill, 999px) !important;
+  background: var(--chip-bg, rgba(255, 255, 255, 0.06)) !important;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.1)) !important;
+  color: var(--text, #f1f5f9) !important;
+  font-weight: 650 !important;
+  text-decoration: none !important;
+}
+
+.mode-page-nav .chip-btn:hover,
+.mode-page-bar .chip-btn:hover {
+  background: var(--accent-soft, rgba(56, 189, 248, 0.16)) !important;
+  border-color: var(--border-accent, rgba(56, 189, 248, 0.35)) !important;
+  transform: translateY(-1px);
+}
+
+.mode-page-nav .icon-chip {
+  width: 2.15rem;
+  height: 2.15rem;
+  padding: 0 !important;
+  display: inline-grid;
+  place-items: center;
+  font-size: 1rem;
+}
+
+/* Mission segment (Earth modes) — shared pill look */
+.mode-page .mode-segment,
+.mode-page .globe-mode-segment {
+  display: inline-flex;
+  gap: 0.18rem;
+  padding: 0.2rem;
+  border-radius: var(--radius-pill, 999px);
+  background: var(--chip-bg, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+  max-width: min(100%, 28rem);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.mode-page .mode-segment::-webkit-scrollbar,
+.mode-page .globe-mode-segment::-webkit-scrollbar {
+  display: none;
+}
+
+.mode-page .mode-segment-chip,
+.mode-page .globe-mode-chip {
+  border: 0;
+  background: transparent;
+  color: var(--text-dim, rgba(226, 232, 240, 0.78));
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  padding: 0.38rem 0.7rem;
+  border-radius: var(--radius-pill, 999px);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.mode-page .mode-segment-chip:hover,
+.mode-page .globe-mode-chip:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.mode-page .mode-segment-chip.is-active,
+.mode-page .globe-mode-chip.is-active {
+  color: #fff;
+  background: linear-gradient(
+    135deg,
+    rgba(56, 189, 248, 0.38),
+    rgba(99, 102, 241, 0.32)
+  );
+  box-shadow: 0 4px 16px rgba(56, 189, 248, 0.22);
+}
+
+/* Below-bar search strip */
+.mode-page-below {
+  padding: 0.55rem max(0.75rem, env(safe-area-inset-right, 0px)) 0.35rem
+    max(0.75rem, env(safe-area-inset-left, 0px));
+  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  background: color-mix(in srgb, var(--glass, rgba(12, 18, 32, 0.55)) 80%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* ----- Body ----- */
+.mode-page-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.mode-page--map .mode-page-body {
+  position: relative;
+  overflow: hidden;
+}
+
+.mode-page--map .mode-page-body > * {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+
+.mode-page--desk .mode-page-body {
+  width: min(72rem, 100%);
+  margin: 0 auto;
+  padding: 0.75rem max(0.85rem, env(safe-area-inset-right, 0px))
+    max(1.25rem, env(safe-area-inset-bottom, 0px)) max(0.85rem, env(safe-area-inset-left, 0px));
+  gap: 0.75rem;
+}
+
+/* Panels inside desk modes → dashboard glass */
+.mode-page--desk .panel,
+.mode-page--desk .chaser-section,
+.mode-page--desk .sg-card,
+.mode-page--desk .chaser-hazard {
+  background: var(--glass, rgba(12, 18, 32, 0.55)) !important;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.1)) !important;
+  border-radius: var(--radius, 20px) !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+}
+
+.mode-page--desk .panel-header h2,
+.mode-page--desk .chaser-section-head h2,
+.mode-page--desk .sg-card h2 {
+  letter-spacing: -0.02em;
+  font-weight: 750;
+}
+
+/* Map page: radar/globe fill body */
+.mode-page--map .radar-panel.radar-page-mode,
+.mode-page--map .globe-stage,
+.mode-page--map .globe-root {
+  height: 100% !important;
+  min-height: 0 !important;
+  border-radius: 0 !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+.mode-page--map .radar-panel.radar-page-mode {
+  padding: 0.5rem 0.55rem 0.65rem !important;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  height: 100%;
+}
+
+.mode-page--map .radar-panel.radar-page-mode .radar-stage {
+  flex: 1;
+  min-height: 0;
+  border-radius: var(--radius, 20px) !important;
+  border: 1px solid var(--border) !important;
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+}
+
+.mode-page--map .radar-panel.radar-page-mode .radar-controls {
+  background: var(--glass-strong, rgba(8, 12, 24, 0.82));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 14px);
+  padding: 0.5rem 0.55rem !important;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+/* Earth HUD chips match glass */
+.mode-page--globe .globe-controls,
+.mode-page--globe .globe-options-menu,
+.mode-page--globe .globe-legend,
+.mode-page--globe .globe-storm-panel,
+.mode-page--globe .globe-side-tools .chip-btn,
+.mode-page--globe .globe-options-trigger,
+.mode-page--globe .globe-options-chip,
+.mode-page--globe .globe-quiet-badge,
+.mode-page--globe .globe-mini-legend span {
+  background: var(--glass-strong, rgba(8, 12, 24, 0.78)) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text) !important;
+  backdrop-filter: blur(14px) saturate(1.25);
+  -webkit-backdrop-filter: blur(14px) saturate(1.25);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+}
+
+.mode-page--globe .globe-options-chip.active,
+.mode-page--globe .globe-options-trigger.active {
+  background: var(--chip-active-bg, rgba(56, 189, 248, 0.22)) !important;
+  border-color: var(--border-accent) !important;
+  color: #fff !important;
+}
+
+/* Kill hard pure-black page fills that fought the theme */
+.mode-page.globe-mission,
+.mode-page--globe {
+  background: var(--app-fallback-bg) !important;
+}
+
+/* Alias legacy page roots when they also carry mode-page */
+.radar-page.mode-page,
+.globe-page.mode-page,
+.chaser-page.mode-page,
+.sg-page.mode-page {
+  /* already covered by .mode-page */
+}
+
+/* Light theme */
+[data-theme='light'] .mode-page {
+  background: var(--app-fallback-bg, #e8eef8);
+  color: var(--text);
+}
+
+[data-theme='light'] .mode-page-bar {
+  background: color-mix(in srgb, var(--glass-strong, #fff) 92%, transparent);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+}
+
+[data-theme='light'] .mode-page-titles strong {
+  background: none;
+  -webkit-background-clip: unset;
+  background-clip: unset;
+  color: var(--text);
+}
+
+[data-theme='light'] .mode-page-nav .chip-btn,
+[data-theme='light'] .mode-page-bar .chip-btn {
+  color: var(--text) !important;
+  background: var(--chip-bg) !important;
+}
+
+/* Mobile: stack bar */
+@media (max-width: 720px) {
+  .mode-page-bar {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      'start end'
+      'center center';
+  }
+
+  .mode-page-bar-start {
+    grid-area: start;
+  }
+
+  .mode-page-bar-center {
+    grid-area: center;
+    justify-self: stretch;
+    overflow-x: auto;
+  }
+
+  .mode-page-bar-end {
+    grid-area: end;
+  }
+
+  .mode-page-titles span {
+    max-width: min(38vw, 10rem);
+  }
+
+  .mode-page-nav .icon-chip {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  /* Hide text labels on very small if overflow */
+  .mode-page-actions .unit-toggle {
+    transform: scale(0.92);
+    transform-origin: right center;
+  }
+}
+
+@media (max-width: 420px) {
+  .mode-page-nav .hide-xs {
+    display: none;
+  }
+}
+
+/* Reduce motion */
+@media (prefers-reduced-motion: reduce) {
+  .mode-page-nav .chip-btn:hover,
+  .mode-page-bar .chip-btn:hover {
+    transform: none;
+  }
+}
+
+html.mobile-perf .mode-page-bar {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.mode-page-loading {
+  flex: 1;
+  display: grid;
+  place-content: center;
+  gap: 0.75rem;
+  justify-items: center;
+  color: var(--text-mute);
+  min-height: 40vh;
+}
+
+.mode-page-search {
+  margin: 0;
+  max-width: 100%;
+}
+
+.mode-page-disclaimer {
+  margin: 0.45rem 0 0;
+  font-size: 0.78rem;
+  color: var(--text-mute);
+  line-height: 1.4;
+}
+
+/* Stargaze red mode still works under mode shell */
+.mode-page.sg-red {
+  --accent: #f87171;
+  --border-accent: rgba(248, 113, 113, 0.4);
+}
