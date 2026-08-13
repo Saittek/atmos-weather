@@ -27,6 +27,8 @@ export async function initNativeShell(): Promise<void> {
 
   try {
     const { StatusBar, Style } = await import('@capacitor/status-bar')
+    // Edge-to-edge: draw under status bar; CSS uses safe-area-inset-top for chrome
+    await StatusBar.setOverlaysWebView({ overlay: true })
     await StatusBar.setStyle({ style: Style.Dark })
     if (Capacitor.getPlatform() === 'android') {
       await StatusBar.setBackgroundColor({ color: '#0b1220' })

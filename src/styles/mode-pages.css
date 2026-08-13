@@ -59,8 +59,9 @@
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: 0.5rem 0.65rem;
-  padding: max(0.5rem, env(safe-area-inset-top, 0px)) max(0.7rem, env(safe-area-inset-right, 0px))
-    0.55rem max(0.7rem, env(safe-area-inset-left, 0px));
+  /* Always clear camera cutout / status bar */
+  padding: max(0.5rem, calc(env(safe-area-inset-top, 0px) + 0.2rem))
+    max(0.7rem, env(safe-area-inset-right, 0px)) 0.55rem max(0.7rem, env(safe-area-inset-left, 0px));
   background: color-mix(in srgb, var(--glass-strong, rgba(8, 12, 24, 0.88)) 94%, transparent);
   border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.1));
   backdrop-filter: blur(22px) saturate(1.4);

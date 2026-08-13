@@ -93,7 +93,10 @@
 }
 
 .app-shell {
-  padding-top: calc(var(--topbar-h, 4.5rem) + var(--alert-bar-h, 0px) + 0.85rem);
+  /* Include --topbar-offset so fixed topbar + iOS safe-area clear content */
+  padding-top: calc(
+    var(--topbar-h, 4.5rem) + var(--alert-bar-h, 0px) + var(--topbar-offset, 0.45rem) + 0.85rem
+  );
 }
 
 /* ===== Glass app bar ===== */

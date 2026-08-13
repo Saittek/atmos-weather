@@ -80,28 +80,55 @@ body.native-ios .app-shell {
   overflow-x: clip;
 }
 
-body.native-ios .alert-top-bar:not(.alert-top-bar-mini) {
-  padding-top: var(--sat);
-}
+/*
+ * iOS camera cutout / Dynamic Island:
+ * Keep fixed chrome fully below env(safe-area-inset-top).
+ * (Previously used sat * 0.2 which drew the topbar under the notch.)
+ */
 body.native-ios .app {
-  --topbar-offset: max(0.35rem, calc(var(--sat) * 0.2));
+  --topbar-offset: calc(var(--sat) + 0.35rem);
 }
-/* --alert-bar-h is measured from the live strip (includes safe-area padding) */
+
+/* Alert strip owns the notch padding when expanded */
+body.native-ios .alert-top-bar:not(.alert-top-bar-mini) {
+  padding-top: max(0.35rem, var(--sat));
+}
+/* Expanded alerts already include safe-area — don't double-offset the topbar */
+body.native-ios .app.has-alerts:not(.alerts-minimized) {
+  --topbar-offset: 0.4rem;
+}
 body.native-ios .app.has-alerts.alerts-minimized {
   /* Circle lives in the top bar — no extra strip under the notch */
   --alert-bar-h: 0px;
+  --topbar-offset: calc(var(--sat) + 0.35rem);
+}
+
+/* Dashboard content must clear fixed topbar + safe area */
+body.native-ios .app-shell {
+  padding-top: calc(
+    var(--topbar-h, 4.5rem) + var(--alert-bar-h, 0px) + var(--topbar-offset, 0.45rem) + 0.75rem
+  ) !important;
 }
 
 body.native-ios .radar-page-bar,
 body.native-ios .mode-page-bar,
-body.native-ios .widget-bar {
-  padding-top: max(0.55rem, var(--sat));
-  padding-left: max(0.75rem, var(--sal));
-  padding-right: max(0.75rem, var(--sar));
+body.native-ios .widget-bar,
+body.native-ios .globe-page-bar,
+body.native-ios .chaser-topbar,
+body.native-ios .sg-topbar {
+  padding-top: max(0.55rem, calc(var(--sat) + 0.25rem)) !important;
+  padding-left: max(0.75rem, var(--sal)) !important;
+  padding-right: max(0.75rem, var(--sar)) !important;
 }
 
-body.native-ios .radar-page {
+body.native-ios .radar-page,
+body.native-ios .mode-page {
   padding-bottom: var(--sab);
+}
+
+/* Account popover: stay under topbar + cutout */
+body.native-ios .account-popover-portal {
+  top: calc(var(--sat) + var(--alert-bar-h, 0px) + var(--topbar-h, 4.5rem) + 0.5rem);
 }
 
 .error-boundary-actions {

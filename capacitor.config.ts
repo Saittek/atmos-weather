@@ -40,7 +40,8 @@ const config: CapacitorConfig = {
     },
   },
   ios: {
-    contentInset: 'automatic',
+    // never: WebView fills the screen; CSS env(safe-area-inset-*) places chrome below the cutout
+    contentInset: 'never',
     preferredContentMode: 'mobile',
     backgroundColor: '#0b1220',
     scheme: 'Solara',
