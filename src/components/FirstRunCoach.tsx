@@ -1,6 +1,5 @@
 /**
- * Single first-run tour: product intro + home/modes/notify/widget/stargaze.
- * Replaces separate Onboarding + coach overlays.
+ * Short first-run tour (4 steps). Skip is permanent; no separate onboarding overlay.
  */
 import { useEffect, useState } from 'react'
 import { InstallPrompt } from './InstallPrompt'
@@ -59,14 +58,8 @@ export function FirstRunCoach({
   useEffect(() => {
     if (!weatherReady) return
     if (alreadySeen()) return
-    try {
-      if (localStorage.getItem(READY_KEY) !== '1' && !weatherReady) return
-      // Slight delay so first paint / weather card show before tour
-      const id = window.setTimeout(() => setOpen(true), 500)
-      return () => window.clearTimeout(id)
-    } catch {
-      /* ignore */
-    }
+    const id = window.setTimeout(() => setOpen(true), 500)
+    return () => window.clearTimeout(id)
   }, [weatherReady])
 
   const dismiss = () => {
@@ -77,42 +70,31 @@ export function FirstRunCoach({
   if (!open) return null
 
   const nativeIos = isNativeApp() && isIOS()
+
+  // Compact 4-step tour (was 9)
   const steps: {
     emoji?: string
     title: string
     body: string
     action?: { label: string; run: () => void | Promise<void> }
+    showInstall?: boolean
   }[] = [
-    // Former Onboarding steps
     {
       emoji: '☀️',
       title: te('coach.ob1Title'),
-      body: te('coach.ob1Body'),
-    },
-    {
-      emoji: '📡',
-      title: te('coach.ob2Title'),
-      body: te('coach.ob2Body'),
+      body: `${te('coach.ob1Body')} ${te('coach.ob2Body')}`,
     },
     {
       emoji: '🏠',
-      title: te('coach.ob3Title'),
-      body: te('coach.ob3Body'),
-    },
-    // Former FirstRunCoach steps
-    {
       title: t('coach.set'),
-      body: hasHome ? t('coach.setHomeDone') : t('coach.setHome'),
+      body: [
+        hasHome ? t('coach.setHomeDone') : t('coach.setHome'),
+        hasWork ? t('coach.homeWorkDone') : t('coach.homeWorkBody'),
+        t('coach.modesBody'),
+      ].join(' '),
     },
     {
-      title: t('coach.modes'),
-      body: t('coach.modesBody'),
-    },
-    {
-      title: t('coach.homeWork'),
-      body: hasWork ? t('coach.homeWorkDone') : t('coach.homeWorkBody'),
-    },
-    {
+      emoji: '🔔',
       title: t('coach.alerts'),
       body: notifyOn ? t('coach.alertsOn') : t('coach.alertsOff'),
       action: !notifyOn
@@ -125,19 +107,17 @@ export function FirstRunCoach({
         : undefined,
     },
     {
+      emoji: nativeIos ? '📱' : '✨',
       title: nativeIos ? t('coach.widget') : t('coach.install'),
-      body: nativeIos ? t('coach.widgetBody') : t('coach.installBody'),
-    },
-    {
-      title: t('coach.stargaze'),
-      body: t('coach.stargazeBody'),
+      body: nativeIos
+        ? `${t('coach.widgetBody')} ${t('coach.stargazeBody')}`
+        : `${t('coach.installBody')} ${t('coach.stargazeBody')}`,
+      showInstall: !nativeIos,
     },
   ]
 
   const s = steps[step] ?? steps[0]
   const last = step >= steps.length - 1
-  // Install prompt on the install/widget step (index 7 with 9 steps)
-  const installStepIndex = 7
 
   return (
     <div
@@ -150,14 +130,14 @@ export function FirstRunCoach({
         <p className="first-run-kicker">
           {t('coach.kicker', { n: step + 1, total: steps.length })}
         </p>
-        <div className="first-run-steps" role="tablist" aria-label="Tour progress">
+        <div className="first-run-steps" role="tablist" aria-label={t('coach.kicker', { n: step + 1, total: steps.length })}>
           {steps.map((_, i) => (
             <button
               key={i}
               type="button"
               role="tab"
               aria-selected={i === step}
-              aria-label={`Step ${i + 1}`}
+              aria-label={`${i + 1} / ${steps.length}`}
               className={`first-run-step-dot ${i === step ? 'is-active' : ''} ${i < step ? 'is-done' : ''}`}
               onClick={() => setStep(i)}
             />
@@ -170,7 +150,7 @@ export function FirstRunCoach({
         )}
         <h2>{s.title}</h2>
         <p>{s.body}</p>
-        {step === installStepIndex && !nativeIos && (
+        {s.showInstall && (
           <div className="first-run-install">
             <InstallPrompt compact />
           </div>

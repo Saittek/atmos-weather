@@ -134,7 +134,18 @@ const Tropical = lazy(() =>
 )
 
 function LazyPanel({ children }: { children: ReactNode }) {
-  return <Suspense fallback={null}>{children}</Suspense>
+  return (
+    <Suspense
+      fallback={
+        <div className="lazy-panel-fallback" role="status" aria-live="polite">
+          <div className="spinner" />
+          <span>Loading…</span>
+        </div>
+      }
+    >
+      {children}
+    </Suspense>
+  )
 }
 
 function MapChunkFallback({ label }: { label: string }) {
@@ -159,6 +170,15 @@ export default function DashboardPage() {
   const setModulePrefs = useCallback((next: ModulePrefs) => {
     setModPrefs(next)
     saveModulePrefs(next)
+  }, [])
+  useEffect(() => {
+    const sync = (e: Event) => {
+      const detail = (e as CustomEvent<ModulePrefs>).detail
+      if (detail) setModPrefs(detail)
+      else setModPrefs(loadModulePrefs())
+    }
+    window.addEventListener('solara-module-prefs-change', sync)
+    return () => window.removeEventListener('solara-module-prefs-change', sync)
   }, [])
   const [atmosphereOn, setAtmosphereOn] = useState(() => loadAtmosphereEnabled())
   const setAtmosphereEnabled = useCallback((on: boolean) => {

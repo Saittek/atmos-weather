@@ -424,7 +424,13 @@ export function GlobalRadarGlobe({
   const [showTropical, setShowTropical] = useState(modeLayers0.showTropical)
   const [showRadar, setShowRadar] = useState(modeLayers0.showRadar)
   const [showLabels, setShowLabels] = useState(prefs0.showLabels)
-  const [showIR, setShowIR] = useState(prefs0.showIR)
+  // mobile-perf: never start with IR on (extra tile layer + GPU)
+  const [showIR, setShowIR] = useState(() => {
+    if (typeof document !== 'undefined' && document.documentElement.classList.contains('mobile-perf')) {
+      return false
+    }
+    return prefs0.showIR
+  })
   const [showDayNight, setShowDayNight] = useState(modeLayers0.showDayNight)
   /** Real-time Sun + Moon at subsolar / sublunar points */
   const [showBodies, setShowBodies] = useState(modeLayers0.showBodies)
@@ -469,9 +475,15 @@ export function GlobalRadarGlobe({
       setShowBodies(L.showBodies)
       setShowEclipses(L.showEclipses)
       setShowTropical(L.showTropical)
+      // Lite presets force IR off; user can re-enable from options
+      if (!L.showIR) setShowIR(false)
       if (!prefersReducedMotion()) setSpinning(L.spinning)
       else setSpinning(false)
-      saveGlobePrefs({ mode, spinning: L.spinning })
+      saveGlobePrefs({
+        mode,
+        spinning: L.spinning,
+        ...(L.showIR ? {} : { showIR: false }),
+      })
       onMissionModeChange?.(mode)
       if (mode === 'eclipse') {
         setActiveEclipseId(null)

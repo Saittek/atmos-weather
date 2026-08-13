@@ -315,7 +315,8 @@ app.put('/api/user/data', authMiddleware, (req, res) => {
       theme: ['dark', 'light', 'auto'].includes(incoming.theme) ? incoming.theme : 'dark',
       density: incoming.density === 'compact' ? 'compact' : 'comfortable',
       lastLocation: incoming.lastLocation ?? null,
-      favorites: Array.isArray(incoming.favorites) ? incoming.favorites.slice(0, 12) : [],
+      // Align with worker max (Pro preview 24); free clients enforce 12 locally
+      favorites: Array.isArray(incoming.favorites) ? incoming.favorites.slice(0, 24) : [],
       severeMode: Boolean(incoming.severeMode),
       stormMode: Boolean(incoming.stormMode),
       notifyAlerts: Boolean(incoming.notifyAlerts),

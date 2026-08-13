@@ -717,14 +717,9 @@ export function RadarMap({
           'Solara: set VITE_MAPBOX_TOKEN for Mapbox basemap (radar still works)',
         )
       }
+      // Lite on constrained devices for all sources (was wrongly disabled on main loops)
       const next = await loadFrames(sourceId, {
-        lite:
-          lite &&
-          sourceId !== 'global_loop' &&
-          sourceId !== 'mapbox_radar' &&
-          sourceId !== 'storm_chaser' &&
-          sourceId !== 'eccc_radar' &&
-          sourceId !== 'us_nexrad_loop',
+        lite,
         lat,
         lon,
       })

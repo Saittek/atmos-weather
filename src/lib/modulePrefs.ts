@@ -49,6 +49,9 @@ export function loadModulePrefs(): ModulePrefs {
 export function saveModulePrefs(prefs: ModulePrefs): void {
   try {
     localStorage.setItem(KEY, JSON.stringify(prefs))
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('solara-module-prefs-change', { detail: prefs }))
+    }
   } catch {
     /* ignore */
   }

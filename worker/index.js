@@ -179,8 +179,9 @@ function cleanLocation(loc) {
 
 function cleanUserData(incoming) {
   const src = incoming && typeof incoming === 'object' ? incoming : {}
+  // Max synced favorites (matches PRO_LIMITS.favorites). Free clients still cap at 12 locally.
   const favorites = Array.isArray(src.favorites)
-    ? src.favorites.map(cleanLocation).filter(Boolean).slice(0, 12)
+    ? src.favorites.map(cleanLocation).filter(Boolean).slice(0, 24)
     : []
   return {
     units: src.units === 'metric' ? 'metric' : 'imperial',
@@ -1196,12 +1197,19 @@ export default {
         if (limited) return limited
         const body = await request.json().catch(() => ({}))
         const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : ''
+        const emailReady = Boolean(env.RESEND_API_KEY)
+        // Honest copy when mail is not configured (still no account enumeration)
         const generic = {
           ok: true,
-          message:
-            'If an account exists for that email, a reset link was sent. Check spam; the link expires in 1 hour.',
+          emailConfigured: emailReady,
+          message: emailReady
+            ? 'If an account exists for that email, a reset link was sent. Check spam; the link expires in 1 hour.'
+            : 'Password reset by email is temporarily unavailable. If you can still sign in, use Account → Change password. For help, email yellowknife1989@gmail.com.',
         }
         if (!validateEmail(email) || !env.DB) return json(generic)
+
+        // Don't mint tokens when we can't deliver them — avoids dead D1 rows
+        if (!emailReady) return json(generic)
 
         try {
           const row = await env.DB.prepare('SELECT id, email FROM users WHERE email = ?')
@@ -1230,10 +1238,16 @@ export default {
             const mailed = await sendPasswordResetEmail(env, email, link)
             if (!mailed.sent) {
               console.log(
-                'password-reset token created (email not sent — set RESEND_API_KEY)',
+                'password-reset token created (email not sent)',
                 email,
                 mailed.reason || '',
               )
+              return json({
+                ok: true,
+                emailConfigured: true,
+                message:
+                  'We could not send email right now. Try again later, or sign in and use Account → Change password. Support: yellowknife1989@gmail.com.',
+              })
             }
           }
         } catch (e) {

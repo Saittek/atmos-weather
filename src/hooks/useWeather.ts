@@ -712,7 +712,7 @@ export function useWeather() {
         const cap = favoritesCap()
         if (p.favorites.length >= cap) {
           showStatus(
-            `Saved places full (${cap}). Remove one or Preview Pro in Settings for more.`,
+            `Saved places full (${cap}). Remove one, or try Preview Pro in Settings (this device only) for more.`,
           )
           return
         }

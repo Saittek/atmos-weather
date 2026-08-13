@@ -120,10 +120,10 @@ const en = {
   'settings.planFree': 'Solara Free',
   'settings.planPro': 'Solara Pro',
   'settings.planHintFree':
-    'Core weather, radar, Earth, alerts, and chat stay free. Pro adds extras — payment comes later.',
+    'Everything core is free. Preview Pro is a local demo only — no payment and no cloud upgrade yet.',
   'settings.planHintPro':
-    'Pro preview: extended radar history, more favorites, multi-widget, ad-free when ads ship.',
-  'settings.previewPro': 'Preview Pro (no charge)',
+    'Preview Pro (this device only): more saved places, ad-free. Not a paid plan; sync uses the same account limits.',
+  'settings.previewPro': 'Try Preview Pro (no charge)',
   'settings.backFree': 'Back to Free',
   'settings.stargaze': '✨ Stargaze · night sky & astro',
   'settings.radar': '📡 Full-page radar',
@@ -435,10 +435,10 @@ const fr: Record<MessageKey, string> = {
   'settings.planFree': 'Solara Gratuit',
   'settings.planPro': 'Solara Pro',
   'settings.planHintFree':
-    'Météo de base, radar, Terre, alertes et clavardage restent gratuits. Pro arrive plus tard — pas de paiement encore.',
+    'Le cœur de Solara est gratuit. L’aperçu Pro est une démo locale seulement — pas de paiement ni de forfait cloud.',
   'settings.planHintPro':
-    'Aperçu Pro : historique radar prolongé, plus de favoris, multi-widget, sans pub plus tard.',
-  'settings.previewPro': 'Aperçu Pro (sans frais)',
+    'Aperçu Pro (cet appareil) : plus de lieux, sans pub. Ce n’est pas un forfait payant; la synchro suit les mêmes limites de compte.',
+  'settings.previewPro': 'Essayer l’aperçu Pro (sans frais)',
   'settings.backFree': 'Revenir au gratuit',
   'settings.stargaze': '✨ Ciel étoilé · astrophoto',
   'settings.radar': '📡 Radar plein écran',

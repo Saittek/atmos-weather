@@ -1,6 +1,7 @@
 /**
- * Free vs future Pro entitlements.
- * Core Solara stays free; Pro flags are scaffolding only until billing ships.
+ * Free vs Preview Pro entitlements.
+ * Preview Pro is a local demo only (localStorage) — no payment, no cloud Pro account.
+ * Core Solara stays free; real billing / StoreKit is not shipped yet.
  */
 
 export type PlanId = 'free' | 'pro'
@@ -58,7 +59,7 @@ export function readPlan(): PlanId {
   return 'free'
 }
 
-/** Preview Pro / future StoreKit restore — no real payment yet. */
+/** Local Preview Pro toggle only — not a purchase or account upgrade. */
 export function setPlanLocal(plan: PlanId) {
   try {
     localStorage.setItem(STORAGE_KEY, plan)

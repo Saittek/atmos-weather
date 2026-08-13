@@ -62,6 +62,12 @@ export function saveGlobePrefs(partial: Partial<GlobePrefs>): void {
   }
 }
 
+/** True when HTML has mobile-perf class (phones / save-data). */
+export function isGlobePerfLite(): boolean {
+  if (typeof document === 'undefined') return false
+  return document.documentElement.classList.contains('mobile-perf')
+}
+
 /** Layer preset when switching mission modes */
 export function layersForMode(mode: GlobeMode): {
   showRadar: boolean
@@ -70,7 +76,10 @@ export function layersForMode(mode: GlobeMode): {
   showEclipses: boolean
   showTropical: boolean
   spinning: boolean
+  /** Force IR off on constrained devices */
+  showIR: boolean
 } {
+  const lite = isGlobePerfLite()
   switch (mode) {
     case 'storms':
       return {
@@ -80,6 +89,7 @@ export function layersForMode(mode: GlobeMode): {
         showEclipses: false,
         showTropical: true,
         spinning: false,
+        showIR: false,
       }
     case 'eclipse':
       return {
@@ -89,6 +99,7 @@ export function layersForMode(mode: GlobeMode): {
         showEclipses: true,
         showTropical: false,
         spinning: false,
+        showIR: false,
       }
     case 'space':
       return {
@@ -97,17 +108,20 @@ export function layersForMode(mode: GlobeMode): {
         showBodies: true,
         showEclipses: false,
         showTropical: false,
-        spinning: true,
+        // Auto-spin is expensive on phones
+        spinning: !lite,
+        showIR: false,
       }
     case 'radar':
     default:
       return {
         showRadar: true,
-        showDayNight: true,
+        showDayNight: !lite, // day/night canvas is costly while panning on mobile
         showBodies: false,
         showEclipses: false,
         showTropical: true,
         spinning: false,
+        showIR: false,
       }
   }
 }

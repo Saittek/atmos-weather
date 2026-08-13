@@ -5,8 +5,14 @@ import type { DensityMode, ThemeMode } from '../api/types'
 import type { Units } from '../utils/format'
 import { UnitToggle } from './UnitToggle'
 import { AccountMenu } from './AccountMenu'
+import { ModulePrefsPanel } from './ModulePrefsPanel'
 import { getEntitlements, setPlanLocal, type PlanId } from '../lib/entitlements'
 import { isAnalyticsOptedOut, setAnalyticsOptOut } from '../lib/analytics'
+import {
+  loadModulePrefs,
+  saveModulePrefs,
+  type ModulePrefs,
+} from '../lib/modulePrefs'
 import { useI18n } from '../i18n/I18nProvider'
 import { LOCALE_LABELS, type LocaleId } from '../i18n/messages'
 
@@ -107,6 +113,7 @@ export function SettingsBar({
   const moreRef = useRef<HTMLDivElement>(null)
   const [analyticsOff, setAnalyticsOff] = useState(() => isAnalyticsOptedOut())
   const [plan, setPlan] = useState(() => getEntitlements())
+  const [modPrefs, setModPrefs] = useState<ModulePrefs>(() => loadModulePrefs())
   const { locale, setLocale, t } = useI18n()
 
   useEffect(() => {
@@ -118,6 +125,20 @@ export function SettingsBar({
       window.removeEventListener('storage', sync)
     }
   }, [])
+
+  useEffect(() => {
+    const sync = (e: Event) => {
+      const detail = (e as CustomEvent<ModulePrefs>).detail
+      setModPrefs(detail ?? loadModulePrefs())
+    }
+    window.addEventListener('solara-module-prefs-change', sync)
+    return () => window.removeEventListener('solara-module-prefs-change', sync)
+  }, [])
+
+  const onModulePrefs = (next: ModulePrefs) => {
+    setModPrefs(next)
+    saveModulePrefs(next)
+  }
 
   const applyPlan = (p: PlanId) => {
     setPlanLocal(p)
@@ -179,6 +200,10 @@ export function SettingsBar({
             </button>
           )}
         </div>
+      </div>
+
+      <div className="settings-more-section settings-modules-card">
+        <ModulePrefsPanel prefs={modPrefs} onChange={onModulePrefs} />
       </div>
 
       {explorePaths && (
