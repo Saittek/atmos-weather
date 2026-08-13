@@ -1,4 +1,12 @@
-import { useId, type CSSProperties } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
 import { windVisual } from '../utils/windVisual'
 import { weatherIconHasLiveFx, weatherIconSrc } from './weatherAssets'
 import './weather-3d.css'
@@ -352,18 +360,72 @@ export function WeatherIcon3D({
 
   const iconSrc = weatherIconSrc(kind)
   const liveFx = hero && weatherIconHasLiveFx(kind)
+  const deep3d = size === 'lg' || size === 'xl' || forceAnimate
 
-  /** HQ image base + optional live CSS particles for hero motion */
+  /* Pointer-driven tilt on hero — sells real 3D depth */
+  const rootRef = useRef<HTMLDivElement>(null)
+  const [tilt, setTilt] = useState({ x: 0, y: 0 })
+  const onPointer = useCallback(
+    (e: ReactPointerEvent) => {
+      if (!hero || !rootRef.current) return
+      const r = rootRef.current.getBoundingClientRect()
+      const nx = ((e.clientX - r.left) / r.width) * 2 - 1
+      const ny = ((e.clientY - r.top) / r.height) * 2 - 1
+      setTilt({
+        x: Math.max(-1, Math.min(1, ny)) * -14,
+        y: Math.max(-1, Math.min(1, nx)) * 18,
+      })
+    },
+    [hero],
+  )
+  const resetTilt = useCallback(() => {
+    if (hero) setTilt({ x: 0, y: 0 })
+  }, [hero])
+
+  useEffect(() => {
+    if (!hero) return
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+    if (mq.matches) setTilt({ x: 0, y: 0 })
+  }, [hero])
+
+  const imgCommon = {
+    src: iconSrc,
+    alt: '',
+    draggable: false as const,
+    decoding: 'async' as const,
+    loading: (size === 'sm' ? 'lazy' : 'eager') as 'lazy' | 'eager',
+  }
+
+  /** Multi-plane mesh: back ghost → core plate → rim → specular → live FX */
   const scene = (
-    <>
-      <img
-        className="w3d-img"
-        src={iconSrc}
-        alt=""
-        draggable={false}
-        decoding="async"
-        loading={size === 'sm' ? 'lazy' : 'eager'}
-      />
+    <div className={`w3d-mesh${deep3d ? ' is-deep' : ''}`}>
+      {/* Depth ghost — parallax lag behind */}
+      <div className="w3d-plane w3d-plane-back" aria-hidden>
+        <img className="w3d-img w3d-img-back" {...imgCommon} />
+      </div>
+
+      {/* Soft volumetric glow plate behind body */}
+      <div className="w3d-plane w3d-plane-glow" aria-hidden />
+
+      {/* Main body with lighting + extrusion thickness */}
+      <div className="w3d-plane w3d-plane-core">
+        <img className="w3d-img w3d-img-core" {...imgCommon} />
+        <div className="w3d-shade" aria-hidden />
+        <div className="w3d-spec" aria-hidden />
+        <div className="w3d-rim" aria-hidden />
+        {/* Extruded side faces for thickness */}
+        <span className="w3d-face w3d-face-right" aria-hidden />
+        <span className="w3d-face w3d-face-bottom" aria-hidden />
+        <span className="w3d-face w3d-face-left" aria-hidden />
+      </div>
+
+      {/* Foreground glass / highlight shell */}
+      {deep3d && (
+        <div className="w3d-plane w3d-plane-glass" aria-hidden>
+          <span className="w3d-glass-sheen" />
+        </div>
+      )}
+
       {liveFx && (
         <div className="w3d-live-fx" aria-hidden>
           {(kind === 'drizzle' ||
@@ -420,25 +482,31 @@ export function WeatherIcon3D({
           )}
         </div>
       )}
-    </>
+    </div>
   )
 
   return (
     <div
-      className={`w3d w3d-${size} w3d-${kind} w3d-i${intensity} w3d-photo ${forceAnimate ? 'w3d-force' : ''} ${className}`}
+      ref={rootRef}
+      className={`w3d w3d-${size} w3d-${kind} w3d-i${intensity} w3d-photo w3d-3d ${forceAnimate ? 'w3d-force' : ''} ${className}`}
       aria-hidden
       data-kind={kind}
       data-intensity={intensity}
+      onPointerMove={hero ? onPointer : undefined}
+      onPointerLeave={hero ? resetTilt : undefined}
       style={
         {
           ['--w-ang']: `${wind.ang}deg`,
           ['--w-drift']: `${wind.drift}px`,
+          ['--tilt-x']: `${tilt.x}deg`,
+          ['--tilt-y']: `${tilt.y}deg`,
         } as CSSProperties
       }
     >
       <div className="w3d-stage">
         <div className="w3d-orbit">{scene}</div>
         <div className="w3d-floor" />
+        {deep3d && <div className="w3d-floor w3d-floor-soft" />}
       </div>
     </div>
   )
