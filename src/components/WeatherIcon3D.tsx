@@ -1,14 +1,5 @@
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useRef,
-  useState,
-  type CSSProperties,
-  type PointerEvent as ReactPointerEvent,
-} from 'react'
+import { useId, type CSSProperties } from 'react'
 import { windVisual } from '../utils/windVisual'
-import { weatherIconHasLiveFx, weatherIconSrc } from './weatherAssets'
 import './weather-3d.css'
 
 export { windVisual } from '../utils/windVisual'
@@ -261,6 +252,222 @@ function Hail({ n = 10, windDrift = 0 }: { n?: number; windDrift?: number }) {
   )
 }
 
+function Clouds({ dark = false, storm = false }: { dark?: boolean; storm?: boolean }) {
+  return (
+    <div className={`w3d-clouds ${dark ? 'dark' : ''} ${storm ? 'storm' : ''}`}>
+      {/* Layered 3D cumulus: far → mid → near with independent bob */}
+      <span className="w3d-cloud back">
+        <i className="w3d-puff a" />
+        <i className="w3d-puff b" />
+        <i className="w3d-puff c" />
+      </span>
+      <span className="w3d-cloud mid">
+        <i className="w3d-puff a" />
+        <i className="w3d-puff b" />
+        <i className="w3d-puff c" />
+        <i className="w3d-puff d" />
+      </span>
+      <span className="w3d-cloud front">
+        <i className="w3d-puff a" />
+        <i className="w3d-puff b" />
+        <i className="w3d-puff c" />
+        <i className="w3d-puff d" />
+        <i className="w3d-puff e" />
+      </span>
+      {storm && <span className="w3d-cloud storm-cap" aria-hidden />}
+    </div>
+  )
+}
+
+function Sun({ small = false }: { small?: boolean }) {
+  const uid = useId().replace(/:/g, '')
+  // 12 major + 12 minor rays for denser 3D corona
+  const major = Array.from({ length: 12 }, (_, i) => i * 30)
+  const minor = Array.from({ length: 12 }, (_, i) => i * 30 + 15)
+
+  return (
+    <div className={`w3d-sun ${small ? 'small' : ''}`}>
+      {/* Depth glow plates behind disc */}
+      <span className="w3d-sun-aura" aria-hidden />
+      <span className="w3d-sun-halo" aria-hidden />
+      <svg className="w3d-sun-svg" viewBox="0 0 100 100" aria-hidden>
+        <defs>
+          <radialGradient id={`${uid}-core`} cx="32%" cy="28%" r="70%">
+            <stop offset="0%" stopColor="#fffef8" />
+            <stop offset="14%" stopColor="#fef9c3" />
+            <stop offset="36%" stopColor="#fde047" />
+            <stop offset="62%" stopColor="#fbbf24" />
+            <stop offset="86%" stopColor="#f59e0b" />
+            <stop offset="100%" stopColor="#b45309" />
+          </radialGradient>
+          <radialGradient id={`${uid}-limb`} cx="38%" cy="34%" r="64%">
+            <stop offset="48%" stopColor="rgba(180,83,9,0)" />
+            <stop offset="78%" stopColor="rgba(180,83,9,0.22)" />
+            <stop offset="100%" stopColor="rgba(120,53,15,0.55)" />
+          </radialGradient>
+          <radialGradient id={`${uid}-glow`} cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="rgba(255,251,235,0.95)" />
+            <stop offset="28%" stopColor="rgba(253,224,71,0.55)" />
+            <stop offset="58%" stopColor="rgba(251,191,36,0.22)" />
+            <stop offset="100%" stopColor="rgba(251,191,36,0)" />
+          </radialGradient>
+          <linearGradient id={`${uid}-ray`} x1="0" y1="1" x2="0" y2="0">
+            <stop offset="0%" stopColor="rgba(253,224,71,0)" />
+            <stop offset="30%" stopColor="rgba(253,224,71,0.9)" />
+            <stop offset="72%" stopColor="rgba(254,243,199,0.98)" />
+            <stop offset="100%" stopColor="rgba(255,255,255,0.45)" />
+          </linearGradient>
+          <filter id={`${uid}-blur`} x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="1.1" />
+          </filter>
+        </defs>
+
+        <circle className="w3d-sun-corona" cx="50" cy="50" r="48" fill={`url(#${uid}-glow)`} />
+
+        <g className="w3d-sun-rays">
+          {major.map((deg) => (
+            <path
+              key={`m${deg}`}
+              className="w3d-sun-ray major"
+              d="M50 5 L53.6 27 L50 31.5 L46.4 27 Z"
+              fill={`url(#${uid}-ray)`}
+              transform={`rotate(${deg} 50 50)`}
+            />
+          ))}
+          {minor.map((deg) => (
+            <path
+              key={`n${deg}`}
+              className="w3d-sun-ray minor"
+              d="M50 12 L51.9 29 L50 32.5 L48.1 29 Z"
+              fill={`url(#${uid}-ray)`}
+              opacity="0.62"
+              transform={`rotate(${deg} 50 50)`}
+            />
+          ))}
+        </g>
+
+        {/* Sphere: core + surface + limb darkening */}
+        <circle className="w3d-sun-disc" cx="50" cy="50" r="23" fill={`url(#${uid}-core)`} />
+        <g className="w3d-sun-surface" opacity="0.4" filter={`url(#${uid}-blur)`}>
+          <ellipse cx="41" cy="40" rx="7" ry="5.5" fill="rgba(255,255,255,0.6)" />
+          <ellipse cx="58" cy="47" rx="4.5" ry="3.5" fill="rgba(255,251,235,0.45)" />
+          <ellipse cx="48" cy="58" rx="5.5" ry="3.2" fill="rgba(245,158,11,0.38)" />
+          <ellipse cx="55" cy="38" rx="3" ry="2.2" fill="rgba(255,255,255,0.35)" />
+        </g>
+        <ellipse cx="61" cy="55" rx="2.4" ry="1.7" fill="rgba(146,64,14,0.32)" />
+        <ellipse cx="39" cy="53" rx="1.6" ry="1.2" fill="rgba(146,64,14,0.26)" />
+        <circle cx="50" cy="50" r="23" fill={`url(#${uid}-limb)`} />
+        <circle
+          cx="50"
+          cy="50"
+          r="23"
+          fill="none"
+          stroke="rgba(255,251,235,0.6)"
+          strokeWidth="1.15"
+        />
+        <ellipse cx="41" cy="39" rx="9" ry="6.5" fill="rgba(255,255,255,0.28)" />
+      </svg>
+    </div>
+  )
+}
+
+function MoonFace({ peep = false }: { peep?: boolean }) {
+  const uid = useId().replace(/:/g, '')
+  return (
+    <div className={`w3d-moon ${peep ? 'peep' : ''}`}>
+      {!peep && (
+        <>
+          <span className="w3d-moon-aura" aria-hidden />
+          <span className="w3d-star s1" />
+          <span className="w3d-star s2" />
+          <span className="w3d-star s3" />
+          <span className="w3d-star s4" />
+          <span className="w3d-star s5" />
+          <span className="w3d-star s6" />
+        </>
+      )}
+      <svg className="w3d-moon-svg" viewBox="0 0 100 100" aria-hidden>
+        <defs>
+          <radialGradient id={`${uid}-face`} cx="30%" cy="26%" r="74%">
+            <stop offset="0%" stopColor="#fcf8f0" />
+            <stop offset="18%" stopColor="#ebe4d6" />
+            <stop offset="42%" stopColor="#c9c2b3" />
+            <stop offset="70%" stopColor="#8a8376" />
+            <stop offset="100%" stopColor="#3d3832" />
+          </radialGradient>
+          <radialGradient id={`${uid}-glow`} cx="50%" cy="50%" r="50%">
+            <stop offset="30%" stopColor="rgba(191,219,254,0.55)" />
+            <stop offset="70%" stopColor="rgba(226,232,240,0.18)" />
+            <stop offset="100%" stopColor="rgba(226,232,240,0)" />
+          </radialGradient>
+          <radialGradient id={`${uid}-limb`} cx="36%" cy="32%" r="64%">
+            <stop offset="45%" stopColor="rgba(0,0,0,0)" />
+            <stop offset="100%" stopColor="rgba(8,10,18,0.62)" />
+          </radialGradient>
+          <radialGradient id={`${uid}-shade`} cx="100%" cy="48%" r="72%">
+            <stop offset="0%" stopColor="rgba(8,10,18,0.62)" />
+            <stop offset="50%" stopColor="rgba(8,10,18,0.14)" />
+            <stop offset="100%" stopColor="rgba(8,10,18,0)" />
+          </radialGradient>
+          <filter id={`${uid}-soft`} x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="0.4" />
+          </filter>
+        </defs>
+
+        {!peep && <circle cx="50" cy="50" r="48" fill={`url(#${uid}-glow)`} />}
+
+        <circle cx="50" cy="50" r="38" fill={`url(#${uid}-face)`} />
+
+        <g filter={`url(#${uid}-soft)`} fill="rgba(58,54,48,0.42)">
+          <ellipse cx="38" cy="40" rx="15" ry="12" transform="rotate(-16 38 40)" />
+          <ellipse cx="56" cy="42" rx="10" ry="9" />
+          <ellipse cx="54" cy="58" rx="13" ry="11" transform="rotate(8 54 58)" />
+          <ellipse cx="30" cy="56" rx="9" ry="12" transform="rotate(12 30 56)" />
+        </g>
+
+        <g stroke="rgba(235,228,215,0.38)" strokeWidth="0.85" fill="rgba(75,70,62,0.34)">
+          <circle cx="52" cy="68" r="5.8" />
+          <circle cx="64" cy="50" r="3.8" />
+          <circle cx="38" cy="50" r="3.2" />
+          <circle cx="68" cy="36" r="2.5" />
+          <circle cx="34" cy="34" r="4.5" />
+          <circle cx="72" cy="60" r="2.2" />
+          <circle cx="46" cy="28" r="2.1" />
+          <circle cx="42" cy="70" r="1.9" />
+          <circle cx="58" cy="32" r="1.6" />
+        </g>
+        <g fill="rgba(40,38,34,0.4)">
+          <circle cx="52" cy="68" r="3.8" />
+          <circle cx="34" cy="34" r="2.8" />
+          <circle cx="64" cy="50" r="2.2" />
+        </g>
+
+        <g stroke="rgba(245,240,230,0.14)" strokeWidth="0.6" fill="none">
+          <line x1="52" y1="68" x2="38" y2="48" />
+          <line x1="52" y1="68" x2="70" y2="52" />
+          <line x1="52" y1="68" x2="58" y2="40" />
+        </g>
+
+        <circle cx="50" cy="50" r="38" fill={`url(#${uid}-limb)`} />
+        <circle cx="50" cy="50" r="38" fill={`url(#${uid}-shade)`} />
+        <ellipse cx="37" cy="35" rx="12" ry="9.5" fill="rgba(255,252,245,0.16)" />
+        <circle
+          cx="50"
+          cy="50"
+          r="38"
+          fill="none"
+          stroke="rgba(226,232,240,0.28)"
+          strokeWidth="1.15"
+        />
+      </svg>
+    </div>
+  )
+}
+
+function Moon() {
+  return <MoonFace />
+}
+
 function Bolt({
   hail = false,
   gradId,
@@ -358,155 +565,188 @@ export function WeatherIcon3D({
     windDrift: wind.drift,
   }
 
-  const iconSrc = weatherIconSrc(kind)
-  const liveFx = hero && weatherIconHasLiveFx(kind)
-  const deep3d = size === 'lg' || size === 'xl' || forceAnimate
-
-  /* Pointer-driven tilt on hero — sells real 3D depth */
-  const rootRef = useRef<HTMLDivElement>(null)
-  const [tilt, setTilt] = useState({ x: 0, y: 0 })
-  const onPointer = useCallback(
-    (e: ReactPointerEvent) => {
-      if (!hero || !rootRef.current) return
-      const r = rootRef.current.getBoundingClientRect()
-      const nx = ((e.clientX - r.left) / r.width) * 2 - 1
-      const ny = ((e.clientY - r.top) / r.height) * 2 - 1
-      setTilt({
-        x: Math.max(-1, Math.min(1, ny)) * -14,
-        y: Math.max(-1, Math.min(1, nx)) * 18,
-      })
-    },
-    [hero],
-  )
-  const resetTilt = useCallback(() => {
-    if (hero) setTilt({ x: 0, y: 0 })
-  }, [hero])
-
-  useEffect(() => {
-    if (!hero) return
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
-    if (mq.matches) setTilt({ x: 0, y: 0 })
-  }, [hero])
-
-  const imgCommon = {
-    src: iconSrc,
-    alt: '',
-    draggable: false as const,
-    decoding: 'async' as const,
-    loading: (size === 'sm' ? 'lazy' : 'eager') as 'lazy' | 'eager',
-  }
-
-  /** Multi-plane mesh: back ghost → core plate → rim → specular → live FX */
-  const scene = (
-    <div className={`w3d-mesh${deep3d ? ' is-deep' : ''}`}>
-      {/* Depth ghost — parallax lag behind */}
-      <div className="w3d-plane w3d-plane-back" aria-hidden>
-        <img className="w3d-img w3d-img-back" {...imgCommon} />
-      </div>
-
-      {/* Soft volumetric glow plate behind body */}
-      <div className="w3d-plane w3d-plane-glow" aria-hidden />
-
-      {/* Main body with lighting + extrusion thickness */}
-      <div className="w3d-plane w3d-plane-core">
-        <img className="w3d-img w3d-img-core" {...imgCommon} />
-        <div className="w3d-shade" aria-hidden />
-        <div className="w3d-spec" aria-hidden />
-        <div className="w3d-rim" aria-hidden />
-        {/* Extruded side faces for thickness */}
-        <span className="w3d-face w3d-face-right" aria-hidden />
-        <span className="w3d-face w3d-face-bottom" aria-hidden />
-        <span className="w3d-face w3d-face-left" aria-hidden />
-      </div>
-
-      {/* Foreground glass / highlight shell */}
-      {deep3d && (
-        <div className="w3d-plane w3d-plane-glass" aria-hidden>
-          <span className="w3d-glass-sheen" />
-        </div>
-      )}
-
-      {liveFx && (
-        <div className="w3d-live-fx" aria-hidden>
-          {(kind === 'drizzle' ||
-            kind === 'freezing-drizzle' ||
-            kind === 'rain' ||
-            kind === 'freezing-rain' ||
-            kind === 'showers') && (
-            <>
-              <Drops
-                n={Math.round(dropCount * 0.55)}
-                className={`w3d-precip ${
-                  kind.includes('drizzle') ? 'light' : intensity > 2 ? 'heavy' : 'med'
-                }${kind.includes('freezing') ? ' icy' : ''}${kind === 'showers' ? ' shower' : ''}`}
-                {...dropProps}
-              />
-              {intensity > 1 && <div className="w3d-splash" />}
-            </>
-          )}
-          {(kind === 'snow' || kind === 'grains' || kind === 'snow-showers') && (
-            <>
-              <Flakes
-                n={Math.round(flakeCount * 0.5)}
-                glyph={kind === 'grains' ? '•' : '❄'}
-                soft={kind === 'grains'}
-                windDrift={wind.drift * 0.65}
-              />
-              {intensity > 2 && <div className="w3d-snow-ground" />}
-            </>
-          )}
-          {(kind === 'thunder' || kind === 'thunder-hail') && (
-            <>
-              <Drops
-                n={Math.round(dropCount * 0.4)}
-                className="w3d-precip heavy"
-                {...dropProps}
-              />
-              <Bolt
-                hail={kind === 'thunder-hail'}
-                gradId={boltGradId}
-                hero={hero}
-                windDrift={wind.drift}
-              />
-              <div className="w3d-flash" />
-            </>
-          )}
-          {(kind === 'fog' || kind === 'rime' || kind === 'smoke') && (
-            <FogLayers
-              kind={kind === 'smoke' ? 'smoke' : kind === 'rime' ? 'icy' : 'fog'}
-              layers={Math.min(fogLayers, 4)}
+  const scene = (() => {
+    switch (kind) {
+      case 'clear-day':
+        return <Sun />
+      case 'clear-night':
+        return <Moon />
+      case 'mostly-day':
+        return (
+          <>
+            <Sun small />
+            <div className="w3d-clouds thin">
+              <span className="w3d-cloud front alone">
+                <i className="w3d-puff a" />
+                <i className="w3d-puff b" />
+                <i className="w3d-puff c" />
+              </span>
+            </div>
+          </>
+        )
+      case 'mostly-night':
+        return (
+          <>
+            <Moon />
+            <div className="w3d-clouds thin">
+              <span className="w3d-cloud front alone">
+                <i className="w3d-puff a" />
+                <i className="w3d-puff b" />
+                <i className="w3d-puff c" />
+              </span>
+            </div>
+          </>
+        )
+      case 'partly-day':
+        return (
+          <>
+            <Sun small />
+            <Clouds />
+          </>
+        )
+      case 'partly-night':
+        return (
+          <>
+            <MoonFace peep />
+            <Clouds />
+          </>
+        )
+      case 'overcast':
+        return <Clouds dark />
+      case 'fog':
+        return (
+          <>
+            <Clouds dark />
+            <FogLayers kind="fog" layers={fogLayers} />
+          </>
+        )
+      case 'smoke':
+        return (
+          <>
+            <Clouds dark />
+            <FogLayers kind="smoke" layers={fogLayers} />
+          </>
+        )
+      case 'rime':
+        return (
+          <>
+            <Clouds dark />
+            <FogLayers kind="icy" layers={hero ? 6 : 4} />
+            <Flakes n={hero ? 10 : 5} glyph="✦" soft windDrift={wind.drift * 0.3} />
+          </>
+        )
+      case 'drizzle':
+        return (
+          <>
+            <Clouds />
+            <Drops n={dropCount} className="w3d-precip light" {...dropProps} />
+            {hero && <div className="w3d-splash" />}
+          </>
+        )
+      case 'freezing-drizzle':
+        return (
+          <>
+            <Clouds dark />
+            <Drops n={dropCount} className="w3d-precip light icy" {...dropProps} />
+            <Flakes n={hero ? 8 : 4} glyph="·" soft windDrift={wind.drift * 0.4} />
+          </>
+        )
+      case 'rain':
+        return (
+          <>
+            <Clouds dark={intensity > 1} />
+            <Drops
+              n={dropCount}
+              className={`w3d-precip ${intensity > 2 ? 'heavy' : 'med'}`}
+              {...dropProps}
             />
-          )}
-          {kind === 'rime' && (
-            <Flakes n={6} glyph="✦" soft windDrift={wind.drift * 0.3} />
-          )}
-        </div>
-      )}
-    </div>
-  )
+            {(intensity > 1 || hero) && <div className="w3d-splash" />}
+          </>
+        )
+      case 'freezing-rain':
+        return (
+          <>
+            <Clouds dark />
+            <Drops n={dropCount} className="w3d-precip med icy" {...dropProps} />
+            <div className="w3d-ice-glaze" />
+            {hero && <div className="w3d-splash" />}
+          </>
+        )
+      case 'snow':
+        return (
+          <>
+            <Clouds dark={intensity > 1} />
+            <Flakes n={flakeCount} windDrift={wind.drift * 0.7} />
+            {(intensity > 2 || hero) && <div className="w3d-snow-ground" />}
+          </>
+        )
+      case 'grains':
+        return (
+          <>
+            <Clouds dark />
+            <Flakes n={hero ? 16 : 10} glyph="•" soft windDrift={wind.drift * 0.5} />
+          </>
+        )
+      case 'showers':
+        return (
+          <>
+            <Sun small />
+            <Clouds />
+            <Drops
+              n={dropCount}
+              className={`w3d-precip shower ${intensity > 2 ? 'heavy' : 'med'}`}
+              {...dropProps}
+            />
+            {(intensity > 1 || hero) && <div className="w3d-splash" />}
+          </>
+        )
+      case 'snow-showers':
+        return (
+          <>
+            <Sun small />
+            <Clouds />
+            <Flakes n={flakeCount} windDrift={wind.drift * 0.7} />
+          </>
+        )
+      case 'thunder':
+        return (
+          <>
+            <Clouds dark storm />
+            <Drops n={Math.max(dropCount, hero ? 36 : 16)} className="w3d-precip heavy" {...dropProps} />
+            <div className="w3d-splash" />
+            <Bolt gradId={boltGradId} hero={hero} windDrift={wind.drift} />
+          </>
+        )
+      case 'thunder-hail':
+        return (
+          <>
+            <Clouds dark storm />
+            <Drops n={Math.max(dropCount, hero ? 30 : 14)} className="w3d-precip heavy" {...dropProps} />
+            <div className="w3d-splash" />
+            <Bolt hail gradId={boltGradId} hero={hero} windDrift={wind.drift} />
+          </>
+        )
+      default:
+        return <Sun />
+    }
+  })()
 
   return (
     <div
-      ref={rootRef}
-      className={`w3d w3d-${size} w3d-${kind} w3d-i${intensity} w3d-photo w3d-3d ${forceAnimate ? 'w3d-force' : ''} ${className}`}
+      className={`w3d w3d-${size} w3d-${kind} w3d-i${intensity} ${forceAnimate ? 'w3d-force' : ''} ${className}`}
       aria-hidden
       data-kind={kind}
       data-intensity={intensity}
-      onPointerMove={hero ? onPointer : undefined}
-      onPointerLeave={hero ? resetTilt : undefined}
       style={
         {
           ['--w-ang']: `${wind.ang}deg`,
           ['--w-drift']: `${wind.drift}px`,
-          ['--tilt-x']: `${tilt.x}deg`,
-          ['--tilt-y']: `${tilt.y}deg`,
         } as CSSProperties
       }
     >
       <div className="w3d-stage">
         <div className="w3d-orbit">{scene}</div>
         <div className="w3d-floor" />
-        {deep3d && <div className="w3d-floor w3d-floor-soft" />}
       </div>
     </div>
   )

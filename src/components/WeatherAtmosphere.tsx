@@ -4,7 +4,6 @@
  */
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { windVisual } from '../utils/windVisual'
-import { WEATHER_ICON_FILES } from './weatherAssets'
 import './weather-atmosphere.css'
 
 export type AtmosphereMode =
@@ -343,15 +342,15 @@ export function WeatherAtmosphere({
       )}
 
       {mode === 'clear-day' && (
-        <div className="wx-atmo-sun-orb wx-atmo-photo" aria-hidden>
-          <img src={WEATHER_ICON_FILES.sun} alt="" draggable={false} decoding="async" />
+        <div className="wx-atmo-sun-orb" aria-hidden>
+          <i />
         </div>
       )}
 
       {mode === 'clear-night' && (
         <>
-          <div className="wx-atmo-moon-orb wx-atmo-photo" aria-hidden>
-            <img src={WEATHER_ICON_FILES.moon} alt="" draggable={false} decoding="async" />
+          <div className="wx-atmo-moon-orb" aria-hidden>
+            <i />
           </div>
           <div className="wx-atmo-stars">
             {Array.from({ length: mobile ? 22 : 48 }, (_, i) => (
@@ -385,44 +384,11 @@ export function WeatherAtmosphere({
         mode === 'smoke' ||
         mode === 'snow' ||
         mode === 'drizzle') && (
-        <div className="wx-atmo-clouds wx-atmo-clouds-photo">
-          <img
-            className="wx-cloud-img c1"
-            src={mode === 'storm' ? WEATHER_ICON_FILES.storm : WEATHER_ICON_FILES.cloud}
-            alt=""
-            draggable={false}
-            decoding="async"
-          />
-          <img
-            className="wx-cloud-img c2"
-            src={
-              mode === 'storm' || mode === 'rain'
-                ? WEATHER_ICON_FILES.cloudDark
-                : WEATHER_ICON_FILES.cloud
-            }
-            alt=""
-            draggable={false}
-            decoding="async"
-          />
-          <img
-            className="wx-cloud-img c3"
-            src={mode === 'smoke' ? WEATHER_ICON_FILES.smoke : WEATHER_ICON_FILES.cloudDark}
-            alt=""
-            draggable={false}
-            decoding="async"
-          />
-          {(mode === 'storm' || intensity >= 2) && (
-            <img
-              className="wx-cloud-img c4"
-              src={mode === 'storm' ? WEATHER_ICON_FILES.thunder : WEATHER_ICON_FILES.cloud}
-              alt=""
-              draggable={false}
-              decoding="async"
-            />
-          )}
-          {/* Soft CSS haze under photos for depth */}
+        <div className="wx-atmo-clouds">
           <span className="wx-cloud c1" />
           <span className="wx-cloud c2" />
+          <span className="wx-cloud c3" />
+          {(mode === 'storm' || intensity >= 2) && <span className="wx-cloud c4" />}
         </div>
       )}
 

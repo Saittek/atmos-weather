@@ -117,22 +117,7 @@
   );
   filter: blur(2px);
   animation: wx-sun-breathe 8s ease-in-out infinite;
-  overflow: hidden;
-}
-.wx-atmo-sun-orb.wx-atmo-photo {
-  background: transparent;
-  filter: drop-shadow(0 0 40px rgba(251, 191, 36, 0.45));
-  border-radius: 50%;
-}
-.wx-atmo-sun-orb.wx-atmo-photo img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 50%;
-  opacity: 0.88;
-  /* Soft edge so navy square disappears into sky */
-  mask-image: radial-gradient(circle at 50% 50%, #000 42%, transparent 72%);
-  -webkit-mask-image: radial-gradient(circle at 50% 50%, #000 42%, transparent 72%);
+  opacity: 0.85;
 }
 .wx-atmo-sun-orb i {
   position: absolute;
@@ -167,22 +152,6 @@
     inset -10px -6px 18px rgba(15, 23, 42, 0.35);
   animation: wx-moon-glow 7s ease-in-out infinite;
   opacity: 0.9;
-  overflow: hidden;
-}
-.wx-atmo-moon-orb.wx-atmo-photo {
-  background: transparent;
-  box-shadow: 0 0 32px rgba(147, 197, 253, 0.35);
-  width: min(18vw, 120px);
-  height: min(18vw, 120px);
-}
-.wx-atmo-moon-orb.wx-atmo-photo img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 50%;
-  opacity: 0.92;
-  mask-image: radial-gradient(circle at 50% 50%, #000 48%, transparent 76%);
-  -webkit-mask-image: radial-gradient(circle at 50% 50%, #000 48%, transparent 76%);
 }
 .wx-atmo-moon-orb i {
   display: none;
@@ -295,62 +264,6 @@
   position: absolute;
   inset: 0;
   overflow: hidden;
-}
-.wx-cloud-img {
-  position: absolute;
-  object-fit: cover;
-  pointer-events: none;
-  user-select: none;
-  opacity: 0.28;
-  filter: blur(1.5px) saturate(0.95);
-  animation: wx-cloud-drift 32s ease-in-out infinite;
-  mask-image: radial-gradient(ellipse 70% 60% at 50% 50%, #000 20%, transparent 72%);
-  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 50%, #000 20%, transparent 72%);
-  mix-blend-mode: screen;
-}
-.wx-cloud-img.c1 {
-  width: min(55vw, 420px);
-  height: min(28vw, 220px);
-  top: 4%;
-  left: -8%;
-  animation-duration: 36s;
-  opacity: 0.32;
-}
-.wx-cloud-img.c2 {
-  width: min(48vw, 360px);
-  height: min(24vw, 190px);
-  top: 12%;
-  right: -6%;
-  left: auto;
-  animation-duration: 42s;
-  animation-direction: reverse;
-  opacity: 0.26;
-}
-.wx-cloud-img.c3 {
-  width: min(40vw, 300px);
-  height: min(20vw, 160px);
-  top: 22%;
-  left: 28%;
-  animation-duration: 48s;
-  opacity: 0.2;
-}
-.wx-cloud-img.c4 {
-  width: min(50vw, 380px);
-  height: min(26vw, 200px);
-  top: 2%;
-  left: 40%;
-  animation-duration: 30s;
-  opacity: 0.3;
-  filter: blur(2px) saturate(1.05) brightness(0.9);
-}
-.wx-atmo-storm .wx-cloud-img {
-  opacity: 0.38;
-  filter: blur(2px) saturate(0.85) brightness(0.75);
-  mix-blend-mode: soft-light;
-}
-.wx-atmo-smoke .wx-cloud-img.c3 {
-  opacity: 0.35;
-  filter: blur(3px) saturate(1.15) hue-rotate(-8deg);
 }
 .wx-cloud {
   position: absolute;
