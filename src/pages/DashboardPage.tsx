@@ -120,6 +120,9 @@ const SnowOutlook = lazy(() =>
 const TripPlanner = lazy(() =>
   import('../components/TripPlanner').then((m) => ({ default: m.TripPlanner })),
 )
+const WeatherAssistant = lazy(() =>
+  import('../components/WeatherAssistant').then((m) => ({ default: m.WeatherAssistant })),
+)
 const OutlookTips = lazy(() =>
   import('../components/OutlookTips').then((m) => ({ default: m.OutlookTips })),
 )
@@ -865,6 +868,16 @@ export default function DashboardPage() {
                 />
 
                 <WeekendBrief weather={weather} units={units} placeName={location.name} />
+
+                <LazyPanel>
+                  <WeatherAssistant
+                    location={location}
+                    weather={weather}
+                    units={units}
+                    air={air}
+                    alerts={activeAlerts}
+                  />
+                </LazyPanel>
 
                 {/* Compact alert action — full text only when expanded */}
                 {!alertsMinimized && activeAlerts.length > 0 && (
