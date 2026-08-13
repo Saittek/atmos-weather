@@ -1041,6 +1041,123 @@ html.mobile-perf .w3d-sm.w3d-force .w3d-sun-rays {
   animation-duration: 18s;
 }
 
+/* ========== HQ PHOTO ICONS ========== */
+.w3d-photo {
+  /* Soft orb mask so navy square bg blends into glass cards */
+  border-radius: 28%;
+  overflow: visible;
+}
+
+.w3d-photo .w3d-orbit {
+  display: grid;
+  place-items: center;
+}
+
+.w3d-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 28%;
+  pointer-events: none;
+  user-select: none;
+  z-index: 1;
+  filter:
+    drop-shadow(0 6px 14px rgba(0, 0, 0, 0.35))
+    saturate(1.06)
+    contrast(1.04);
+  animation: w3d-img-breathe 3.2s ease-in-out infinite;
+  transform-origin: 50% 52%;
+}
+
+.w3d-sm .w3d-img {
+  animation: none;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.28)) saturate(1.04);
+}
+
+.w3d-live-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: 28%;
+  /* Soften particle edges over photo */
+  mask-image: radial-gradient(ellipse 88% 88% at 50% 50%, #000 55%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 88% 88% at 50% 50%, #000 55%, transparent 100%);
+}
+
+.w3d-live-fx .w3d-precip,
+.w3d-live-fx .w3d-snow,
+.w3d-live-fx .w3d-fog,
+.w3d-live-fx .w3d-bolt,
+.w3d-live-fx .w3d-flash,
+.w3d-live-fx .w3d-splash {
+  opacity: 0.72;
+}
+
+.w3d-live-fx .w3d-bolt {
+  opacity: 0.9;
+}
+
+@keyframes w3d-img-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    filter:
+      drop-shadow(0 6px 14px rgba(0, 0, 0, 0.35))
+      saturate(1.06)
+      contrast(1.04)
+      brightness(1);
+  }
+  50% {
+    transform: scale(1.035);
+    filter:
+      drop-shadow(0 10px 20px rgba(0, 0, 0, 0.4))
+      saturate(1.1)
+      contrast(1.05)
+      brightness(1.06);
+  }
+}
+
+/* Kind-specific glow tints on the photo shell */
+.w3d-photo.w3d-clear-day .w3d-img,
+.w3d-photo.w3d-mostly-day .w3d-img,
+.w3d-photo.w3d-partly-day .w3d-img {
+  box-shadow: 0 0 28px rgba(251, 191, 36, 0.22);
+}
+.w3d-photo.w3d-clear-night .w3d-img,
+.w3d-photo.w3d-mostly-night .w3d-img,
+.w3d-photo.w3d-partly-night .w3d-img {
+  box-shadow: 0 0 26px rgba(147, 197, 253, 0.2);
+}
+.w3d-photo.w3d-thunder .w3d-img,
+.w3d-photo.w3d-thunder-hail .w3d-img {
+  box-shadow: 0 0 30px rgba(167, 139, 250, 0.28);
+}
+.w3d-photo.w3d-rain .w3d-img,
+.w3d-photo.w3d-drizzle .w3d-img,
+.w3d-photo.w3d-showers .w3d-img {
+  box-shadow: 0 0 22px rgba(96, 165, 250, 0.18);
+}
+.w3d-photo.w3d-snow .w3d-img,
+.w3d-photo.w3d-snow-showers .w3d-img {
+  box-shadow: 0 0 24px rgba(186, 230, 253, 0.22);
+}
+.w3d-photo.w3d-smoke .w3d-img {
+  box-shadow: 0 0 24px rgba(251, 146, 60, 0.2);
+}
+
+/* Light theme: slightly lift exposure so navy orb reads as intentional */
+html.theme-light .w3d-img {
+  filter:
+    drop-shadow(0 4px 12px rgba(15, 23, 42, 0.18))
+    saturate(1.08)
+    contrast(1.02)
+    brightness(1.05);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .w3d-stage,
   .w3d-orbit,
@@ -1061,7 +1178,8 @@ html.mobile-perf .w3d-sm.w3d-force .w3d-sun-rays {
   .w3d-floor,
   .w3d-splash,
   .w3d-ice-glaze,
-  .w3d-snow-ground {
+  .w3d-snow-ground,
+  .w3d-img {
     animation: none !important;
   }
   .w3d-stage {
