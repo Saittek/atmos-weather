@@ -8,7 +8,7 @@ import { getVapidConfig } from './push-send.js'
 import { getWeatherVideos } from './weather-videos.js'
 import { getTropicalGlobeData } from './tropical.js'
 import { computeIssPasses } from './iss-passes.js'
-import { aiConfigured, runWeatherAssistant } from './ai-weather.js'
+
 
 const TOKEN_DAYS = 30
 const CELL = 0.2
@@ -676,7 +676,6 @@ export default {
             'sky-kp',
             'sky-iss',
             'metar',
-            'ai-weather',
           ],
           runtime: 'cloudflare-worker',
           pushConfigured: Boolean(getVapidConfig(env)),
@@ -687,7 +686,6 @@ export default {
             cron: Boolean(env.CRON_SECRET && String(env.CRON_SECRET).length >= 8),
             vapidPrivate: Boolean(env.VAPID_PRIVATE_KEY),
             resend: Boolean(env.RESEND_API_KEY),
-            xai: aiConfigured(env),
             apns:
               Boolean(env.APNS_KEY_ID) &&
               Boolean(env.APNS_TEAM_ID) &&
@@ -869,27 +867,6 @@ export default {
           return json({ days, rows: rows.results || [] })
         } catch (e) {
           return err('Metrics unavailable — run migrations', 503)
-        }
-      }
-
-      // ── Solara AI weather assistant (SpaceXAI / xAI) ──
-      if (path === '/api/ai/weather' && method === 'POST') {
-        const limited = rateLimitAuth(request, 'ai-weather', 24, 60 * 60 * 1000)
-        if (limited) return limited
-        try {
-          const body = await request.json().catch(() => ({}))
-          const result = await runWeatherAssistant(env, body)
-          if (!result.ok) {
-            return err(result.error || 'AI failed', result.status || 502)
-          }
-          return json(
-            { reply: result.reply, model: result.model },
-            200,
-            { 'Cache-Control': 'no-store' },
-          )
-        } catch (e) {
-          console.error('ai-weather', e)
-          return err('AI request failed', 502)
         }
       }
 
