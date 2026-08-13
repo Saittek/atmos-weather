@@ -48,26 +48,29 @@
 @keyframes w3d-float {
   0%,
   100% {
-    transform: translateY(0) rotateX(12deg) rotateY(-10deg) translateZ(0) scale(1);
+    transform: translateY(0) rotateX(14deg) rotateY(-12deg) translateZ(0) scale(1);
   }
-  33% {
-    transform: translateY(-5%) rotateX(8deg) rotateY(4deg) translateZ(4px) scale(1.02);
+  25% {
+    transform: translateY(-4%) rotateX(9deg) rotateY(2deg) translateZ(5px) scale(1.025);
   }
-  66% {
-    transform: translateY(-9%) rotateX(5deg) rotateY(12deg) translateZ(8px) scale(1.01);
+  50% {
+    transform: translateY(-10%) rotateX(5deg) rotateY(10deg) translateZ(10px) scale(1.03);
+  }
+  75% {
+    transform: translateY(-5%) rotateX(8deg) rotateY(4deg) translateZ(6px) scale(1.015);
   }
 }
 
 @keyframes w3d-yaw {
   0%,
   100% {
-    transform: rotateY(-8deg) rotateZ(-1.5deg);
+    transform: rotateY(-10deg) rotateZ(-2deg);
   }
-  40% {
-    transform: rotateY(4deg) rotateZ(0.5deg);
+  35% {
+    transform: rotateY(3deg) rotateZ(0.5deg);
   }
-  70% {
-    transform: rotateY(10deg) rotateZ(1.5deg);
+  65% {
+    transform: rotateY(12deg) rotateZ(2deg);
   }
 }
 
@@ -606,17 +609,17 @@
 /* Seamless loop — soft fade in/out like real streaks entering the frame */
 @keyframes w3d-fall {
   0% {
-    transform: translate3d(0, 0, 0) rotate(var(--ang, 12deg));
+    transform: translate3d(0, -8%, 0) rotate(var(--ang, 12deg)) scaleY(0.9);
     opacity: 0;
   }
-  6% {
+  5% {
     opacity: var(--op, 0.55);
   }
-  88% {
+  78% {
     opacity: var(--op, 0.55);
   }
   100% {
-    transform: translate3d(var(--wind, -10px), 175%, 0) rotate(var(--ang, 12deg));
+    transform: translate3d(var(--wind, -10px), 185%, 0) rotate(var(--ang, 12deg)) scaleY(1.05);
     opacity: 0;
   }
 }
