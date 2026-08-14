@@ -59,6 +59,15 @@ export interface RadarSourceMeta {
 
 export const RADAR_SOURCES: RadarSourceMeta[] = [
   {
+    id: 'global_loop',
+    name: 'Global radar',
+    desc: 'Worldwide precip mosaic (RainViewer) — best free global coverage + short nowcast',
+    coverage: 'Global',
+    animated: true,
+    maxNativeZoom: 7,
+    attribution: 'Radar © RainViewer',
+  },
+  {
     id: 'storm_chaser',
     name: 'Storm chaser',
     desc: 'Region-aware: ECCC Canada · NEXRAD US loop · global composite elsewhere — high-contrast chaser palette',
@@ -113,15 +122,6 @@ export const RADAR_SOURCES: RadarSourceMeta[] = [
     animated: false,
     maxNativeZoom: 8,
     attribution: 'Precip © Iowa Environmental Mesonet / NSSL MRMS',
-  },
-  {
-    id: 'global_loop',
-    name: 'Global radar (loop)',
-    desc: 'Worldwide precip mosaic (RainViewer) — best free global/Europe coverage + short nowcast',
-    coverage: 'Global',
-    animated: true,
-    maxNativeZoom: 7,
-    attribution: 'Radar © RainViewer',
   },
   {
     id: 'mapbox_radar',
@@ -204,20 +204,9 @@ export function isCanadaRadarRegion(lat?: number, lon?: number): boolean {
   return false
 }
 
-/**
- * Pick the strongest free radar for the user’s region:
- * - Canada → official ECCC rain composite
- * - CONUS NEXRAD domain → national mosaic loop
- * - Elsewhere (incl. Europe) → Storm chaser (region-aware RainViewer/ECCC/NEXRAD)
- */
-export function defaultSourceForLocation(lat?: number, lon?: number): RadarSourceId {
-  if (lat == null || lon == null || !Number.isFinite(lat) || !Number.isFinite(lon)) {
-    return 'storm_chaser'
-  }
-  if (isCanadaRadarRegion(lat, lon)) return 'eccc_radar'
-  if (isNexradMosaicRegion(lat, lon)) return 'us_nexrad_loop'
-  // Europe / Asia / rest — RainViewer via storm chaser palette + global fallbacks
-  return 'storm_chaser'
+/** Default product is always Global radar (RainViewer worldwide mosaic). */
+export function defaultSourceForLocation(_lat?: number, _lon?: number): RadarSourceId {
+  return 'global_loop'
 }
 
 /** Prefer Mapbox dark basemap for chaser-style sources when token exists */
