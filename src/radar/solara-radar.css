@@ -22,8 +22,9 @@
 
 .sr-stage {
   position: relative;
-  flex: 1;
-  min-height: 260px;
+  flex: 1 1 auto;
+  min-height: 280px;
+  height: min(52vh, 420px);
   border-radius: var(--sr-radius);
   overflow: hidden;
   border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
@@ -33,6 +34,8 @@
 
 .solara-radar.is-page .sr-stage {
   min-height: 0;
+  height: auto;
+  flex: 1 1 auto;
 }
 
 .sr-map {

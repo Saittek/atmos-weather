@@ -1,10 +1,10 @@
 /**
- * Solara HD Radar — MapLibre GL rebuild (replaces Leaflet RadarMap).
- * Auto product · 512px RainViewer · ECCC WMS · IEM NEXRAD · glass chrome.
+ * Solara HD Radar — MapLibre GL (rebuild).
+ * Reliable frame apply matches GlobalRadarGlobe: remove source/layer → re-add.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as maplibregl from 'maplibre-gl'
-import type { GeoJSONSource, Map as MapLibreMap } from 'maplibre-gl'
+import type { GeoJSONSource, Map as MapLibreMap, StyleSpecification } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import './solara-radar.css'
 import {
@@ -37,7 +37,6 @@ export interface MapFocusRequest {
   lat: number
   lon: number
   zoom?: number
-  /** Optional identity so repeated focuses re-trigger fly */
   token?: number | string
 }
 
@@ -60,125 +59,155 @@ type SpeedKey = 'slow' | 'normal' | 'fast'
 type BasemapId = 'dark' | 'street' | 'sat'
 
 const HOLD_MS: Record<SpeedKey, number> = { slow: 720, normal: 400, fast: 180 }
-const FADE_MS: Record<SpeedKey, number> = { slow: 320, normal: 220, fast: 140 }
 
-const BASEMAPS: Record<BasemapId, { name: string; tiles: string[]; attr: string }> = {
-  dark: {
-    name: 'Dark',
-    tiles: ['https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'],
-    attr: '© OSM © CARTO',
-  },
-  street: {
-    name: 'Street',
-    tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-    attr: '© OpenStreetMap',
-  },
-  sat: {
-    name: 'Satellite',
-    tiles: [
-      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    ],
-    attr: '© Esri',
-  },
+const RADAR_SRC = 'solara-radar-src'
+const RADAR_LYR = 'solara-radar-lyr'
+
+function expandCarto(url: string): string[] {
+  if (!url.includes('{s}')) return [url.replace('{r}', '')]
+  return ['a', 'b', 'c', 'd'].map((s) => url.replace('{s}', s).replace('{r}', ''))
 }
 
-function expandCarto(tiles: string[]): string[] {
-  // MapLibre needs concrete subdomains
-  return tiles.flatMap((t) =>
-    t.includes('{s}')
-      ? ['a', 'b', 'c', 'd'].map((s) => t.replace('{s}', s).replace('{r}', ''))
-      : [t],
-  )
-}
-
-function basemapStyle(id: BasemapId, mapboxToken: string | null): maplibregl.StyleSpecification {
+function buildBasemapStyle(
+  id: BasemapId,
+  mapboxToken: string | null,
+): StyleSpecification {
   if (mapboxToken && id === 'dark') {
     return {
       version: 8,
+      glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
       sources: {
         basemap: {
           type: 'raster',
           tiles: [
-            `https://api.mapbox.com/styles/v1/mapbox/dark-v11/tiles/512/{z}/{x}/{y}@2x?access_token=${encodeURIComponent(mapboxToken)}`,
+            `https://api.mapbox.com/styles/v1/mapbox/dark-v11/tiles/256/{z}/{x}/{y}@2x?access_token=${encodeURIComponent(mapboxToken)}`,
           ],
-          tileSize: 512,
+          tileSize: 256,
           attribution: '© Mapbox © OpenStreetMap',
         },
       },
-      layers: [{ id: 'basemap', type: 'raster', source: 'basemap' }],
+      layers: [{ id: 'basemap', type: 'raster', source: 'basemap', minzoom: 0, maxzoom: 22 }],
     }
   }
-  const b = BASEMAPS[id]
+
+  const catalog: Record<BasemapId, { tiles: string[]; attr: string }> = {
+    dark: {
+      tiles: expandCarto('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'),
+      attr: '© OSM © CARTO',
+    },
+    street: {
+      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+      attr: '© OpenStreetMap',
+    },
+    sat: {
+      tiles: [
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      ],
+      attr: '© Esri',
+    },
+  }
+  const b = catalog[id]
   return {
     version: 8,
+    glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
     sources: {
       basemap: {
         type: 'raster',
-        tiles: expandCarto(b.tiles),
+        tiles: b.tiles,
         tileSize: 256,
         attribution: b.attr,
       },
     },
-    layers: [{ id: 'basemap', type: 'raster', source: 'basemap' }],
+    layers: [{ id: 'basemap', type: 'raster', source: 'basemap', minzoom: 0, maxzoom: 22 }],
   }
 }
 
-const RADAR_A = 'solara-radar-a'
-const RADAR_B = 'solara-radar-b'
-const LAYER_A = 'solara-radar-layer-a'
-const LAYER_B = 'solara-radar-layer-b'
+/** Same pattern as GlobalRadarGlobe — tear down + rebuild radar source each frame. */
+function applyRadarFrame(
+  map: MapLibreMap,
+  tileUrl: string | null,
+  opacity: number,
+  tileSize: number,
+) {
+  try {
+    if (map.getLayer(RADAR_LYR)) map.removeLayer(RADAR_LYR)
+    if (map.getSource(RADAR_SRC)) map.removeSource(RADAR_SRC)
+  } catch {
+    /* ignore */
+  }
+  if (!tileUrl || !map.isStyleLoaded()) return
 
-function ensureRadarSources(map: MapLibreMap, tileSize: number) {
-  for (const id of [RADAR_A, RADAR_B]) {
-    if (!map.getSource(id)) {
-      map.addSource(id, {
-        type: 'raster',
-        tiles: ['https://tile.openstreetmap.org/0/0/0.png'],
-        tileSize,
-        attribution: 'Radar',
-        maxzoom: 12,
-      })
-    }
-  }
-  if (!map.getLayer(LAYER_A)) {
-    map.addLayer({
-      id: LAYER_A,
-      type: 'raster',
-      source: RADAR_A,
-      paint: { 'raster-opacity': 0.82, 'raster-fade-duration': 0 },
-    })
-  }
-  if (!map.getLayer(LAYER_B)) {
-    map.addLayer({
-      id: LAYER_B,
-      type: 'raster',
-      source: RADAR_B,
-      paint: { 'raster-opacity': 0, 'raster-fade-duration': 0 },
-    })
-  }
-}
-
-function setRasterTiles(map: MapLibreMap, sourceId: string, tileUrl: string, tileSize: number) {
-  const src = map.getSource(sourceId) as { setTiles?: (t: string[]) => void } | undefined
-  if (src && typeof src.setTiles === 'function') {
-    src.setTiles([tileUrl])
-    return
-  }
-  const layerId = sourceId === RADAR_A ? LAYER_A : LAYER_B
-  if (map.getLayer(layerId)) map.removeLayer(layerId)
-  if (map.getSource(sourceId)) map.removeSource(sourceId)
-  map.addSource(sourceId, {
+  map.addSource(RADAR_SRC, {
     type: 'raster',
     tiles: [tileUrl],
     tileSize,
     maxzoom: 12,
+    attribution: 'Radar',
   })
   map.addLayer({
-    id: layerId,
+    id: RADAR_LYR,
     type: 'raster',
-    source: sourceId,
-    paint: { 'raster-opacity': sourceId === RADAR_A ? 0.82 : 0, 'raster-fade-duration': 0 },
+    source: RADAR_SRC,
+    paint: {
+      'raster-opacity': opacity,
+      'raster-fade-duration': 0,
+      'raster-resampling': 'linear',
+    },
   })
+}
+
+function upsertGeoJson(
+  map: MapLibreMap,
+  sourceId: string,
+  layerId: string,
+  data: GeoJSON.FeatureCollection,
+  kind: 'fill' | 'circle',
+  paint: Record<string, unknown>,
+) {
+  if (!map.isStyleLoaded()) return
+  const existing = map.getSource(sourceId) as GeoJSONSource | undefined
+  if (existing) {
+    existing.setData(data)
+    return
+  }
+  map.addSource(sourceId, { type: 'geojson', data })
+  if (kind === 'fill') {
+    map.addLayer({
+      id: layerId,
+      type: 'fill',
+      source: sourceId,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      paint: paint as any,
+    })
+    map.addLayer({
+      id: `${layerId}-line`,
+      type: 'line',
+      source: sourceId,
+      paint: {
+        'line-color': '#f87171',
+        'line-width': 1.5,
+        'line-opacity': 0.85,
+      },
+    })
+  } else {
+    map.addLayer({
+      id: layerId,
+      type: 'circle',
+      source: sourceId,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      paint: paint as any,
+    })
+  }
+}
+
+function removeOverlay(map: MapLibreMap, sourceId: string, layerId: string) {
+  try {
+    if (map.getLayer(`${layerId}-line`)) map.removeLayer(`${layerId}-line`)
+    if (map.getLayer(layerId)) map.removeLayer(layerId)
+    if (map.getSource(sourceId)) map.removeSource(sourceId)
+  } catch {
+    /* ignore */
+  }
 }
 
 export function SolaraRadar({
@@ -199,11 +228,16 @@ export function SolaraRadar({
   const lite = useMemo(() => isConstrainedDevice(), [])
   const hd = !lite
   const mapboxToken = useMemo(() => getMapboxToken(), [])
-  const containerRef = useRef<HTMLDivElement>(null)
+
+  const wrapRef = useRef<HTMLElement | null>(null)
+  const containerRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
-  const activeBuf = useRef<'a' | 'b'>('a')
+  const mapReadyRef = useRef(false)
+  const basemapInitRef = useRef(true)
   const wantPlay = useRef(false)
   const playTimer = useRef<number | null>(null)
+  const tileUrlRef = useRef<string | null>(null)
+  const opacityRef = useRef(0.84)
 
   const [product, setProduct] = useState<RadarSourceId>(
     () => initialSource ?? defaultSourceForLocation(lat, lon),
@@ -219,10 +253,10 @@ export function SolaraRadar({
   const [rvHost, setRvHost] = useState('https://tilecache.rainviewer.com')
   const [fullscreen, setFullscreen] = useState(false)
   const [inView, setInView] = useState(true)
+  const [mapReady, setMapReady] = useState(false)
   const [showFires, setShowFires] = useState(false)
   const [showWarn, setShowWarn] = useState(chaserOverlays || severeMode)
   const [showReports, setShowReports] = useState(chaserOverlays || severeMode)
-  const wrapRef = useRef<HTMLElement>(null)
 
   const meta = getSourceMeta(product)
   const frame = frames[frameIdx] ?? null
@@ -232,27 +266,29 @@ export function SolaraRadar({
     () => primaryTileUrl(product, frame, rvHost, { hd }),
     [product, frame, rvHost, hd],
   )
+  tileUrlRef.current = tileUrl
+  opacityRef.current = opacity
 
-  // IntersectionObserver — pause when off-screen
+  // Visibility
   useEffect(() => {
     const el = wrapRef.current
     if (!el || typeof IntersectionObserver === 'undefined') return
     const io = new IntersectionObserver(
-      ([e]) => setInView(e.isIntersecting && e.intersectionRatio > 0.12),
-      { threshold: [0, 0.12, 0.5] },
+      ([e]) => setInView(e.isIntersecting && e.intersectionRatio > 0.08),
+      { threshold: [0, 0.08, 0.4] },
     )
     io.observe(el)
     return () => io.disconnect()
   }, [])
 
-  // Init MapLibre
+  // Create map once
   useEffect(() => {
     const el = containerRef.current
-    if (!el || mapRef.current) return
+    if (!el) return
 
     const map = new maplibregl.Map({
       container: el,
-      style: basemapStyle(basemap, mapboxToken),
+      style: buildBasemapStyle('dark', mapboxToken),
       center: [lon, lat],
       zoom: pageMode ? 6.2 : 7.1,
       attributionControl: { compact: true },
@@ -260,14 +296,188 @@ export function SolaraRadar({
       dragRotate: false,
       pitchWithRotate: false,
       fadeDuration: 0,
+      renderWorldCopies: true,
     })
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right')
     mapRef.current = map
 
-    map.on('load', () => {
-      ensureRadarSources(map, tileSize)
-      // Place marker
-      if (!map.getSource('place')) {
+    const onReady = () => {
+      mapReadyRef.current = true
+      setMapReady(true)
+      map.resize()
+      // Place pin
+      try {
+        if (!map.getSource('place')) {
+          map.addSource('place', {
+            type: 'geojson',
+            data: {
+              type: 'FeatureCollection',
+              features: [
+                {
+                  type: 'Feature',
+                  properties: { name: placeName },
+                  geometry: { type: 'Point', coordinates: [lon, lat] },
+                },
+              ],
+            },
+          })
+          map.addLayer({
+            id: 'place-glow',
+            type: 'circle',
+            source: 'place',
+            paint: {
+              'circle-radius': 14,
+              'circle-color': '#38bdf8',
+              'circle-opacity': 0.22,
+              'circle-blur': 0.6,
+            },
+          })
+          map.addLayer({
+            id: 'place-dot',
+            type: 'circle',
+            source: 'place',
+            paint: {
+              'circle-radius': 6,
+              'circle-color': '#7dd3fc',
+              'circle-stroke-width': 2,
+              'circle-stroke-color': '#0f172a',
+            },
+          })
+        }
+      } catch (e) {
+        console.warn('[radar] place marker', e)
+      }
+      // Apply any pending radar frame
+      applyRadarFrame(map, tileUrlRef.current, opacityRef.current, tileSize)
+    }
+
+    if (map.loaded()) onReady()
+    else map.once('load', onReady)
+
+    // Keep canvas sized (Deferred / flex layouts)
+    const ro =
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => {
+            try {
+              map.resize()
+            } catch {
+              /* ignore */
+            }
+          })
+        : null
+    ro?.observe(el)
+
+    map.on('error', (e) => {
+      // Don't blank the whole UI for a single tile error
+      console.warn('[radar] map error', e?.error || e)
+    })
+
+    return () => {
+      ro?.disconnect()
+      mapReadyRef.current = false
+      map.remove()
+      mapRef.current = null
+      setMapReady(false)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- create once
+  }, [])
+
+  // Resize when becoming visible / fullscreen
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !inView) return
+    const t = window.setTimeout(() => {
+      try {
+        map.resize()
+      } catch {
+        /* ignore */
+      }
+    }, 80)
+    return () => window.clearTimeout(t)
+  }, [inView, fullscreen, pageMode, mapReady])
+
+  // Camera + place marker
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !mapReadyRef.current) return
+    map.easeTo({ center: [lon, lat], duration: 500 })
+    const src = map.getSource('place') as GeoJSONSource | undefined
+    src?.setData({
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { name: placeName },
+          geometry: { type: 'Point', coordinates: [lon, lat] },
+        },
+      ],
+    })
+  }, [lat, lon, placeName, mapReady])
+
+  // Home marker
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !mapReady) return
+    const id = 'home-place'
+    if (!homeLocation) {
+      removeOverlay(map, id, 'home-dot')
+      return
+    }
+    upsertGeoJson(
+      map,
+      id,
+      'home-dot',
+      {
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            properties: { name: homeLocation.name || 'Home' },
+            geometry: {
+              type: 'Point',
+              coordinates: [homeLocation.longitude, homeLocation.latitude],
+            },
+          },
+        ],
+      },
+      'circle',
+      {
+        'circle-radius': 7,
+        'circle-color': '#fbbf24',
+        'circle-stroke-width': 2,
+        'circle-stroke-color': '#0f172a',
+      },
+    )
+  }, [homeLocation, mapReady])
+
+  // Chase focus
+  useEffect(() => {
+    if (!focusRequest || !mapRef.current) return
+    mapRef.current.flyTo({
+      center: [focusRequest.lon, focusRequest.lat],
+      zoom: focusRequest.zoom ?? 8,
+      duration: 900,
+    })
+  }, [focusRequest])
+
+  // Basemap change (skip first paint — map already created with dark)
+  useEffect(() => {
+    if (basemapInitRef.current) {
+      basemapInitRef.current = false
+      return
+    }
+    const map = mapRef.current
+    if (!map) return
+    mapReadyRef.current = false
+    setMapReady(false)
+    map.setStyle(buildBasemapStyle(basemap, mapboxToken))
+    map.once('style.load', () => {
+      mapReadyRef.current = true
+      setMapReady(true)
+      map.resize()
+      applyRadarFrame(map, tileUrlRef.current, opacityRef.current, tileSize)
+      // re-add place
+      try {
         map.addSource('place', {
           type: 'geojson',
           data: {
@@ -282,17 +492,6 @@ export function SolaraRadar({
           },
         })
         map.addLayer({
-          id: 'place-glow',
-          type: 'circle',
-          source: 'place',
-          paint: {
-            'circle-radius': 14,
-            'circle-color': '#38bdf8',
-            'circle-opacity': 0.22,
-            'circle-blur': 0.6,
-          },
-        })
-        map.addLayer({
           id: 'place-dot',
           type: 'circle',
           source: 'place',
@@ -303,102 +502,13 @@ export function SolaraRadar({
             'circle-stroke-color': '#0f172a',
           },
         })
+      } catch {
+        /* ignore */
       }
     })
+  }, [basemap, mapboxToken, tileSize, placeName, lat, lon])
 
-    return () => {
-      map.remove()
-      mapRef.current = null
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount once
-  }, [])
-
-  // Fly to place when coords change
-  useEffect(() => {
-    const map = mapRef.current
-    if (!map) return
-    map.easeTo({ center: [lon, lat], duration: 600 })
-    const src = map.getSource('place') as GeoJSONSource | undefined
-    src?.setData({
-      type: 'FeatureCollection',
-      features: [
-        {
-          type: 'Feature',
-          properties: { name: placeName },
-          geometry: { type: 'Point', coordinates: [lon, lat] },
-        },
-      ],
-    })
-  }, [lat, lon, placeName])
-
-  // Home marker
-  useEffect(() => {
-    const map = mapRef.current
-    if (!map || !map.isStyleLoaded()) return
-    const id = 'home-place'
-    if (!homeLocation) {
-      if (map.getLayer('home-dot')) map.removeLayer('home-dot')
-      if (map.getSource(id)) map.removeSource(id)
-      return
-    }
-    const data: GeoJSON.FeatureCollection = {
-      type: 'FeatureCollection',
-      features: [
-        {
-          type: 'Feature',
-          properties: { name: homeLocation.name || 'Home' },
-          geometry: {
-            type: 'Point',
-            coordinates: [homeLocation.longitude, homeLocation.latitude],
-          },
-        },
-      ],
-    }
-    if (map.getSource(id)) {
-      ;(map.getSource(id) as GeoJSONSource).setData(data)
-    } else {
-      map.addSource(id, { type: 'geojson', data })
-      map.addLayer({
-        id: 'home-dot',
-        type: 'circle',
-        source: id,
-        paint: {
-          'circle-radius': 7,
-          'circle-color': '#fbbf24',
-          'circle-stroke-width': 2,
-          'circle-stroke-color': '#0f172a',
-        },
-      })
-    }
-  }, [homeLocation])
-
-  // Focus request (chase)
-  useEffect(() => {
-    if (!focusRequest || !mapRef.current) return
-    mapRef.current.flyTo({
-      center: [focusRequest.lon, focusRequest.lat],
-      zoom: focusRequest.zoom ?? 8,
-      duration: 900,
-    })
-  }, [focusRequest])
-
-  // Basemap switch
-  useEffect(() => {
-    const map = mapRef.current
-    if (!map) return
-    const style = basemapStyle(basemap, mapboxToken)
-    map.setStyle(style)
-    map.once('style.load', () => {
-      ensureRadarSources(map, tileSize)
-      // re-apply current radar tiles after style reset
-      if (tileUrl) {
-        setRasterTiles(map, RADAR_A, tileUrl, tileSize)
-        map.setPaintProperty(LAYER_A, 'raster-opacity', opacity)
-      }
-    })
-  }, [basemap, mapboxToken, tileSize]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Product default when place moves
+  // Auto product when place changes
   useEffect(() => {
     setProduct((prev) => {
       if (
@@ -423,19 +533,23 @@ export function SolaraRadar({
         product === 'mapbox_radar' ||
         (product === 'storm_chaser' &&
           !isCanadaRadarRegion(lat, lon) &&
-          !isNexradMosaicRegion(lat, lon))
+          !isNexradMosaicRegion(lat, lon)) ||
+        // storm_chaser in US uses IEM but also RV for labels — always warm host for global fallback
+        product === 'storm_chaser'
+
       if (needsRv) {
         try {
           const maps = await fetchRainViewerMaps()
           setRvHost(maps.host || 'https://tilecache.rainviewer.com')
         } catch {
-          /* continue */
+          /* ECCC/IEM may still work */
         }
       }
+
       const next = await loadFrames(product, { lite, lat, lon })
       if (!next.length) throw new Error(te('radar.noFrames'))
       setFrames(next)
-      setFrameIdx(next.length - 1)
+      setFrameIdx(Math.max(0, next.length - 1))
     } catch (e) {
       setFrames([])
       setError(e instanceof Error ? e.message : te('radar.failed'))
@@ -448,7 +562,7 @@ export function SolaraRadar({
     void reload()
   }, [reload])
 
-  // Refresh frames periodically
+  // Periodic refresh
   useEffect(() => {
     const mins = playing ? (lite ? 5 : 4) : lite ? 12 : 8
     const id = window.setInterval(() => {
@@ -458,50 +572,12 @@ export function SolaraRadar({
     return () => window.clearInterval(id)
   }, [reload, playing, lite, inView])
 
-  // Apply frame tiles with crossfade
+  // Apply radar tiles whenever frame/url ready and map is ready
   useEffect(() => {
     const map = mapRef.current
-    if (!map || !tileUrl || !map.isStyleLoaded()) return
-    ensureRadarSources(map, tileSize)
-
-    const nextBuf = activeBuf.current === 'a' ? 'b' : 'a'
-    const nextSrc = nextBuf === 'a' ? RADAR_A : RADAR_B
-    const nextLayer = nextBuf === 'a' ? LAYER_A : LAYER_B
-    const prevLayer = activeBuf.current === 'a' ? LAYER_A : LAYER_B
-
-    setRasterTiles(map, nextSrc, tileUrl, tileSize)
-    map.setPaintProperty(nextLayer, 'raster-opacity', 0)
-    map.setPaintProperty(prevLayer, 'raster-opacity', opacity)
-
-    const fade = FADE_MS[speed]
-    const t0 = performance.now()
-    let raf = 0
-    const step = (now: number) => {
-      const p = Math.min(1, (now - t0) / fade)
-      map.setPaintProperty(nextLayer, 'raster-opacity', opacity * p)
-      map.setPaintProperty(prevLayer, 'raster-opacity', opacity * (1 - p))
-      if (p < 1) raf = requestAnimationFrame(step)
-      else {
-        map.setPaintProperty(prevLayer, 'raster-opacity', 0)
-        map.setPaintProperty(nextLayer, 'raster-opacity', opacity)
-        activeBuf.current = nextBuf
-      }
-    }
-    raf = requestAnimationFrame(step)
-    return () => cancelAnimationFrame(raf)
-  }, [tileUrl, tileSize, opacity, speed])
-
-  // Opacity live update
-  useEffect(() => {
-    const map = mapRef.current
-    if (!map || !map.isStyleLoaded()) return
-    const layer = activeBuf.current === 'a' ? LAYER_A : LAYER_B
-    try {
-      map.setPaintProperty(layer, 'raster-opacity', opacity)
-    } catch {
-      /* style mid-swap */
-    }
-  }, [opacity])
+    if (!map || !mapReady) return
+    applyRadarFrame(map, tileUrl, opacity, tileSize)
+  }, [tileUrl, opacity, tileSize, mapReady])
 
   // Playback
   useEffect(() => {
@@ -509,11 +585,10 @@ export function SolaraRadar({
       window.clearInterval(playTimer.current)
       playTimer.current = null
     }
-    const run = playing && inView && !document.hidden && frames.length > 1
-    if (!run) return
+    if (!(playing && inView && !document.hidden && frames.length > 1)) return
     playTimer.current = window.setInterval(() => {
       setFrameIdx((i) => (i + 1) % frames.length)
-    }, HOLD_MS[speed] + FADE_MS[speed])
+    }, HOLD_MS[speed])
     return () => {
       if (playTimer.current) window.clearInterval(playTimer.current)
     }
@@ -528,175 +603,101 @@ export function SolaraRadar({
     return () => document.removeEventListener('visibilitychange', onVis)
   }, [inView])
 
-  // Severe + fires GeoJSON
+  // Overlays
   useEffect(() => {
     const map = mapRef.current
-    if (!map) return
-
-    const applyCollection = (
-      sourceId: string,
-      layerId: string,
-      data: GeoJSON.FeatureCollection,
-      paint: Record<string, unknown>,
-      type: 'circle' | 'fill' | 'line',
-    ) => {
-      if (!map.isStyleLoaded()) return
-      if (map.getSource(sourceId)) {
-        ;(map.getSource(sourceId) as GeoJSONSource).setData(data)
-      } else {
-        map.addSource(sourceId, { type: 'geojson', data })
-        if (type === 'fill') {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          map.addLayer({
-            id: layerId,
-            type: 'fill',
-            source: sourceId,
-            paint,
-          } as any)
-          map.addLayer({
-            id: `${layerId}-line`,
-            type: 'line',
-            source: sourceId,
-            paint: {
-              'line-color': '#f87171',
-              'line-width': 1.5,
-              'line-opacity': 0.85,
-            },
-          })
-        } else if (type === 'circle') {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          map.addLayer({
-            id: layerId,
-            type: 'circle',
-            source: sourceId,
-            paint,
-          } as any)
-        }
-      }
-    }
-
+    if (!map || !mapReady) return
     let cancelled = false
+
     const run = async () => {
       if (showWarn) {
         try {
           const warns = await fetchStormWarnings()
-          if (cancelled) return
+          if (cancelled || !mapRef.current) return
           const fc: GeoJSON.FeatureCollection = {
             type: 'FeatureCollection',
-            features: (warns as StormWarning[])
+            features: warns
               .filter((w) => w.geometry)
+              .slice(0, 200)
               .map((w) => ({
                 type: 'Feature' as const,
-                properties: {
-                  event: w.label,
-                  severity: w.significance,
-                  headline: w.label,
-                },
+                properties: { label: w.label },
                 geometry: w.geometry as GeoJSON.Geometry,
               })),
           }
-          applyCollection(
-            'severe-warn',
-            'severe-warn-fill',
-            fc,
-            {
-              'fill-color': '#f87171',
-              'fill-opacity': 0.18,
-            },
-            'fill',
-          )
+          upsertGeoJson(map, 'severe-warn', 'severe-warn-fill', fc, 'fill', {
+            'fill-color': '#f87171',
+            'fill-opacity': 0.16,
+          })
         } catch {
           /* soft */
         }
-      } else if (map.getLayer('severe-warn-fill')) {
-        map.removeLayer('severe-warn-fill')
-        if (map.getLayer('severe-warn-fill-line')) map.removeLayer('severe-warn-fill-line')
-        if (map.getSource('severe-warn')) map.removeSource('severe-warn')
+      } else {
+        removeOverlay(map, 'severe-warn', 'severe-warn-fill')
       }
 
       if (showReports) {
         try {
           const reports = await fetchSpcStormReports()
-          if (cancelled) return
-          // Keep reports near the view (~5°)
-          const near = (reports as StormReport[]).filter(
-            (r) => Math.abs(r.lat - lat) < 5 && Math.abs(r.lon - lon) < 5,
+          if (cancelled || !mapRef.current) return
+          const near = reports.filter(
+            (r) => Math.abs(r.lat - lat) < 6 && Math.abs(r.lon - lon) < 6,
           )
           const fc: GeoJSON.FeatureCollection = {
             type: 'FeatureCollection',
-            features: near.map((r) => ({
+            features: near.map((r: StormReport) => ({
               type: 'Feature' as const,
-              properties: { type: r.kind, remark: r.magnitude },
-              geometry: {
-                type: 'Point',
-                coordinates: [r.lon, r.lat],
-              },
+              properties: { kind: r.kind },
+              geometry: { type: 'Point', coordinates: [r.lon, r.lat] },
             })),
           }
-          applyCollection(
-            'severe-reports',
-            'severe-reports-dot',
-            fc,
-            {
-              'circle-radius': 5,
-              'circle-color': '#fbbf24',
-              'circle-stroke-width': 1,
-              'circle-stroke-color': '#0f172a',
-            },
-            'circle',
-          )
+          upsertGeoJson(map, 'severe-reports', 'severe-reports-dot', fc, 'circle', {
+            'circle-radius': 5,
+            'circle-color': '#fbbf24',
+            'circle-stroke-width': 1,
+            'circle-stroke-color': '#0f172a',
+          })
         } catch {
           /* soft */
         }
-      } else if (map.getLayer('severe-reports-dot')) {
-        map.removeLayer('severe-reports-dot')
-        if (map.getSource('severe-reports')) map.removeSource('severe-reports')
+      } else {
+        removeOverlay(map, 'severe-reports', 'severe-reports-dot')
       }
 
       if (showFires) {
         try {
           const fires = await fetchFiresNear(lat, lon, 3.5, 200)
-          if (cancelled) return
-          const list = Array.isArray(fires) ? fires : []
+          if (cancelled || !mapRef.current) return
           const fc: GeoJSON.FeatureCollection = {
             type: 'FeatureCollection',
-            features: (list as FireHotspot[])
-              .filter((f) => Number.isFinite(f.lat) && Number.isFinite(f.lon))
-              .slice(0, 400)
+            features: fires
+              .filter((f: FireHotspot) => Number.isFinite(f.lat) && Number.isFinite(f.lon))
               .map((f) => ({
                 type: 'Feature' as const,
                 properties: { bright: f.brightness },
                 geometry: { type: 'Point', coordinates: [f.lon, f.lat] },
               })),
           }
-          applyCollection(
-            'firms-fires',
-            'firms-fires-dot',
-            fc,
-            {
-              'circle-radius': 4,
-              'circle-color': '#fb923c',
-              'circle-opacity': 0.85,
-              'circle-stroke-width': 0.5,
-              'circle-stroke-color': '#7c2d12',
-            },
-            'circle',
-          )
+          upsertGeoJson(map, 'firms-fires', 'firms-fires-dot', fc, 'circle', {
+            'circle-radius': 4,
+            'circle-color': '#fb923c',
+            'circle-opacity': 0.85,
+            'circle-stroke-width': 0.5,
+            'circle-stroke-color': '#7c2d12',
+          })
         } catch {
           /* soft */
         }
-      } else if (map.getLayer('firms-fires-dot')) {
-        map.removeLayer('firms-fires-dot')
-        if (map.getSource('firms-fires')) map.removeSource('firms-fires')
+      } else {
+        removeOverlay(map, 'firms-fires', 'firms-fires-dot')
       }
     }
 
-    if (map.isStyleLoaded()) void run()
-    else map.once('load', () => void run())
+    void run()
     return () => {
       cancelled = true
     }
-  }, [showWarn, showReports, showFires, lat, lon])
+  }, [showWarn, showReports, showFires, lat, lon, mapReady])
 
   const togglePlay = () => {
     setPlaying((p) => {
@@ -714,12 +715,19 @@ export function SolaraRadar({
 
   return (
     <section
-      ref={wrapRef as React.RefObject<HTMLElement>}
+      ref={(n) => {
+        wrapRef.current = n
+      }}
       className={`panel radar-panel solara-radar ${pageMode ? 'is-page radar-page-mode' : 'is-compact radar-compact'} ${fullscreen ? 'is-fullscreen' : ''}`}
       id={mapId}
     >
       <div className="sr-stage">
-        <div ref={containerRef} className="sr-map" role="img" aria-label={`Radar for ${placeName}`} />
+        <div
+          ref={containerRef}
+          className="sr-map"
+          role="img"
+          aria-label={`Radar for ${placeName}`}
+        />
 
         <div className="sr-legend" aria-hidden>
           <div className="sr-legend-bar" />
@@ -754,10 +762,19 @@ export function SolaraRadar({
                 {frameIdx + 1}/{frames.length}
               </em>
             )}
-            {hd && <span className="sr-hd-badge" style={{ marginLeft: '0.4rem' }}>HD</span>}
+            {hd && (
+              <span className="sr-hd-badge" style={{ marginLeft: '0.4rem' }}>
+                HD
+              </span>
+            )}
           </div>
           <div className="sr-row">
-            <button type="button" className="chip-btn" onClick={togglePlay} disabled={frames.length < 2}>
+            <button
+              type="button"
+              className="chip-btn"
+              onClick={togglePlay}
+              disabled={frames.length < 2}
+            >
               {playing ? '⏸' : '▶'}
             </button>
             <select
@@ -774,7 +791,6 @@ export function SolaraRadar({
               type="button"
               className="chip-btn"
               onClick={() => setFullscreen((f) => !f)}
-              title={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}
             >
               {fullscreen ? '↘' : 'Fullscreen'}
             </button>
@@ -819,7 +835,10 @@ export function SolaraRadar({
             <option value="street">Street</option>
             <option value="sat">Satellite</option>
           </select>
-          <label className="chip-btn" style={{ display: 'inline-flex', gap: '0.35rem', alignItems: 'center' }}>
+          <label
+            className="chip-btn"
+            style={{ display: 'inline-flex', gap: '0.35rem', alignItems: 'center' }}
+          >
             <span>Opacity</span>
             <input
               type="range"
