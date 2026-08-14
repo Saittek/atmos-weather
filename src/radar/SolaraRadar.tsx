@@ -1,6 +1,6 @@
 /**
  * Solara HD Radar — MapLibre GL (rebuild).
- * Reliable frame apply matches GlobalRadarGlobe: remove source/layer → re-add.
+ * Dual-buffer frames: keep the last radar image up until the next tiles load, then fade.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as maplibregl from 'maplibre-gl'
@@ -58,10 +58,14 @@ export interface SolaraRadarProps {
 type SpeedKey = 'slow' | 'normal' | 'fast'
 type BasemapId = 'dark' | 'street' | 'sat'
 
-const HOLD_MS: Record<SpeedKey, number> = { slow: 720, normal: 400, fast: 180 }
+const HOLD_MS: Record<SpeedKey, number> = { slow: 520, normal: 300, fast: 170 }
 
-const RADAR_SRC = 'solara-radar-src'
-const RADAR_LYR = 'solara-radar-lyr'
+const RADAR_BUFS = [
+  { src: 'solara-radar-src-0', lyr: 'solara-radar-lyr-0' },
+  { src: 'solara-radar-src-1', lyr: 'solara-radar-lyr-1' },
+] as const
+
+type RadarBufState = { active: 0 | 1; url: string | null }
 
 type MapLibreNS = {
   Map: typeof maplibregl.Map
@@ -170,41 +174,176 @@ function buildBasemapStyle(
   }
 }
 
-/** Same pattern as GlobalRadarGlobe — tear down + rebuild radar source each frame. */
-function applyRadarFrame(
-  map: MapLibreMap,
-  tileUrl: string | null,
-  opacity: number,
-  tileSize: number,
-) {
+function radarBeforeId(map: MapLibreMap): string | undefined {
+  if (map.getLayer('place-glow')) return 'place-glow'
+  if (map.getLayer('place-dot')) return 'place-dot'
+  if (map.getLayer('home-dot')) return 'home-dot'
+  if (map.getLayer('severe-warn-fill')) return 'severe-warn-fill'
+  return undefined
+}
+
+function dropRadarBuf(map: MapLibreMap, i: 0 | 1) {
+  const { src, lyr } = RADAR_BUFS[i]
   try {
-    if (map.getLayer(RADAR_LYR)) map.removeLayer(RADAR_LYR)
-    if (map.getSource(RADAR_SRC)) map.removeSource(RADAR_SRC)
+    if (map.getLayer(lyr)) map.removeLayer(lyr)
+    if (map.getSource(src)) map.removeSource(src)
   } catch {
     /* ignore */
   }
-  if (!tileUrl) return
+}
 
+function resetRadarBufs(map: MapLibreMap, state: RadarBufState) {
+  dropRadarBuf(map, 0)
+  dropRadarBuf(map, 1)
+  state.active = 0
+  state.url = null
+}
+
+function waitForSource(map: MapLibreMap, sourceId: string, ms = 420): Promise<void> {
   try {
-    map.addSource(RADAR_SRC, {
+    if (map.isSourceLoaded(sourceId)) return Promise.resolve()
+  } catch {
+    /* continue */
+  }
+  return new Promise((resolve) => {
+    let done = false
+    const finish = () => {
+      if (done) return
+      done = true
+      map.off('sourcedata', onData)
+      window.clearTimeout(t)
+      resolve()
+    }
+    const onData = (e: { sourceId?: string }) => {
+      if (e.sourceId !== sourceId) return
+      try {
+        if (map.isSourceLoaded(sourceId)) finish()
+      } catch {
+        finish()
+      }
+    }
+    map.on('sourcedata', onData)
+    const t = window.setTimeout(finish, ms)
+  })
+}
+
+function addRadarBuf(
+  map: MapLibreMap,
+  i: 0 | 1,
+  tileUrl: string,
+  tileSize: number,
+  opacity: number,
+) {
+  const { src, lyr } = RADAR_BUFS[i]
+  dropRadarBuf(map, i)
+  map.addSource(src, {
+    type: 'raster',
+    tiles: [tileUrl],
+    tileSize,
+    maxzoom: 12,
+    attribution: 'Radar',
+  })
+  map.addLayer(
+    {
+      id: lyr,
       type: 'raster',
-      tiles: [tileUrl],
-      tileSize,
-      maxzoom: 12,
-      attribution: 'Radar',
-    })
-    map.addLayer({
-      id: RADAR_LYR,
-      type: 'raster',
-      source: RADAR_SRC,
+      source: src,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       paint: {
         'raster-opacity': opacity,
-        'raster-fade-duration': 0,
+        'raster-fade-duration': 80,
         'raster-resampling': 'linear',
-      },
-    })
+        'raster-opacity-transition': { duration: 160, delay: 0 },
+      } as any,
+    },
+    radarBeforeId(map),
+  )
+}
+
+async function showRadarFrame(
+  map: MapLibreMap,
+  state: RadarBufState,
+  tileUrl: string | null,
+  opacity: number,
+  tileSize: number,
+  stale: () => boolean,
+) {
+  if (!tileUrl) {
+    resetRadarBufs(map, state)
+    return
+  }
+  if (state.url === tileUrl) {
+    const { lyr } = RADAR_BUFS[state.active]
+    if (map.getLayer(lyr)) map.setPaintProperty(lyr, 'raster-opacity', opacity)
+    return
+  }
+
+  const incoming: 0 | 1 = state.url == null ? state.active : ((1 - state.active) as 0 | 1)
+  try {
+    addRadarBuf(map, incoming, tileUrl, tileSize, state.url ? 0 : opacity)
   } catch (e) {
-    console.warn('[radar] apply frame', e)
+    console.warn('[radar] add frame', e)
+    return
+  }
+  await waitForSource(map, RADAR_BUFS[incoming].src)
+  if (stale() || !map.getLayer(RADAR_BUFS[incoming].lyr)) return
+
+  map.setPaintProperty(RADAR_BUFS[incoming].lyr, 'raster-opacity', opacity)
+  if (incoming !== state.active && map.getLayer(RADAR_BUFS[state.active].lyr)) {
+    map.setPaintProperty(RADAR_BUFS[state.active].lyr, 'raster-opacity', 0)
+  }
+  state.active = incoming
+  state.url = tileUrl
+}
+
+const prefetchSeen = new Set<string>()
+
+function lngLatToTile(lon: number, lat: number, z: number) {
+  const n = 2 ** z
+  const x = Math.floor(((lon + 180) / 360) * n)
+  const latRad = (lat * Math.PI) / 180
+  const y = Math.floor(
+    ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n,
+  )
+  return { x, y }
+}
+
+function prefetchTemplate(map: MapLibreMap, template: string) {
+  if (!template.includes('{z}') || !template.includes('{x}')) return
+  let z = 1
+  let west = -180
+  let east = 180
+  let north = 85
+  let south = -85
+  try {
+    z = Math.min(8, Math.max(1, Math.round(map.getZoom())))
+    const b = map.getBounds()
+    west = b.getWest()
+    east = b.getEast()
+    north = b.getNorth()
+    south = b.getSouth()
+  } catch {
+    return
+  }
+  const nw = lngLatToTile(west, north, z)
+  const se = lngLatToTile(east, south, z)
+  const x0 = Math.min(nw.x, se.x) - 1
+  const x1 = Math.max(nw.x, se.x) + 1
+  const y0 = Math.min(nw.y, se.y) - 1
+  const y1 = Math.max(nw.y, se.y) + 1
+  for (let x = x0; x <= x1; x++) {
+    for (let y = y0; y <= y1; y++) {
+      const url = template
+        .replaceAll('{z}', String(z))
+        .replaceAll('{x}', String(x))
+        .replaceAll('{y}', String(y))
+      if (prefetchSeen.has(url)) continue
+      if (prefetchSeen.size > 360) prefetchSeen.clear()
+      prefetchSeen.add(url)
+      const img = new Image()
+      img.decoding = 'async'
+      img.src = url
+    }
   }
 }
 
@@ -333,6 +472,13 @@ export function SolaraRadar({
   const playTimer = useRef<number | null>(null)
   const tileUrlRef = useRef<string | null>(null)
   const opacityRef = useRef(0.84)
+  const bufRef = useRef<RadarBufState>({ active: 0, url: null })
+  const applyBusyRef = useRef(false)
+  const desiredRef = useRef<{ url: string | null; opacity: number; tileSize: number }>({
+    url: null,
+    opacity: 0.84,
+    tileSize: 256,
+  })
 
   const [product, setProduct] = useState<RadarSourceId>(
     () => initialSource ?? defaultSourceForLocation(lat, lon),
@@ -439,7 +585,15 @@ export function SolaraRadar({
         setMapReady(true)
         bumpSize(map)
         addPlaceMarker(map, lon, lat, placeName)
-        applyRadarFrame(map, tileUrlRef.current, opacityRef.current, tileSize)
+        bufRef.current = { active: 0, url: null }
+        void showRadarFrame(
+          map,
+          bufRef.current,
+          tileUrlRef.current,
+          opacityRef.current,
+          tileSize,
+          () => false,
+        )
       }
 
       if (map.loaded()) onReady()
@@ -577,8 +731,17 @@ export function SolaraRadar({
       mapReadyRef.current = true
       setMapReady(true)
       map.resize()
-      applyRadarFrame(map, tileUrlRef.current, opacityRef.current, tileSize)
+      bufRef.current = { active: 0, url: null }
+      applyBusyRef.current = false
       addPlaceMarker(map, lon, lat, placeName)
+      void showRadarFrame(
+        map,
+        bufRef.current,
+        tileUrlRef.current,
+        opacityRef.current,
+        tileSize,
+        () => false,
+      )
     })
   }, [basemap, mapboxToken, tileSize, placeName, lat, lon])
 
@@ -646,14 +809,55 @@ export function SolaraRadar({
     return () => window.clearInterval(id)
   }, [reload, playing, lite, inView])
 
-  // Apply radar tiles whenever frame/url ready and map is ready
+  // Apply radar tiles — keep the last frame visible until the next is loaded
   useEffect(() => {
     const map = mapRef.current
     if (!map || !mapReady) return
-    applyRadarFrame(map, tileUrl, opacity, tileSize)
-  }, [tileUrl, opacity, tileSize, mapReady])
+    desiredRef.current = { url: tileUrl, opacity, tileSize }
 
-  // Playback
+    const pump = async () => {
+      if (applyBusyRef.current) return
+      applyBusyRef.current = true
+      try {
+        while (true) {
+          const want = desiredRef.current
+          await showRadarFrame(
+            map,
+            bufRef.current,
+            want.url,
+            want.opacity,
+            want.tileSize,
+            () => desiredRef.current.url !== want.url,
+          )
+          if (desiredRef.current.url === want.url && bufRef.current.url !== want.url) {
+            break
+          }
+          if (
+            desiredRef.current.url === want.url &&
+            desiredRef.current.opacity === want.opacity
+          ) {
+            break
+          }
+        }
+      } finally {
+        applyBusyRef.current = false
+        if (bufRef.current.url !== desiredRef.current.url) {
+          void pump()
+        }
+      }
+    }
+    void pump()
+
+    const ahead = [1, 2, 3, 4, 5]
+    for (const step of ahead) {
+      const f = frames[(frameIdx + step) % Math.max(frames.length, 1)]
+      if (!f) continue
+      const nextUrl = primaryTileUrl(product, f, rvHost, { hd })
+      if (nextUrl) prefetchTemplate(map, nextUrl)
+    }
+  }, [tileUrl, opacity, tileSize, mapReady, frames, frameIdx, product, rvHost, hd])
+
+  // Playback — even cadence; tiles are prefetched so swaps stay on-beat
   useEffect(() => {
     if (playTimer.current) {
       window.clearInterval(playTimer.current)

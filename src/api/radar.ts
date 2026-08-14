@@ -497,8 +497,8 @@ export async function loadFrames(
     case 'global_loop':
     case 'mapbox_radar': {
       const maps = await fetchRainViewerMaps()
-      // Fewer frames on constrained devices = less tile RAM / GPU
-      return rainViewerFrames(maps, lite ? 8 : 14)
+      // Enough past frames for a long smooth loop; lite keeps RAM down
+      return rainViewerFrames(maps, lite ? 10 : 18)
     }
     case 'us_nexrad_live':
     case 'us_precip':
