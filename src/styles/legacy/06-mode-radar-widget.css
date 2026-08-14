@@ -85,8 +85,9 @@
 .radar-panel.radar-page-mode .radar-header h2 {
   font-size: 0.95rem;
 }
-.radar-panel.radar-page-mode .radar-stage {
-  /* flex-basis 0 + definite parent height â†’ fills leftover space (not 0) */
+.radar-panel.radar-page-mode .radar-stage,
+.radar-panel.radar-page-mode .sr-stage {
+  /* flex-basis 0 + definite parent height → fills leftover space (not 0) */
   flex: 1 1 0;
   min-height: 240px;
   height: auto !important; /* override fixed min(520px, 62vh) */

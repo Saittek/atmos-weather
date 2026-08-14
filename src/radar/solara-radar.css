@@ -13,18 +13,20 @@
 
 .solara-radar.is-page {
   height: 100%;
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .solara-radar.is-compact {
-  min-height: 280px;
+  min-height: 320px;
 }
 
 .sr-stage {
   position: relative;
-  flex: 1 1 auto;
-  min-height: 280px;
-  height: min(52vh, 420px);
+  flex: 0 0 auto;
+  width: 100%;
+  height: min(56vh, 440px);
+  min-height: 300px;
   border-radius: var(--sr-radius);
   overflow: hidden;
   border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
@@ -32,10 +34,12 @@
   background: #0a0e18;
 }
 
-.solara-radar.is-page .sr-stage {
-  min-height: 0;
+/* flex-basis 0 so an absolutely-positioned map still receives leftover height */
+.solara-radar.is-page .sr-stage,
+.solara-radar.is-fullscreen .sr-stage {
+  flex: 1 1 0%;
+  min-height: 260px;
   height: auto;
-  flex: 1 1 auto;
 }
 
 .sr-map {
@@ -43,6 +47,17 @@
   inset: 0;
   width: 100%;
   height: 100%;
+  min-height: 260px;
+  background: #0a0e18;
+}
+
+.sr-map .maplibregl-map,
+.sr-map .maplibregl-canvas-container,
+.sr-map .maplibregl-canvas {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
 }
 
 .sr-map .maplibregl-ctrl-attrib {
@@ -76,22 +91,38 @@
 
 .sr-status {
   position: absolute;
-  inset: 0;
+  left: 50%;
+  top: 0.7rem;
+  transform: translateX(-50%);
   z-index: 4;
-  display: grid;
-  place-content: center;
-  gap: 0.55rem;
-  justify-items: center;
-  background: rgba(6, 10, 18, 0.55);
-  backdrop-filter: blur(6px);
-  color: var(--text-mute);
-  font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(8, 12, 24, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #e2e8f0;
+  font-size: 0.8rem;
+  font-weight: 650;
   pointer-events: none;
+  max-width: calc(100% - 1.2rem);
 }
 
 .sr-status.is-error {
+  inset: 0;
+  left: 0;
+  top: 0;
+  transform: none;
+  border-radius: 0;
+  border: 0;
   pointer-events: auto;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.55rem;
   background: rgba(20, 8, 12, 0.72);
+  font-size: 0.9rem;
 }
 
 .sr-status .primary-btn {
@@ -187,16 +218,25 @@
   cursor: pointer;
 }
 
-.sr-product {
-  max-width: min(100%, 14rem);
+.sr-product,
+.solara-radar select.sr-product {
+  max-width: min(100%, 16rem);
   font: inherit;
-  font-size: 0.78rem;
-  font-weight: 650;
-  padding: 0.35rem 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 0.4rem 0.65rem;
   border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--input-bg, rgba(255, 255, 255, 0.06));
-  color: var(--text);
+  border: 1px solid rgba(15, 23, 42, 0.22);
+  background: #f8fafc !important;
+  color: #0b1220 !important;
+  -webkit-text-fill-color: #0b1220;
+  color-scheme: light;
+  appearance: auto;
+}
+
+.solara-radar select.sr-product option {
+  color: #0b1220;
+  background: #ffffff;
 }
 
 .sr-layers {

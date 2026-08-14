@@ -204,7 +204,8 @@ html.mobile-perf .earth-nav-glow {
   .chaser-order-alerts { order: 5; }
   .chaser-order-atmos { order: 6; }
   .chaser-order-tropical { order: 7; }
-  .chaser-radar-wrap .radar-panel .radar-stage {
+  .chaser-radar-wrap .radar-panel .radar-stage,
+  .chaser-radar-wrap .radar-panel .sr-stage {
     height: min(72vh, 640px) !important;
     min-height: 420px !important;
   }
@@ -375,7 +376,8 @@ html.mobile-perf .earth-nav-glow {
   margin: 0;
 }
 /* Storm desk: never collapse to page-mode flex height (parent isn't full viewport) */
-.chaser-radar-wrap .radar-panel .radar-stage {
+.chaser-radar-wrap .radar-panel .radar-stage,
+.chaser-radar-wrap .radar-panel .sr-stage {
   height: min(78vh, 760px) !important;
   min-height: 480px !important;
   flex: none !important;

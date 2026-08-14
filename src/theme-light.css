@@ -328,8 +328,15 @@
 }
 
 [data-theme='light'] .radar-panel.radar-page-mode .radar-stage,
+[data-theme='light'] .radar-panel.radar-page-mode .sr-stage,
 [data-theme='light'] .radar-panel.is-fullscreen {
   background: #0f172a;
+}
+
+[data-theme='light'] .solara-radar select.sr-product {
+  background-color: #f8fafc !important;
+  color: #0b1220 !important;
+  -webkit-text-fill-color: #0b1220;
 }
 
 /* Leaflet zoom (map libs hard-code dark styles) */

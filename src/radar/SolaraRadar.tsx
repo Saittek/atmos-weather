@@ -63,6 +63,40 @@ const HOLD_MS: Record<SpeedKey, number> = { slow: 720, normal: 400, fast: 180 }
 const RADAR_SRC = 'solara-radar-src'
 const RADAR_LYR = 'solara-radar-lyr'
 
+type MapLibreNS = {
+  Map: typeof maplibregl.Map
+  NavigationControl: typeof maplibregl.NavigationControl
+}
+
+function getMapLibre(): MapLibreNS {
+  const ns = maplibregl as unknown as MapLibreNS & { default?: MapLibreNS }
+  if (typeof ns.Map === 'function') return ns
+  if (ns.default && typeof ns.default.Map === 'function') return ns.default
+  throw new Error('MapLibre failed to load')
+}
+
+function waitForBox(el: HTMLElement, timeoutMs = 2000): Promise<void> {
+  if (el.clientWidth > 16 && el.clientHeight > 16) return Promise.resolve()
+  return new Promise((resolve) => {
+    let done = false
+    const finish = () => {
+      if (done) return
+      done = true
+      ro?.disconnect()
+      window.clearTimeout(timer)
+      resolve()
+    }
+    const ro =
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => {
+            if (el.clientWidth > 16 && el.clientHeight > 16) finish()
+          })
+        : null
+    ro?.observe(el)
+    const timer = window.setTimeout(finish, timeoutMs)
+  })
+}
+
 function expandCarto(url: string): string[] {
   if (!url.includes('{s}')) return [url.replace('{r}', '')]
   return ['a', 'b', 'c', 'd'].map((s) => url.replace('{s}', s).replace('{r}', ''))
@@ -86,7 +120,14 @@ function buildBasemapStyle(
           attribution: '© Mapbox © OpenStreetMap',
         },
       },
-      layers: [{ id: 'basemap', type: 'raster', source: 'basemap', minzoom: 0, maxzoom: 22 }],
+      layers: [
+        {
+          id: 'bg',
+          type: 'background',
+          paint: { 'background-color': '#0a0e18' },
+        },
+        { id: 'basemap', type: 'raster', source: 'basemap', minzoom: 0, maxzoom: 22 },
+      ],
     }
   }
 
@@ -118,7 +159,14 @@ function buildBasemapStyle(
         attribution: b.attr,
       },
     },
-    layers: [{ id: 'basemap', type: 'raster', source: 'basemap', minzoom: 0, maxzoom: 22 }],
+    layers: [
+      {
+        id: 'bg',
+        type: 'background',
+        paint: { 'background-color': '#0a0e18' },
+      },
+      { id: 'basemap', type: 'raster', source: 'basemap', minzoom: 0, maxzoom: 22 },
+    ],
   }
 }
 
@@ -135,25 +183,72 @@ function applyRadarFrame(
   } catch {
     /* ignore */
   }
-  if (!tileUrl || !map.isStyleLoaded()) return
+  if (!tileUrl) return
 
-  map.addSource(RADAR_SRC, {
-    type: 'raster',
-    tiles: [tileUrl],
-    tileSize,
-    maxzoom: 12,
-    attribution: 'Radar',
-  })
-  map.addLayer({
-    id: RADAR_LYR,
-    type: 'raster',
-    source: RADAR_SRC,
-    paint: {
-      'raster-opacity': opacity,
-      'raster-fade-duration': 0,
-      'raster-resampling': 'linear',
-    },
-  })
+  try {
+    map.addSource(RADAR_SRC, {
+      type: 'raster',
+      tiles: [tileUrl],
+      tileSize,
+      maxzoom: 12,
+      attribution: 'Radar',
+    })
+    map.addLayer({
+      id: RADAR_LYR,
+      type: 'raster',
+      source: RADAR_SRC,
+      paint: {
+        'raster-opacity': opacity,
+        'raster-fade-duration': 0,
+        'raster-resampling': 'linear',
+      },
+    })
+  } catch (e) {
+    console.warn('[radar] apply frame', e)
+  }
+}
+
+function addPlaceMarker(map: MapLibreMap, lon: number, lat: number, placeName: string) {
+  try {
+    if (map.getSource('place')) return
+    map.addSource('place', {
+      type: 'geojson',
+      data: {
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            properties: { name: placeName },
+            geometry: { type: 'Point', coordinates: [lon, lat] },
+          },
+        ],
+      },
+    })
+    map.addLayer({
+      id: 'place-glow',
+      type: 'circle',
+      source: 'place',
+      paint: {
+        'circle-radius': 14,
+        'circle-color': '#38bdf8',
+        'circle-opacity': 0.22,
+        'circle-blur': 0.6,
+      },
+    })
+    map.addLayer({
+      id: 'place-dot',
+      type: 'circle',
+      source: 'place',
+      paint: {
+        'circle-radius': 6,
+        'circle-color': '#7dd3fc',
+        'circle-stroke-width': 2,
+        'circle-stroke-color': '#0f172a',
+      },
+    })
+  } catch (e) {
+    console.warn('[radar] place marker', e)
+  }
 }
 
 function upsertGeoJson(
@@ -254,6 +349,7 @@ export function SolaraRadar({
   const [fullscreen, setFullscreen] = useState(false)
   const [inView, setInView] = useState(true)
   const [mapReady, setMapReady] = useState(false)
+  const [mapError, setMapError] = useState<string | null>(null)
   const [showFires, setShowFires] = useState(false)
   const [showWarn, setShowWarn] = useState(chaserOverlays || severeMode)
   const [showReports, setShowReports] = useState(chaserOverlays || severeMode)
@@ -281,111 +377,117 @@ export function SolaraRadar({
     return () => io.disconnect()
   }, [])
 
-  // Create map once
+  // Create map once — wait for a real box so MapLibre does not boot at 0×0
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
+    let cancelled = false
+    let map: MapLibreMap | null = null
+    let ro: ResizeObserver | null = null
+    const stage = el.parentElement
 
-    const map = new maplibregl.Map({
-      container: el,
-      style: buildBasemapStyle('dark', mapboxToken),
-      center: [lon, lat],
-      zoom: pageMode ? 6.2 : 7.1,
-      attributionControl: { compact: true },
-      maxPitch: 0,
-      dragRotate: false,
-      pitchWithRotate: false,
-      fadeDuration: 0,
-      renderWorldCopies: true,
-    })
-    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right')
-    mapRef.current = map
-
-    const onReady = () => {
-      mapReadyRef.current = true
-      setMapReady(true)
-      map.resize()
-      // Place pin
+    const bumpSize = (m: MapLibreMap) => {
       try {
-        if (!map.getSource('place')) {
-          map.addSource('place', {
-            type: 'geojson',
-            data: {
-              type: 'FeatureCollection',
-              features: [
-                {
-                  type: 'Feature',
-                  properties: { name: placeName },
-                  geometry: { type: 'Point', coordinates: [lon, lat] },
-                },
-              ],
-            },
-          })
-          map.addLayer({
-            id: 'place-glow',
-            type: 'circle',
-            source: 'place',
-            paint: {
-              'circle-radius': 14,
-              'circle-color': '#38bdf8',
-              'circle-opacity': 0.22,
-              'circle-blur': 0.6,
-            },
-          })
-          map.addLayer({
-            id: 'place-dot',
-            type: 'circle',
-            source: 'place',
-            paint: {
-              'circle-radius': 6,
-              'circle-color': '#7dd3fc',
-              'circle-stroke-width': 2,
-              'circle-stroke-color': '#0f172a',
-            },
-          })
-        }
-      } catch (e) {
-        console.warn('[radar] place marker', e)
+        m.resize()
+      } catch {
+        /* ignore */
       }
-      // Apply any pending radar frame
-      applyRadarFrame(map, tileUrlRef.current, opacityRef.current, tileSize)
     }
 
-    if (map.loaded()) onReady()
-    else map.once('load', onReady)
+    const start = async () => {
+      await waitForBox(el)
+      if (cancelled) return
 
-    // Keep canvas sized (Deferred / flex layouts)
-    const ro =
-      typeof ResizeObserver !== 'undefined'
-        ? new ResizeObserver(() => {
-            try {
-              map.resize()
-            } catch {
-              /* ignore */
-            }
-          })
-        : null
-    ro?.observe(el)
+      let ML: MapLibreNS
+      try {
+        ML = getMapLibre()
+      } catch (e) {
+        setMapError(e instanceof Error ? e.message : 'Map engine failed')
+        return
+      }
 
-    map.on('error', (e) => {
-      // Don't blank the whole UI for a single tile error
-      console.warn('[radar] map error', e?.error || e)
-    })
+      try {
+        map = new ML.Map({
+          container: el,
+          style: buildBasemapStyle('dark', mapboxToken),
+          center: [lon, lat],
+          zoom: pageMode ? 6.2 : 7.1,
+          attributionControl: { compact: true },
+          maxPitch: 0,
+          dragRotate: false,
+          pitchWithRotate: false,
+          fadeDuration: 0,
+          renderWorldCopies: true,
+        })
+      } catch (e) {
+        setMapError(e instanceof Error ? e.message : 'Could not start the map')
+        return
+      }
+
+      if (cancelled) {
+        map.remove()
+        return
+      }
+
+      map.addControl(new ML.NavigationControl({ showCompass: false }), 'top-right')
+      mapRef.current = map
+      setMapError(null)
+
+      const onReady = () => {
+        if (cancelled || !map) return
+        mapReadyRef.current = true
+        setMapReady(true)
+        bumpSize(map)
+        addPlaceMarker(map, lon, lat, placeName)
+        applyRadarFrame(map, tileUrlRef.current, opacityRef.current, tileSize)
+      }
+
+      if (map.loaded()) onReady()
+      else map.once('load', onReady)
+      map.once('idle', () => {
+        if (map && !mapReadyRef.current) onReady()
+        else if (map) bumpSize(map)
+      })
+
+      ro =
+        typeof ResizeObserver !== 'undefined'
+          ? new ResizeObserver(() => {
+              if (map) bumpSize(map)
+            })
+          : null
+      ro?.observe(el)
+      if (stage && stage !== el) ro?.observe(stage)
+
+      map.on('error', (e) => {
+        console.warn('[radar] map error', e?.error || e)
+      })
+
+      window.requestAnimationFrame(() => map && bumpSize(map))
+      window.setTimeout(() => map && bumpSize(map), 120)
+      window.setTimeout(() => map && bumpSize(map), 400)
+    }
+
+    void start()
 
     return () => {
+      cancelled = true
       ro?.disconnect()
       mapReadyRef.current = false
-      map.remove()
+      try {
+        map?.remove()
+      } catch {
+        /* ignore */
+      }
       mapRef.current = null
       setMapReady(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- create once
   }, [])
 
-  // Resize when becoming visible / fullscreen
+  // Resize when layout changes — never skip just because IO said "out of view"
   useEffect(() => {
     const map = mapRef.current
-    if (!map || !inView) return
+    if (!map) return
     const t = window.setTimeout(() => {
       try {
         map.resize()
@@ -476,35 +578,7 @@ export function SolaraRadar({
       setMapReady(true)
       map.resize()
       applyRadarFrame(map, tileUrlRef.current, opacityRef.current, tileSize)
-      // re-add place
-      try {
-        map.addSource('place', {
-          type: 'geojson',
-          data: {
-            type: 'FeatureCollection',
-            features: [
-              {
-                type: 'Feature',
-                properties: { name: placeName },
-                geometry: { type: 'Point', coordinates: [lon, lat] },
-              },
-            ],
-          },
-        })
-        map.addLayer({
-          id: 'place-dot',
-          type: 'circle',
-          source: 'place',
-          paint: {
-            'circle-radius': 6,
-            'circle-color': '#7dd3fc',
-            'circle-stroke-width': 2,
-            'circle-stroke-color': '#0f172a',
-          },
-        })
-      } catch {
-        /* ignore */
-      }
+      addPlaceMarker(map, lon, lat, placeName)
     })
   }, [basemap, mapboxToken, tileSize, placeName, lat, lon])
 
@@ -737,15 +811,15 @@ export function SolaraRadar({
           </div>
         </div>
 
-        {loading && (
+        {(loading || !mapReady) && !error && !mapError && (
           <div className="sr-status" role="status">
-            <div className="spinner large" />
+            <div className="spinner" />
             <span>{te('radar.loadingName', { name: meta.name })}</span>
           </div>
         )}
-        {error && !loading && (
+        {(error || mapError) && !loading && (
           <div className="sr-status is-error" role="alert">
-            <span>{error}</span>
+            <span>{mapError || error}</span>
             <button type="button" className="primary-btn" onClick={() => void reload()}>
               Retry
             </button>
