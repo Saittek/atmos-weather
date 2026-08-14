@@ -427,15 +427,20 @@ export function rainViewerFrames(maps: RvMaps, maxPast = 16): RadarFrame[] {
   }))
 }
 
-/** XYZ tile template for a RainViewer radar path (global mosaic). */
+/**
+ * XYZ tile template for a RainViewer radar path (global mosaic).
+ * @param tileSize 512 = HD (preferred); 256 = lite / fallback
+ */
 export function rainViewerTileUrl(
   host: string,
   path: string,
   colorScheme: number = RV_COLOR_NEXRAD,
+  tileSize: 256 | 512 = 512,
 ): string {
   const h = host.replace(/\/$/, '')
   const p = path.startsWith('/') ? path : `/${path}`
-  return `${h}${p}/256/{z}/{x}/{y}/${colorScheme}/1_1.png`
+  const size = tileSize === 512 ? 512 : 256
+  return `${h}${p}/${size}/{z}/{x}/{y}/${colorScheme}/1_1.png`
 }
 
 /**
@@ -520,16 +525,26 @@ export async function loadFrames(
 }
 
 /**
- * Leaflet tile URL template for the primary animated/live layer.
- * Uses {z}/{x}/{y} placeholders. Returns null for WMS frames (use WMS layer).
+ * Tile URL for animated/live radar (MapLibre / Leaflet XYZ).
+ * WMS (ECCC) returns a MapLibre `{bbox-epsg-3857}` template via `ecccMapLibreTileUrl`.
+ * @param hd prefer 512px RainViewer tiles when true
  */
 export function primaryTileUrl(
   sourceId: RadarSourceId,
   frame: RadarFrame | null,
   rvHost?: string,
+  opts?: { hd?: boolean },
 ): string | null {
   if (!frame) return null
-  if (frameUsesWms(sourceId, frame)) return null
+  const hd = opts?.hd !== false
+  const rvSize: 256 | 512 = hd ? 512 : 256
+
+  if (frameUsesWms(sourceId, frame)) {
+    const parsed = parseEcccFrame(frame)
+    if (!parsed) return null
+    return ecccMapLibreTileUrl(parsed.layer, parsed.time, hd ? 512 : 256)
+  }
+
   switch (sourceId) {
     case 'storm_chaser': {
       const host = (rvHost ?? 'https://tilecache.rainviewer.com').replace(/\/$/, '')
@@ -537,9 +552,13 @@ export function primaryTileUrl(
         const path = frame.key.slice(4)
         return `${IEM_TILE}/${path}/{z}/{x}/{y}.png`
       }
+      if (frame.key.startsWith('eccc:')) {
+        const parsed = parseEcccFrame(frame)
+        if (!parsed) return null
+        return ecccMapLibreTileUrl(parsed.layer, parsed.time, hd ? 512 : 256)
+      }
       const path = frame.key.startsWith('rv:') ? frame.key.slice(3) : frame.key
-      // NEXRAD Level III palette (chaser / WeatherWise-like greens→yellow→red→magenta)
-      return `${host}${path}/256/{z}/{x}/{y}/${RV_COLOR_NEXRAD}/1_1.png`
+      return rainViewerTileUrl(host, path, RV_COLOR_NEXRAD, rvSize)
     }
     case 'us_nexrad_live':
       return `${IEM_TILE}/nexrad-n0q-900913/{z}/{x}/{y}.png`
@@ -550,8 +569,7 @@ export function primaryTileUrl(
     case 'global_loop':
     case 'mapbox_radar': {
       const host = (rvHost ?? 'https://tilecache.rainviewer.com').replace(/\/$/, '')
-      // color 6 NEXRAD Level III (same family as chaser style)
-      return `${host}${frame.key}/256/{z}/{x}/{y}/${RV_COLOR_NEXRAD}/1_1.png`
+      return rainViewerTileUrl(host, frame.key, RV_COLOR_NEXRAD, rvSize)
     }
     case 'goes_east_ir':
       return `${IEM_TILE}/goes-east-ir-4km-900913/{z}/{x}/{y}.png`
@@ -562,11 +580,26 @@ export function primaryTileUrl(
     case 'nasa_ir':
       return gibsInfraredTileUrl()
     case 'us_combo':
-      // Primary is NEXRAD; IR is secondary layer
       return `${IEM_TILE}/nexrad-n0q-900913/{z}/{x}/{y}.png`
     default:
       return null
   }
+}
+
+/** MapLibre raster tile URL for ECCC GeoMet WMS (EPSG:3857 bbox template). */
+export function ecccMapLibreTileUrl(
+  layer: string,
+  timeIso: string,
+  size: 256 | 512 = 512,
+): string {
+  const styles =
+    layer === ECCC_LAYER_RAIN || layer === ECCC_LAYER_SNOW ? ECCC_STYLE_RAIN : ''
+  return (
+    `${ECCC_GEOMET_WMS}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap` +
+    `&BBOX={bbox-epsg-3857}&CRS=EPSG:3857&WIDTH=${size}&HEIGHT=${size}` +
+    `&LAYERS=${encodeURIComponent(layer)}&STYLES=${encodeURIComponent(styles)}` +
+    `&FORMAT=image/png&TRANSPARENT=TRUE&TIME=${encodeURIComponent(timeIso)}`
+  )
 }
 
 /** WMS options for Leaflet tileLayer.wms — ECCC GeoMet */

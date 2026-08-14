@@ -1,0 +1,250 @@
+/* HD Solara Radar — MapLibre stage + glass chrome */
+
+.solara-radar {
+  --sr-radius: var(--radius, 20px);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  min-height: 0;
+  width: 100%;
+  color: var(--text, #f1f5f9);
+}
+
+.solara-radar.is-page {
+  height: 100%;
+  flex: 1;
+}
+
+.solara-radar.is-compact {
+  min-height: 280px;
+}
+
+.sr-stage {
+  position: relative;
+  flex: 1;
+  min-height: 260px;
+  border-radius: var(--sr-radius);
+  overflow: hidden;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.35);
+  background: #0a0e18;
+}
+
+.solara-radar.is-page .sr-stage {
+  min-height: 0;
+}
+
+.sr-map {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.sr-map .maplibregl-ctrl-attrib {
+  font-size: 0.65rem;
+  background: rgba(8, 12, 24, 0.72) !important;
+  color: rgba(226, 232, 240, 0.75) !important;
+}
+
+.sr-map .maplibregl-ctrl-group {
+  background: rgba(8, 12, 24, 0.85) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+
+.sr-map .maplibregl-ctrl-group button {
+  background: transparent !important;
+  border: 0 !important;
+  width: 32px !important;
+  height: 32px !important;
+}
+
+.sr-map .maplibregl-ctrl-group button + button {
+  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.sr-map .maplibregl-ctrl-group button span {
+  filter: invert(1) brightness(1.2);
+}
+
+.sr-status {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: grid;
+  place-content: center;
+  gap: 0.55rem;
+  justify-items: center;
+  background: rgba(6, 10, 18, 0.55);
+  backdrop-filter: blur(6px);
+  color: var(--text-mute);
+  font-size: 0.9rem;
+  pointer-events: none;
+}
+
+.sr-status.is-error {
+  pointer-events: auto;
+  background: rgba(20, 8, 12, 0.72);
+}
+
+.sr-status .primary-btn {
+  pointer-events: auto;
+}
+
+.sr-legend {
+  position: absolute;
+  left: 0.55rem;
+  bottom: 0.55rem;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 10px;
+  background: rgba(8, 12, 24, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(12px);
+  font-size: 0.65rem;
+  font-weight: 650;
+  color: rgba(241, 245, 249, 0.9);
+  pointer-events: none;
+}
+
+.sr-legend-bar {
+  width: 7.5rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    #22c55e 0%,
+    #84cc16 22%,
+    #eab308 45%,
+    #f97316 68%,
+    #ef4444 85%,
+    #c026d3 100%
+  );
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+
+.sr-legend-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  opacity: 0.85;
+  font-weight: 600;
+}
+
+.sr-dock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.55rem 0.6rem;
+  border-radius: var(--radius-sm, 14px);
+  background: var(--glass-strong, rgba(8, 12, 24, 0.82));
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+  backdrop-filter: blur(16px) saturate(1.25);
+  -webkit-backdrop-filter: blur(16px) saturate(1.25);
+}
+
+.sr-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.sr-row-main {
+  justify-content: space-between;
+}
+
+.sr-time {
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  min-width: 0;
+}
+
+.sr-time em {
+  font-style: normal;
+  font-weight: 600;
+  color: var(--text-mute);
+  margin-left: 0.35rem;
+  font-size: 0.75rem;
+}
+
+.sr-scrub {
+  width: 100%;
+  accent-color: var(--accent, #38bdf8);
+  height: 0.35rem;
+  cursor: pointer;
+}
+
+.sr-product {
+  max-width: min(100%, 14rem);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 650;
+  padding: 0.35rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--input-bg, rgba(255, 255, 255, 0.06));
+  color: var(--text);
+}
+
+.sr-layers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.sr-layers .chip-btn {
+  font-size: 0.72rem;
+  padding: 0.3rem 0.55rem;
+}
+
+.sr-layers .chip-btn.is-on {
+  background: var(--chip-active-bg, rgba(56, 189, 248, 0.22)) !important;
+  border-color: var(--border-accent, rgba(56, 189, 248, 0.35)) !important;
+}
+
+.sr-hd-badge {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.45rem;
+  border-radius: 6px;
+  background: rgba(56, 189, 248, 0.18);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  color: #7dd3fc;
+}
+
+/* Fullscreen */
+.solara-radar.is-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  padding: max(0.5rem, env(safe-area-inset-top)) max(0.5rem, env(safe-area-inset-right))
+    max(0.5rem, env(safe-area-inset-bottom)) max(0.5rem, env(safe-area-inset-left));
+  background: var(--page-bg, #060a12);
+  border-radius: 0;
+}
+
+.solara-radar.is-fullscreen .sr-stage {
+  border-radius: var(--sr-radius);
+}
+
+@media (max-width: 720px) {
+  .solara-radar.is-compact .sr-stage {
+    min-height: 240px;
+  }
+  .sr-product {
+    max-width: 100%;
+    flex: 1;
+  }
+}
