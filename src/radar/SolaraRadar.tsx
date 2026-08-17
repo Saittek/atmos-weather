@@ -22,8 +22,12 @@ import {
   type RadarSourceId,
 } from '../api/radar'
 import {
+  fetchNexradStormTracks,
   fetchSpcStormReports,
   fetchStormWarnings,
+  nearestNexrad,
+  stormMotionTip,
+  velocityTileUrl,
   type StormReport,
   type StormWarning,
 } from '../api/severeLayers'
@@ -379,8 +383,9 @@ function lngLatToTile(lon: number, lat: number, z: number) {
   return { x, y }
 }
 
-function prefetchTemplate(map: MapLibreMap, template: string, maxZ = 7) {
-  if (!template.includes('{z}') || !template.includes('{x}')) return
+function prefetchTemplate(map: MapLibreMap, template: string, maxZ = 7): string[] {
+  const urls: string[] = []
+  if (!template.includes('{z}') || !template.includes('{x}')) return urls
   let z = 1
   let west = -180
   let east = 180
@@ -394,7 +399,7 @@ function prefetchTemplate(map: MapLibreMap, template: string, maxZ = 7) {
     north = b.getNorth()
     south = b.getSouth()
   } catch {
-    return
+    return urls
   }
   const nw = lngLatToTile(west, north, z)
   const se = lngLatToTile(east, south, z)
@@ -411,11 +416,36 @@ function prefetchTemplate(map: MapLibreMap, template: string, maxZ = 7) {
       if (prefetchSeen.has(url)) continue
       if (prefetchSeen.size > 800) prefetchSeen.clear()
       prefetchSeen.add(url)
-      const img = new Image()
-      img.decoding = 'async'
-      img.src = url
+      urls.push(url)
     }
   }
+  return urls
+}
+
+function warmImages(urls: string[], timeoutMs = 2200): Promise<void> {
+  if (!urls.length) return Promise.resolve()
+  return new Promise((resolve) => {
+    let left = urls.length
+    let settled = false
+    const finish = () => {
+      if (settled) return
+      settled = true
+      window.clearTimeout(timer)
+      resolve()
+    }
+    const timer = window.setTimeout(finish, timeoutMs)
+    const done = () => {
+      left -= 1
+      if (left <= 0) finish()
+    }
+    for (const url of urls) {
+      const img = new Image()
+      img.decoding = 'async'
+      img.onload = done
+      img.onerror = done
+      img.src = url
+    }
+  })
 }
 
 function upsertPlacePin(
@@ -496,6 +526,29 @@ function removeOverlay(map: MapLibreMap, sourceId: string, layerId: string) {
   }
 }
 
+function upsertLine(
+  map: MapLibreMap,
+  sourceId: string,
+  layerId: string,
+  data: GeoJSON.FeatureCollection,
+  paint: Record<string, unknown>,
+) {
+  if (!map.isStyleLoaded()) return
+  const existing = map.getSource(sourceId) as GeoJSONSource | undefined
+  if (existing) {
+    existing.setData(data)
+    return
+  }
+  map.addSource(sourceId, { type: 'geojson', data })
+  map.addLayer({
+    id: layerId,
+    type: 'line',
+    source: sourceId,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    paint: paint as any,
+  })
+}
+
 export function SolaraRadar({
   lat,
   lon,
@@ -560,6 +613,9 @@ export function SolaraRadar({
   const [showFires, setShowFires] = useState(false)
   const [showWarn, setShowWarn] = useState(chaserOverlays || severeMode)
   const [showReports, setShowReports] = useState(chaserOverlays || severeMode)
+  const [showVel, setShowVel] = useState(false)
+  const [showTracks, setShowTracks] = useState(chaserOverlays || severeMode)
+  const [warming, setWarming] = useState(false)
 
   const meta = getSourceMeta(product)
   const frame = frames[frameIdx] ?? null
@@ -937,12 +993,20 @@ export function SolaraRadar({
     let cancelled = false
     const stale = () => cancelled || !playingRef.current
 
-    for (const f of frames) {
-      const u = primaryTileUrl(product, f, rvHost, { hd })
-      if (u) prefetchTemplate(map, u, radarMaxZ)
-    }
-
     const run = async () => {
+      setWarming(true)
+      const warm: string[] = []
+      for (const f of frames) {
+        const u = primaryTileUrl(product, f, rvHost, { hd })
+        if (u) warm.push(...prefetchTemplate(map, u, radarMaxZ))
+      }
+      await warmImages(warm.slice(0, 48), 2400)
+      if (stale()) {
+        setWarming(false)
+        return
+      }
+      setWarming(false)
+
       while (!stale()) {
         const list = frames
         if (list.length < 2) return
@@ -975,6 +1039,7 @@ export function SolaraRadar({
     void run()
     return () => {
       cancelled = true
+      setWarming(false)
     }
   }, [playing, inView, mapReady, frames, speed, product, rvHost, hd, tileSize, radarMaxZ])
 
@@ -1048,6 +1113,99 @@ export function SolaraRadar({
         removeOverlay(map, 'severe-reports', 'severe-reports-dot')
       }
 
+      if (showVel) {
+        const near = nearestNexrad(lat, lon, 450)
+        try {
+          if (map.getLayer('sr-vel-lyr')) map.removeLayer('sr-vel-lyr')
+          if (map.getSource('sr-vel-src')) map.removeSource('sr-vel-src')
+        } catch {
+          /* ignore */
+        }
+        if (near) {
+          try {
+            map.addSource('sr-vel-src', {
+              type: 'raster',
+              tiles: [velocityTileUrl(near.site.id, 'n0s')],
+              tileSize: 256,
+              maxzoom: 9,
+              attribution: 'Velocity © IEM / NWS',
+            })
+            map.addLayer({
+              id: 'sr-vel-lyr',
+              type: 'raster',
+              source: 'sr-vel-src',
+              paint: {
+                'raster-opacity': 0.72,
+                'raster-fade-duration': 0,
+                'raster-resampling': 'linear',
+              },
+            })
+          } catch {
+            /* soft */
+          }
+        }
+      } else {
+        try {
+          if (map.getLayer('sr-vel-lyr')) map.removeLayer('sr-vel-lyr')
+          if (map.getSource('sr-vel-src')) map.removeSource('sr-vel-src')
+        } catch {
+          /* ignore */
+        }
+      }
+
+      if (showTracks) {
+        try {
+          const cells = await fetchNexradStormTracks()
+          if (cancelled || !mapRef.current) return
+          const near = cells.filter(
+            (c) => Math.abs(c.lat - lat) < 6 && Math.abs(c.lon - lon) < 6,
+          )
+          const dots: GeoJSON.FeatureCollection = {
+            type: 'FeatureCollection',
+            features: near.map((c) => ({
+              type: 'Feature' as const,
+              properties: { id: c.id, dbz: c.maxDbz },
+              geometry: { type: 'Point', coordinates: [c.lon, c.lat] },
+            })),
+          }
+          const lines: GeoJSON.FeatureCollection = {
+            type: 'FeatureCollection',
+            features: near
+              .filter((c) => c.drct != null && c.sknt != null && c.sknt > 2)
+              .map((c) => {
+                const [tLat, tLon] = stormMotionTip(c.lat, c.lon, c.drct as number, c.sknt as number)
+                return {
+                  type: 'Feature' as const,
+                  properties: { id: c.id },
+                  geometry: {
+                    type: 'LineString' as const,
+                    coordinates: [
+                      [c.lon, c.lat],
+                      [tLon, tLat],
+                    ],
+                  },
+                }
+              }),
+          }
+          upsertGeoJson(map, 'storm-tracks', 'storm-tracks-dot', dots, 'circle', {
+            'circle-radius': 5,
+            'circle-color': '#f472b6',
+            'circle-stroke-width': 1,
+            'circle-stroke-color': '#0f172a',
+          })
+          upsertLine(map, 'storm-tracks-vec', 'storm-tracks-line', lines, {
+            'line-color': '#f9a8d4',
+            'line-width': 2,
+            'line-opacity': 0.85,
+          })
+        } catch {
+          /* soft */
+        }
+      } else {
+        removeOverlay(map, 'storm-tracks', 'storm-tracks-dot')
+        removeOverlay(map, 'storm-tracks-vec', 'storm-tracks-line')
+      }
+
       if (showFires) {
         try {
           const fires = await fetchFiresNear(lat, lon, 3.5, 200)
@@ -1081,7 +1239,7 @@ export function SolaraRadar({
     return () => {
       cancelled = true
     }
-  }, [showWarn, showReports, showFires, lat, lon, mapReady])
+  }, [showWarn, showReports, showFires, showVel, showTracks, lat, lon, mapReady])
 
   const togglePlay = () => {
     setPlaying((p) => {
@@ -1116,12 +1274,18 @@ export function SolaraRadar({
         <div className="sr-legend" aria-hidden>
           <div className="sr-legend-bar" />
           <div className="sr-legend-row">
-            <span>Light</span>
-            <span>Severe</span>
+            <span>{te('radar.light')}</span>
+            <span>{te('radar.severe')}</span>
           </div>
         </div>
 
-        {(loading || !mapReady) && !error && !mapError && (
+        {warming && playing && (
+          <div className="sr-status" role="status">
+            <div className="spinner" />
+            <span>{te('radar.warming')}</span>
+          </div>
+        )}
+        {(loading || !mapReady) && !error && !mapError && !warming && (
           <div className="sr-status" role="status">
             <div className="spinner" />
             <span>{te('radar.loadingName', { name: meta.name })}</span>
@@ -1159,24 +1323,24 @@ export function SolaraRadar({
               onClick={togglePlay}
               disabled={frames.length < 2}
             >
-              {playing ? '⏸' : '▶'}
+              {playing ? te('radar.pause') : te('radar.play')}
             </button>
             <select
               className="sr-product"
               value={speed}
               onChange={(e) => setSpeed(e.target.value as SpeedKey)}
-              aria-label="Playback speed"
+              aria-label={te('radar.speed')}
             >
-              <option value="slow">Slow</option>
-              <option value="normal">Normal</option>
-              <option value="fast">Fast</option>
+              <option value="slow">{te('radar.slow')}</option>
+              <option value="normal">{te('radar.normal')}</option>
+              <option value="fast">{te('radar.fast')}</option>
             </select>
             <button
               type="button"
               className="chip-btn"
               onClick={() => setFullscreen((f) => !f)}
             >
-              {fullscreen ? '↘' : 'Fullscreen'}
+              {fullscreen ? te('radar.exitFullscreen') : te('radar.fullscreen')}
             </button>
           </div>
         </div>
@@ -1213,17 +1377,17 @@ export function SolaraRadar({
             className="sr-product"
             value={basemap}
             onChange={(e) => setBasemap(e.target.value as BasemapId)}
-            aria-label="Basemap"
+            aria-label={te('radar.basemap')}
           >
-            <option value="dark">Dark</option>
-            <option value="street">Street</option>
-            <option value="sat">Satellite</option>
+            <option value="dark">{te('radar.basemapDark')}</option>
+            <option value="street">{te('radar.basemapStreet')}</option>
+            <option value="sat">{te('radar.basemapSat')}</option>
           </select>
           <label
             className="chip-btn"
             style={{ display: 'inline-flex', gap: '0.35rem', alignItems: 'center' }}
           >
-            <span>Opacity</span>
+            <span>{te('common.opacity')}</span>
             <input
               type="range"
               min={0.35}
@@ -1236,7 +1400,7 @@ export function SolaraRadar({
           </label>
         </div>
 
-        <div className="sr-layers" role="group" aria-label="Overlays">
+        <div className="sr-layers" role="group" aria-label={te('radar.overlays')}>
           <button
             type="button"
             className={`chip-btn ${showWarn ? 'is-on' : ''}`}
@@ -1250,6 +1414,22 @@ export function SolaraRadar({
             onClick={() => setShowReports((v) => !v)}
           >
             {te('radar.reports')}
+          </button>
+          <button
+            type="button"
+            className={`chip-btn ${showTracks ? 'is-on' : ''}`}
+            onClick={() => setShowTracks((v) => !v)}
+            title={te('radar.titleTracks')}
+          >
+            {te('radar.tracks')}
+          </button>
+          <button
+            type="button"
+            className={`chip-btn ${showVel ? 'is-on' : ''}`}
+            onClick={() => setShowVel((v) => !v)}
+            title={te('radar.titleVelocity')}
+          >
+            {te('radar.velocity')}
           </button>
           <button
             type="button"

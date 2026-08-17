@@ -61,6 +61,7 @@ import {
   saveAtmosphereEnabled,
 } from '../lib/atmospherePrefs'
 import { fireSmokeRisk } from '../utils/fireRisk'
+import { ErrorBoundary } from '../components/ErrorBoundary'
 
 /** Heavy / below-fold — code-split off the critical path */
 const RadarMap = lazy(() =>
@@ -941,14 +942,16 @@ export default function DashboardPage() {
                       }
                     >
                       <Suspense fallback={<MapChunkFallback label="Loading fire map…" />}>
-                        <FireMapPanel
-                          lat={location.latitude}
-                          lon={location.longitude}
-                          placeName={location.name}
-                          weather={weather}
-                          air={air}
-                          homeLocation={homeLocation}
-                        />
+                        <ErrorBoundary compact label="Fire map hit a problem">
+                          <FireMapPanel
+                            lat={location.latitude}
+                            lon={location.longitude}
+                            placeName={location.name}
+                            weather={weather}
+                            air={air}
+                            homeLocation={homeLocation}
+                          />
+                        </ErrorBoundary>
                       </Suspense>
                     </Deferred>
                   )}

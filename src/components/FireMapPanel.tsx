@@ -41,10 +41,17 @@ function MapFix() {
     const t1 = window.setTimeout(fix, 100)
     const t2 = window.setTimeout(fix, 400)
     window.addEventListener('resize', fix)
+    const el = map.getContainer()
+    const ro =
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => fix())
+        : null
+    ro?.observe(el)
     return () => {
       window.clearTimeout(t1)
       window.clearTimeout(t2)
       window.removeEventListener('resize', fix)
+      ro?.disconnect()
     }
   }, [map])
   return null

@@ -61,7 +61,7 @@ export const RADAR_SOURCES: RadarSourceMeta[] = [
   {
     id: 'mapbox_radar',
     name: 'Mapbox + radar',
-    desc: 'Global precip loop on a Mapbox basemap (set VITE_MAPBOX_TOKEN)',
+    desc: 'Worldwide precip loop; uses a Mapbox dark map when a token is set, otherwise the built-in dark map',
     coverage: 'Global',
     animated: true,
     maxNativeZoom: 7,

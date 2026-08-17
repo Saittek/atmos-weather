@@ -161,6 +161,27 @@ body.native-ios .account-popover-portal {
   max-width: 28rem;
 }
 
+.panel-error-boundary {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  min-height: 12rem;
+  padding: 1rem 1.1rem;
+  border-radius: var(--radius, 16px);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+  background: var(--glass-strong, rgba(8, 12, 24, 0.82));
+  color: var(--text, #f1f5f9);
+}
+.panel-error-boundary p {
+  margin: 0;
+  font-weight: 700;
+}
+.panel-error-boundary span {
+  font-size: 0.82rem;
+  color: var(--text-mute, #94a3b8);
+}
+
 /* Leaflet default icon path fix not needed — we use CircleMarker */
 
 ::-webkit-scrollbar {

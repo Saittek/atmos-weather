@@ -141,7 +141,7 @@ struct SolaraHomeWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: SolaraProvider()) { entry in
             SolaraWidgetView(entry: entry)
-                .modifier(SolaraWidgetBackground())
+                .modifier(SolaraWidgetBackground(code: entry.snapshot?.code))
         }
         .configurationDisplayName("Solara Weather")
         .description("Today at a glance — temp, high/low, UV, wind, sun times, and rain.")
@@ -150,15 +150,40 @@ struct SolaraHomeWidget: Widget {
 }
 
 private struct SolaraWidgetBackground: ViewModifier {
+    var code: Int?
+
     private var gradient: LinearGradient {
-        LinearGradient(
-            gradient: Gradient(colors: [
-                Color(red: 0.04, green: 0.07, blue: 0.13),
-                Color(red: 0.08, green: 0.12, blue: 0.22),
-            ]),
+        let pair = Self.sky(code)
+        return LinearGradient(
+            gradient: Gradient(colors: [pair.0, pair.1]),
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
+    }
+
+    private static func sky(_ code: Int?) -> (Color, Color) {
+        switch code ?? -1 {
+        case 0, 1:
+            return (
+                Color(red: 0.07, green: 0.22, blue: 0.42),
+                Color(red: 0.04, green: 0.08, blue: 0.16)
+            )
+        case 61, 63, 65, 80, 81, 82, 95, 96, 99:
+            return (
+                Color(red: 0.08, green: 0.12, blue: 0.22),
+                Color(red: 0.04, green: 0.06, blue: 0.12)
+            )
+        case 71, 73, 75, 77, 85, 86:
+            return (
+                Color(red: 0.16, green: 0.22, blue: 0.34),
+                Color(red: 0.07, green: 0.10, blue: 0.18)
+            )
+        default:
+            return (
+                Color(red: 0.05, green: 0.08, blue: 0.16),
+                Color(red: 0.08, green: 0.12, blue: 0.22)
+            )
+        }
     }
 
     @ViewBuilder
@@ -201,11 +226,15 @@ struct SolaraWidgetView: View {
     private var brand: Color { Color(red: 0.34, green: 0.78, blue: 0.96) }
 
     private func smallView(_ snap: WidgetSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 5) {
+            Text("SOLARA")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundColor(brand)
+                .tracking(0.6)
             Text(snap.placeName)
                 .font(.caption)
                 .fontWeight(.semibold)
-                .foregroundColor(Color.white.opacity(0.85))
+                .foregroundColor(Color.white.opacity(0.88))
                 .lineLimit(1)
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(snap.iconDisplay)

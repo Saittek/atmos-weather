@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useState } from 'react'
 import { useI18n } from '../i18n/I18nProvider'
 import { ModePageShell } from '../components/ModePageShell'
+import { ErrorBoundary } from '../components/ErrorBoundary'
 import {
   type GlobeMode,
   loadGlobePrefs,
@@ -65,7 +66,9 @@ export default function GlobePage() {
           </div>
         }
       >
-        <GlobalRadarGlobe missionMode={mode} onMissionModeChange={onMode} />
+        <ErrorBoundary compact label="Earth hit a problem">
+          <GlobalRadarGlobe missionMode={mode} onMissionModeChange={onMode} />
+        </ErrorBoundary>
       </Suspense>
     </ModePageShell>
   )

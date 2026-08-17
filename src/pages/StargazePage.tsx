@@ -43,6 +43,7 @@ import {
   type DarkSite,
 } from '../utils/darkSites'
 import { ModePageShell } from '../components/ModePageShell'
+import { ErrorBoundary } from '../components/ErrorBoundary'
 
 const StargazeCloudMap = lazy(() =>
   import('../components/StargazeCloudMap').then((m) => ({ default: m.StargazeCloudMap })),
@@ -718,11 +719,13 @@ export default function StargazePage() {
                   <span className="panel-hint">Is the hole real right now?</span>
                 </div>
                 <Suspense fallback={<p className="muted-center">Loading map…</p>}>
-                  <StargazeCloudMap
-                    lat={location.latitude}
-                    lon={location.longitude}
-                    placeName={location.name}
-                  />
+                  <ErrorBoundary compact label="Cloud map hit a problem">
+                    <StargazeCloudMap
+                      lat={location.latitude}
+                      lon={location.longitude}
+                      placeName={location.name}
+                    />
+                  </ErrorBoundary>
                 </Suspense>
               </section>
             )}
@@ -734,12 +737,14 @@ export default function StargazePage() {
                   <span className="panel-hint">Zoom &amp; pan · yellow pin</span>
                 </div>
                 <Suspense fallback={<p className="muted-center">Loading pollution map…</p>}>
-                  <StargazeBortleMap
-                    lat={location.latitude}
-                    lon={location.longitude}
-                    placeName={location.name}
-                    bortleClass={shown.bortle?.class ?? bortleClass}
-                  />
+                  <ErrorBoundary compact label="Light-pollution map hit a problem">
+                    <StargazeBortleMap
+                      lat={location.latitude}
+                      lon={location.longitude}
+                      placeName={location.name}
+                      bortleClass={shown.bortle?.class ?? bortleClass}
+                    />
+                  </ErrorBoundary>
                 </Suspense>
               </section>
             )}

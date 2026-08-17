@@ -3,6 +3,9 @@ import { trackClientError } from '../lib/analytics'
 
 interface Props {
   children: ReactNode
+  /** Compact inline fallback (radar / maps) instead of a full-page crash */
+  compact?: boolean
+  label?: string
 }
 
 interface State {
@@ -52,6 +55,17 @@ export class ErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.error) {
+      if (this.props.compact) {
+        return (
+          <div className="panel-error-boundary" role="alert">
+            <p>{this.props.label || 'This panel hit a problem.'}</p>
+            <span>{this.state.error.message || 'Unexpected UI error'}</span>
+            <button type="button" className="chip-btn" onClick={this.retry}>
+              Try again
+            </button>
+          </div>
+        )
+      }
       return (
         <div className="error-boundary">
           <h1>Something went wrong</h1>
