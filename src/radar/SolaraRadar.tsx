@@ -59,7 +59,29 @@ export interface SolaraRadarProps {
 type SpeedKey = 'slow' | 'normal' | 'fast'
 type BasemapId = 'dark' | 'street' | 'sat'
 
-const HOLD_MS: Record<SpeedKey, number> = { slow: 520, normal: 300, fast: 170 }
+const HOLD_MS: Record<SpeedKey, number> = { slow: 640, normal: 480, fast: 300 }
+const FADE_MS: Record<SpeedKey, number> = { slow: 420, normal: 340, fast: 220 }
+
+function easeInOut(t: number) {
+  return t < 0.5 ? 4 * t * t * t : 1 - (2 - 2 * t) ** 3 / 2
+}
+
+function sleep(ms: number, cancelled: () => boolean) {
+  return new Promise<void>((resolve) => {
+    if (ms <= 0 || cancelled()) {
+      resolve()
+      return
+    }
+    const t = window.setTimeout(resolve, ms)
+    const poll = window.setInterval(() => {
+      if (!cancelled()) return
+      window.clearTimeout(t)
+      window.clearInterval(poll)
+      resolve()
+    }, 40)
+    window.setTimeout(() => window.clearInterval(poll), ms + 20)
+  })
+}
 
 const RADAR_BUFS = [
   { src: 'solara-radar-src-0', lyr: 'solara-radar-lyr-0' },
@@ -208,7 +230,7 @@ function resetRadarBufs(map: MapLibreMap, state: RadarBufState) {
   state.url = null
 }
 
-function waitForSource(map: MapLibreMap, sourceId: string, ms = 420): Promise<void> {
+function waitForSource(map: MapLibreMap, sourceId: string, ms = 900): Promise<void> {
   try {
     if (map.isSourceLoaded(sourceId)) return Promise.resolve()
   } catch {
@@ -261,13 +283,49 @@ function addRadarBuf(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       paint: {
         'raster-opacity': opacity,
-        'raster-fade-duration': 80,
+        'raster-fade-duration': 0,
         'raster-resampling': 'linear',
-        'raster-opacity-transition': { duration: 160, delay: 0 },
+        'raster-opacity-transition': { duration: 0, delay: 0 },
       } as any,
     },
     radarBeforeId(map),
   )
+}
+
+function setBufOpacity(map: MapLibreMap, i: 0 | 1, opacity: number) {
+  const { lyr } = RADAR_BUFS[i]
+  if (map.getLayer(lyr)) map.setPaintProperty(lyr, 'raster-opacity', opacity)
+}
+
+function crossfadeBufs(
+  map: MapLibreMap,
+  from: 0 | 1,
+  to: 0 | 1,
+  opacity: number,
+  fadeMs: number,
+  stale: () => boolean,
+) {
+  if (fadeMs <= 0 || from === to) {
+    setBufOpacity(map, to, opacity)
+    if (from !== to) setBufOpacity(map, from, 0)
+    return Promise.resolve()
+  }
+  const t0 = performance.now()
+  return new Promise<void>((resolve) => {
+    const step = (now: number) => {
+      if (stale()) {
+        resolve()
+        return
+      }
+      const t = Math.min(1, (now - t0) / fadeMs)
+      const e = easeInOut(t)
+      setBufOpacity(map, to, e * opacity)
+      setBufOpacity(map, from, (1 - e) * opacity)
+      if (t < 1) window.requestAnimationFrame(step)
+      else resolve()
+    }
+    window.requestAnimationFrame(step)
+  })
 }
 
 async function showRadarFrame(
@@ -277,6 +335,7 @@ async function showRadarFrame(
   opacity: number,
   tileSize: number,
   maxzoom: number,
+  fadeMs: number,
   stale: () => boolean,
 ) {
   if (!tileUrl) {
@@ -284,14 +343,13 @@ async function showRadarFrame(
     return
   }
   if (state.url === tileUrl) {
-    const { lyr } = RADAR_BUFS[state.active]
-    if (map.getLayer(lyr)) map.setPaintProperty(lyr, 'raster-opacity', opacity)
+    setBufOpacity(map, state.active, opacity)
     return
   }
 
   const incoming: 0 | 1 = state.url == null ? state.active : ((1 - state.active) as 0 | 1)
   try {
-    addRadarBuf(map, incoming, tileUrl, tileSize, state.url ? 0 : opacity, maxzoom)
+    addRadarBuf(map, incoming, tileUrl, tileSize, incoming === state.active ? opacity : 0, maxzoom)
   } catch (e) {
     console.warn('[radar] add frame', e)
     return
@@ -299,9 +357,11 @@ async function showRadarFrame(
   await waitForSource(map, RADAR_BUFS[incoming].src)
   if (stale() || !map.getLayer(RADAR_BUFS[incoming].lyr)) return
 
-  map.setPaintProperty(RADAR_BUFS[incoming].lyr, 'raster-opacity', opacity)
-  if (incoming !== state.active && map.getLayer(RADAR_BUFS[state.active].lyr)) {
-    map.setPaintProperty(RADAR_BUFS[state.active].lyr, 'raster-opacity', 0)
+  if (incoming === state.active) {
+    setBufOpacity(map, incoming, opacity)
+  } else {
+    await crossfadeBufs(map, state.active, incoming, opacity, fadeMs, stale)
+    if (stale()) return
   }
   state.active = incoming
   state.url = tileUrl
@@ -349,7 +409,7 @@ function prefetchTemplate(map: MapLibreMap, template: string, maxZ = 7) {
         .replaceAll('{x}', String(x))
         .replaceAll('{y}', String(y))
       if (prefetchSeen.has(url)) continue
-      if (prefetchSeen.size > 360) prefetchSeen.clear()
+      if (prefetchSeen.size > 800) prefetchSeen.clear()
       prefetchSeen.add(url)
       const img = new Image()
       img.decoding = 'async'
@@ -461,11 +521,12 @@ export function SolaraRadar({
   const mapReadyRef = useRef(false)
   const basemapInitRef = useRef(true)
   const wantPlay = useRef(false)
-  const playTimer = useRef<number | null>(null)
   const tileUrlRef = useRef<string | null>(null)
   const opacityRef = useRef(0.84)
   const bufRef = useRef<RadarBufState>({ active: 0, url: null })
   const applyBusyRef = useRef(false)
+  const frameIdxRef = useRef(0)
+  const playingRef = useRef(false)
   const desiredRef = useRef<{
     url: string | null
     opacity: number
@@ -511,6 +572,8 @@ export function SolaraRadar({
   )
   tileUrlRef.current = tileUrl
   opacityRef.current = opacity
+  frameIdxRef.current = frameIdx
+  playingRef.current = playing
 
   // Visibility
   useEffect(() => {
@@ -597,6 +660,7 @@ export function SolaraRadar({
           opacityRef.current,
           tileSize,
           radarNativeMaxZoom(product, null),
+          0,
           () => false,
         )
       }
@@ -752,6 +816,7 @@ export function SolaraRadar({
         opacityRef.current,
         tileSize,
         radarNativeMaxZoom(product, null),
+        0,
         () => false,
       )
     })
@@ -821,10 +886,10 @@ export function SolaraRadar({
     return () => window.clearInterval(id)
   }, [reload, playing, lite, inView])
 
-  // Apply radar tiles — keep the last frame visible until the next is loaded
+  // Scrub / first paint — play loop owns swaps while animating
   useEffect(() => {
     const map = mapRef.current
-    if (!map || !mapReady) return
+    if (!map || !mapReady || playing) return
     desiredRef.current = { url: tileUrl, opacity, tileSize, maxzoom: radarMaxZ }
 
     const pump = async () => {
@@ -840,6 +905,7 @@ export function SolaraRadar({
             want.opacity,
             want.tileSize,
             want.maxzoom,
+            90,
             () => desiredRef.current.url !== want.url,
           )
           if (desiredRef.current.url === want.url && bufRef.current.url !== want.url) {
@@ -860,30 +926,57 @@ export function SolaraRadar({
       }
     }
     void pump()
+  }, [tileUrl, opacity, tileSize, radarMaxZ, mapReady, playing])
 
-    const ahead = [1, 2, 3, 4, 5]
-    for (const step of ahead) {
-      const f = frames[(frameIdx + step) % Math.max(frames.length, 1)]
-      if (!f) continue
-      const nextUrl = primaryTileUrl(product, f, rvHost, { hd })
-      if (nextUrl) prefetchTemplate(map, nextUrl, radarMaxZ)
-    }
-  }, [tileUrl, opacity, tileSize, radarMaxZ, mapReady, frames, frameIdx, product, rvHost, hd])
-
-  // Playback — even cadence; tiles are prefetched so swaps stay on-beat
+  // Playback: wait for the next tiles, then ease-in/out crossfade. Never advance early.
   useEffect(() => {
-    if (playTimer.current) {
-      window.clearInterval(playTimer.current)
-      playTimer.current = null
-    }
+    const map = mapRef.current
+    if (!map || !mapReady) return
     if (!(playing && inView && !document.hidden && frames.length > 1)) return
-    playTimer.current = window.setInterval(() => {
-      setFrameIdx((i) => (i + 1) % frames.length)
-    }, HOLD_MS[speed])
-    return () => {
-      if (playTimer.current) window.clearInterval(playTimer.current)
+
+    let cancelled = false
+    const stale = () => cancelled || !playingRef.current
+
+    for (const f of frames) {
+      const u = primaryTileUrl(product, f, rvHost, { hd })
+      if (u) prefetchTemplate(map, u, radarMaxZ)
     }
-  }, [playing, inView, frames.length, speed])
+
+    const run = async () => {
+      while (!stale()) {
+        const list = frames
+        if (list.length < 2) return
+        const next = (frameIdxRef.current + 1) % list.length
+        const url = primaryTileUrl(product, list[next], rvHost, { hd })
+        const after = (next + 1) % list.length
+        const peek = primaryTileUrl(product, list[after], rvHost, { hd })
+        if (peek) prefetchTemplate(map, peek, radarMaxZ)
+
+        const fade = FADE_MS[speed]
+        const hold = HOLD_MS[speed]
+        const t0 = performance.now()
+        await showRadarFrame(
+          map,
+          bufRef.current,
+          url,
+          opacityRef.current,
+          tileSize,
+          radarMaxZ,
+          fade,
+          stale,
+        )
+        if (stale()) return
+        frameIdxRef.current = next
+        setFrameIdx(next)
+        const used = performance.now() - t0
+        await sleep(Math.max(40, hold - used), stale)
+      }
+    }
+    void run()
+    return () => {
+      cancelled = true
+    }
+  }, [playing, inView, mapReady, frames, speed, product, rvHost, hd, tileSize, radarMaxZ])
 
   useEffect(() => {
     const onVis = () => {
