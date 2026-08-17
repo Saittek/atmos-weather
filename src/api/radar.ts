@@ -59,6 +59,15 @@ export interface RadarSourceMeta {
 
 export const RADAR_SOURCES: RadarSourceMeta[] = [
   {
+    id: 'mapbox_radar',
+    name: 'Mapbox + radar',
+    desc: 'Global precip loop on a Mapbox basemap (set VITE_MAPBOX_TOKEN)',
+    coverage: 'Global',
+    animated: true,
+    maxNativeZoom: 7,
+    attribution: 'Basemap © Mapbox · Radar © RainViewer',
+  },
+  {
     id: 'global_loop',
     name: 'Global radar',
     desc: 'Worldwide precip mosaic (RainViewer) — best free global coverage + short nowcast',
@@ -122,15 +131,6 @@ export const RADAR_SOURCES: RadarSourceMeta[] = [
     animated: false,
     maxNativeZoom: 8,
     attribution: 'Precip © Iowa Environmental Mesonet / NSSL MRMS',
-  },
-  {
-    id: 'mapbox_radar',
-    name: 'Mapbox + radar',
-    desc: 'Global precip loop on a Mapbox basemap (set VITE_MAPBOX_TOKEN)',
-    coverage: 'Global',
-    animated: true,
-    maxNativeZoom: 7,
-    attribution: 'Basemap © Mapbox · Radar © RainViewer',
   },
   {
     id: 'goes_east_ir',
@@ -204,9 +204,9 @@ export function isCanadaRadarRegion(lat?: number, lon?: number): boolean {
   return false
 }
 
-/** Default product is always Global radar (RainViewer worldwide mosaic). */
+/** Default product is Mapbox + radar (RainViewer loop on the Mapbox basemap). */
 export function defaultSourceForLocation(_lat?: number, _lon?: number): RadarSourceId {
-  return 'global_loop'
+  return 'mapbox_radar'
 }
 
 /** Prefer Mapbox dark basemap for chaser-style sources when token exists */
