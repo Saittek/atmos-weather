@@ -15,6 +15,7 @@ import {
   getSourceMeta,
   isCanadaRadarRegion,
   isNexradMosaicRegion,
+  frameUsesWms,
   loadFrames,
   primaryTileUrl,
   type RadarFrame,
@@ -70,6 +71,14 @@ type RadarBufState = { active: 0 | 1; url: string | null }
 type MapLibreNS = {
   Map: typeof maplibregl.Map
   NavigationControl: typeof maplibregl.NavigationControl
+  Marker: typeof maplibregl.Marker
+}
+
+function radarNativeMaxZoom(product: RadarSourceId, frame: RadarFrame | null): number {
+  // WMS is rendered per-view, so keep requesting at high zoom.
+  // XYZ mosaics must cap at native z so MapLibre overzooms instead of 404ing.
+  if (frameUsesWms(product, frame)) return 14
+  return getSourceMeta(product).maxNativeZoom
 }
 
 function getMapLibre(): MapLibreNS {
@@ -233,6 +242,7 @@ function addRadarBuf(
   tileUrl: string,
   tileSize: number,
   opacity: number,
+  maxzoom: number,
 ) {
   const { src, lyr } = RADAR_BUFS[i]
   dropRadarBuf(map, i)
@@ -240,7 +250,7 @@ function addRadarBuf(
     type: 'raster',
     tiles: [tileUrl],
     tileSize,
-    maxzoom: 12,
+    maxzoom,
     attribution: 'Radar',
   })
   map.addLayer(
@@ -266,6 +276,7 @@ async function showRadarFrame(
   tileUrl: string | null,
   opacity: number,
   tileSize: number,
+  maxzoom: number,
   stale: () => boolean,
 ) {
   if (!tileUrl) {
@@ -280,7 +291,7 @@ async function showRadarFrame(
 
   const incoming: 0 | 1 = state.url == null ? state.active : ((1 - state.active) as 0 | 1)
   try {
-    addRadarBuf(map, incoming, tileUrl, tileSize, state.url ? 0 : opacity)
+    addRadarBuf(map, incoming, tileUrl, tileSize, state.url ? 0 : opacity, maxzoom)
   } catch (e) {
     console.warn('[radar] add frame', e)
     return
@@ -308,7 +319,7 @@ function lngLatToTile(lon: number, lat: number, z: number) {
   return { x, y }
 }
 
-function prefetchTemplate(map: MapLibreMap, template: string) {
+function prefetchTemplate(map: MapLibreMap, template: string, maxZ = 7) {
   if (!template.includes('{z}') || !template.includes('{x}')) return
   let z = 1
   let west = -180
@@ -316,7 +327,7 @@ function prefetchTemplate(map: MapLibreMap, template: string) {
   let north = 85
   let south = -85
   try {
-    z = Math.min(8, Math.max(1, Math.round(map.getZoom())))
+    z = Math.min(maxZ, Math.max(1, Math.round(map.getZoom())))
     const b = map.getBounds()
     west = b.getWest()
     east = b.getEast()
@@ -347,47 +358,28 @@ function prefetchTemplate(map: MapLibreMap, template: string) {
   }
 }
 
-function addPlaceMarker(map: MapLibreMap, lon: number, lat: number, placeName: string) {
-  try {
-    if (map.getSource('place')) return
-    map.addSource('place', {
-      type: 'geojson',
-      data: {
-        type: 'FeatureCollection',
-        features: [
-          {
-            type: 'Feature',
-            properties: { name: placeName },
-            geometry: { type: 'Point', coordinates: [lon, lat] },
-          },
-        ],
-      },
-    })
-    map.addLayer({
-      id: 'place-glow',
-      type: 'circle',
-      source: 'place',
-      paint: {
-        'circle-radius': 14,
-        'circle-color': '#38bdf8',
-        'circle-opacity': 0.22,
-        'circle-blur': 0.6,
-      },
-    })
-    map.addLayer({
-      id: 'place-dot',
-      type: 'circle',
-      source: 'place',
-      paint: {
-        'circle-radius': 6,
-        'circle-color': '#7dd3fc',
-        'circle-stroke-width': 2,
-        'circle-stroke-color': '#0f172a',
-      },
-    })
-  } catch (e) {
-    console.warn('[radar] place marker', e)
+function upsertPlacePin(
+  map: MapLibreMap,
+  ML: MapLibreNS,
+  marker: maplibregl.Marker | null,
+  lon: number,
+  lat: number,
+  placeName: string,
+): maplibregl.Marker {
+  if (marker) {
+    marker.setLngLat([lon, lat])
+    marker.getElement().title = placeName
+    marker.getElement().setAttribute('aria-label', placeName)
+    return marker
   }
+  const el = document.createElement('div')
+  el.className = 'sr-pin'
+  el.title = placeName
+  el.setAttribute('role', 'img')
+  el.setAttribute('aria-label', placeName)
+  el.innerHTML =
+    '<span class="sr-pin-head"></span><span class="sr-pin-point"></span><span class="sr-pin-pulse"></span>'
+  return new ML.Marker({ element: el, anchor: 'bottom' }).setLngLat([lon, lat]).addTo(map)
 }
 
 function upsertGeoJson(
@@ -474,11 +466,19 @@ export function SolaraRadar({
   const opacityRef = useRef(0.84)
   const bufRef = useRef<RadarBufState>({ active: 0, url: null })
   const applyBusyRef = useRef(false)
-  const desiredRef = useRef<{ url: string | null; opacity: number; tileSize: number }>({
+  const desiredRef = useRef<{
+    url: string | null
+    opacity: number
+    tileSize: number
+    maxzoom: number
+  }>({
     url: null,
     opacity: 0.84,
     tileSize: 256,
+    maxzoom: 7,
   })
+  const markerRef = useRef<maplibregl.Marker | null>(null)
+  const mlRef = useRef<MapLibreNS | null>(null)
 
   const [product, setProduct] = useState<RadarSourceId>(
     () => initialSource ?? defaultSourceForLocation(lat, lon),
@@ -503,6 +503,7 @@ export function SolaraRadar({
   const meta = getSourceMeta(product)
   const frame = frames[frameIdx] ?? null
   const tileSize = hd ? 512 : 256
+  const radarMaxZ = radarNativeMaxZoom(product, frame)
 
   const tileUrl = useMemo(
     () => primaryTileUrl(product, frame, rvHost, { hd }),
@@ -558,6 +559,8 @@ export function SolaraRadar({
           style: buildBasemapStyle('dark', mapboxToken),
           center: [lon, lat],
           zoom: pageMode ? 6.2 : 7.1,
+          minZoom: 1,
+          maxZoom: 18,
           attributionControl: { compact: true },
           maxPitch: 0,
           dragRotate: false,
@@ -577,6 +580,7 @@ export function SolaraRadar({
 
       map.addControl(new ML.NavigationControl({ showCompass: false }), 'top-right')
       mapRef.current = map
+      mlRef.current = ML
       setMapError(null)
 
       const onReady = () => {
@@ -584,7 +588,7 @@ export function SolaraRadar({
         mapReadyRef.current = true
         setMapReady(true)
         bumpSize(map)
-        addPlaceMarker(map, lon, lat, placeName)
+        markerRef.current = upsertPlacePin(map, ML, markerRef.current, lon, lat, placeName)
         bufRef.current = { active: 0, url: null }
         void showRadarFrame(
           map,
@@ -592,6 +596,7 @@ export function SolaraRadar({
           tileUrlRef.current,
           opacityRef.current,
           tileSize,
+          radarNativeMaxZoom(product, null),
           () => false,
         )
       }
@@ -628,6 +633,12 @@ export function SolaraRadar({
       ro?.disconnect()
       mapReadyRef.current = false
       try {
+        markerRef.current?.remove()
+      } catch {
+        /* ignore */
+      }
+      markerRef.current = null
+      try {
         map?.remove()
       } catch {
         /* ignore */
@@ -652,22 +663,13 @@ export function SolaraRadar({
     return () => window.clearTimeout(t)
   }, [inView, fullscreen, pageMode, mapReady])
 
-  // Camera + place marker
+  // Camera + place pin
   useEffect(() => {
     const map = mapRef.current
-    if (!map || !mapReadyRef.current) return
+    const ML = mlRef.current
+    if (!map || !ML || !mapReadyRef.current) return
     map.easeTo({ center: [lon, lat], duration: 500 })
-    const src = map.getSource('place') as GeoJSONSource | undefined
-    src?.setData({
-      type: 'FeatureCollection',
-      features: [
-        {
-          type: 'Feature',
-          properties: { name: placeName },
-          geometry: { type: 'Point', coordinates: [lon, lat] },
-        },
-      ],
-    })
+    markerRef.current = upsertPlacePin(map, ML, markerRef.current, lon, lat, placeName)
   }, [lat, lon, placeName, mapReady])
 
   // Home marker
@@ -733,13 +735,23 @@ export function SolaraRadar({
       map.resize()
       bufRef.current = { active: 0, url: null }
       applyBusyRef.current = false
-      addPlaceMarker(map, lon, lat, placeName)
+      if (mlRef.current) {
+        markerRef.current = upsertPlacePin(
+          map,
+          mlRef.current,
+          markerRef.current,
+          lon,
+          lat,
+          placeName,
+        )
+      }
       void showRadarFrame(
         map,
         bufRef.current,
         tileUrlRef.current,
         opacityRef.current,
         tileSize,
+        radarNativeMaxZoom(product, null),
         () => false,
       )
     })
@@ -813,7 +825,7 @@ export function SolaraRadar({
   useEffect(() => {
     const map = mapRef.current
     if (!map || !mapReady) return
-    desiredRef.current = { url: tileUrl, opacity, tileSize }
+    desiredRef.current = { url: tileUrl, opacity, tileSize, maxzoom: radarMaxZ }
 
     const pump = async () => {
       if (applyBusyRef.current) return
@@ -827,6 +839,7 @@ export function SolaraRadar({
             want.url,
             want.opacity,
             want.tileSize,
+            want.maxzoom,
             () => desiredRef.current.url !== want.url,
           )
           if (desiredRef.current.url === want.url && bufRef.current.url !== want.url) {
@@ -853,9 +866,9 @@ export function SolaraRadar({
       const f = frames[(frameIdx + step) % Math.max(frames.length, 1)]
       if (!f) continue
       const nextUrl = primaryTileUrl(product, f, rvHost, { hd })
-      if (nextUrl) prefetchTemplate(map, nextUrl)
+      if (nextUrl) prefetchTemplate(map, nextUrl, radarMaxZ)
     }
-  }, [tileUrl, opacity, tileSize, mapReady, frames, frameIdx, product, rvHost, hd])
+  }, [tileUrl, opacity, tileSize, radarMaxZ, mapReady, frames, frameIdx, product, rvHost, hd])
 
   // Playback — even cadence; tiles are prefetched so swaps stay on-beat
   useEffect(() => {
