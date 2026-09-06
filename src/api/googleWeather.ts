@@ -36,7 +36,9 @@ export async function fetchGoogleWeather(
       headers: { Accept: 'application/json' },
       signal: ctrl.signal,
     })
-    if (res.status === 503) {
+    // 503 = secret not set. 404 = Worker not redeployed yet. Skip retries
+    // so every forecast does not wait on a known-missing route.
+    if (res.status === 503 || res.status === 404) {
       googleUnconfiguredUntil = Date.now() + 10 * 60_000
       return null
     }
