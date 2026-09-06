@@ -12,6 +12,10 @@ export function formatWeatherSource(weather: WeatherData | null | undefined): st
     return 'Sources · Open-Meteo forecast'
   }
 
+  if (s.provider === 'google' || /WeatherNext|Google Weather/i.test(s.strategy)) {
+    return 'Sources · Google WeatherNext 3'
+  }
+
   const strategy = s.strategy
   // ECCC path
   if (/ECCC/i.test(strategy)) {

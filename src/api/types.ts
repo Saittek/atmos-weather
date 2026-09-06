@@ -98,11 +98,13 @@ export interface WeatherData {
   daily: DailyWeather
   minutely_15?: Minutely15
   current_units: Record<string, string>
-  /** Which Open-Meteo models Solara blended for this payload */
+  /** Which forecast provider / models Solara used for this payload */
   solara_source?: {
     strategy: string
     shortModel?: string
     longModel?: string
+    /** Set when Google WeatherNext 3 served current/hourly/daily */
+    provider?: 'google' | 'open-meteo'
   }
   /** Nearest airport METAR surface observation (when available) */
   solara_obs?: {

@@ -8,6 +8,7 @@ import { getVapidConfig } from './push-send.js'
 import { getWeatherVideos } from './weather-videos.js'
 import { getTropicalGlobeData } from './tropical.js'
 import { computeIssPasses } from './iss-passes.js'
+import { fetchGoogleWeatherMapped, googleWeatherApiKey } from './google-weather.js'
 
 
 const TOKEN_DAYS = 30
@@ -676,6 +677,7 @@ export default {
             'sky-kp',
             'sky-iss',
             'metar',
+            'google-weather',
           ],
           runtime: 'cloudflare-worker',
           pushConfigured: Boolean(getVapidConfig(env)),
@@ -691,6 +693,7 @@ export default {
               Boolean(env.APNS_TEAM_ID) &&
               Boolean(env.APNS_BUNDLE_ID) &&
               Boolean(env.APNS_PRIVATE_KEY),
+            googleWeather: Boolean(googleWeatherApiKey(env)),
           },
           ship: {
             pushEntitlementNote:
@@ -867,6 +870,45 @@ export default {
           return json({ days, rows: rows.results || [] })
         } catch (e) {
           return err('Metrics unavailable — run migrations', 503)
+        }
+      }
+
+      // ── Google Weather API proxy (WeatherNext 3 → Solara WeatherData) ──
+      if (path === '/api/weather/google' && method === 'GET') {
+        const limited = rateLimitAuth(request, 'google-weather', 40, 60 * 1000)
+        if (limited) return limited
+        const lat = parseFloat(url.searchParams.get('lat') || '')
+        const lon = parseFloat(url.searchParams.get('lon') || '')
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+          return err('lat and lon required', 400)
+        }
+        if (Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+          return err('lat/lon out of range', 400)
+        }
+        if (!googleWeatherApiKey(env)) {
+          return json(
+            { error: 'Google Weather not configured', fallback: true },
+            503,
+          )
+        }
+        const lite =
+          url.searchParams.get('lite') === '1' ||
+          url.searchParams.get('lite') === 'true'
+        try {
+          const data = await fetchGoogleWeatherMapped(env, { lat, lon, lite })
+          return json(data, 200, {
+            'Cache-Control': 'public, max-age=90',
+          })
+        } catch (e) {
+          const status = e?.unconfigured ? 503 : e?.status >= 400 && e?.status < 600 ? e.status : 502
+          console.error('google-weather', e?.message || e)
+          return json(
+            {
+              error: e?.message || 'Google Weather failed',
+              fallback: true,
+            },
+            status,
+          )
         }
       }
 

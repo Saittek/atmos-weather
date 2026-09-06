@@ -35,6 +35,8 @@ npm run build
 npx wrangler d1 migrations apply atmos-db --remote
 # Interactive secret (pick a long random string):
 npx wrangler secret put JWT_SECRET
+# Optional — Google WeatherNext 3 as the primary forecast (Open-Meteo stays the fallback):
+npx wrangler secret put GOOGLE_WEATHER_API_KEY
 npx wrangler deploy
 ```
 
@@ -53,7 +55,8 @@ or your CI). Ensure `JWT_SECRET` is set as a Worker secret and D1 migrations are
 
 | Feature | How |
 |--------|-----|
-| Forecasts, radar, alerts, maps | Browser → public APIs |
+| Forecasts | Worker `/api/weather/google` (Google WeatherNext 3) → Open-Meteo fallback |
+| Radar, alerts, maps | Browser → public APIs |
 | Accounts / login / prefs sync | Worker `/api/auth/*`, `/api/user/*` → D1 |
 | Area chat | Worker `/api/chat/*` → D1 |
 | Fire hotspots | Worker `/api/fires` → NASA FIRMS (cached) |
@@ -139,7 +142,7 @@ JWT sessions last 30 days. Signed-in users can **Change password**; **Forgot pas
 ### Forecasts & data
 - Current conditions + adaptive sky gradients
 - **Precip timing sentence** (15-min + hourly: when it starts, how much)
-- Clear source line (ECCC City Page blend in Canada, multi-model elsewhere)
+- Clear source line (**Google WeatherNext 3** when the Worker key is set; Open-Meteo / ECCC blend on fallback)
 - 48-hour hourly + 24h graphs (temp / pop / precip)
 - 14-day outlook with expandable details
 - Weekend plain-English outlook + clothing / activity tips
@@ -157,15 +160,40 @@ JWT sessions last 30 days. Signed-in users can **Change password**; **Forgot pas
 - °F/°C, dark / light / auto theme, compact density
 - PWA (installable, offline shell)
 
-## Data sources (no API keys)
+## Data sources
 
 | Data | Source |
 |------|--------|
-| Forecast / models / pressure | [Open-Meteo](https://open-meteo.com/) |
+| Forecast (primary) | [Google Maps Platform Weather API](https://developers.google.com/maps/documentation/weather) (WeatherNext 3), via Worker `/api/weather/google` |
+| Forecast (fallback) | [Open-Meteo](https://open-meteo.com/) region blends (HRRR / GEM / ICON / ECMWF) + ECCC City Page in Canada |
 | Radar / satellite | [RainViewer](https://www.rainviewer.com/) |
 | Geocoding | Open-Meteo + Nominatim |
 | US alerts | [NWS](https://www.weather.gov/) |
+| Canada alerts | Environment and Climate Change Canada |
 | Tropical | NHC / NWS |
+
+Radar, alerts, air quality, METAR, and ECCC extras stay on their existing paths. The Google key is **never** sent to the browser.
+
+### Enable Google Weather (one-time)
+
+1. In [Google Cloud Console](https://console.cloud.google.com/) create or pick a project.
+2. Enable **Weather API** (Maps Platform → Weather API).
+3. Credentials → **Create credentials → API key**. Restrict the key to **Weather API**.
+4. Store the key as a Worker secret (do not commit it, do not put it in `VITE_*`):
+
+```bash
+npx wrangler secret put GOOGLE_WEATHER_API_KEY
+npm run deploy
+```
+
+`GOOGLE_MAPS_API_KEY` is accepted as an alias. Until the secret is set (or if Google returns an error), Solara keeps using Open-Meteo unchanged.
+
+**Local dev**
+
+- `npm run dev` (Express on `:8787`): put `GOOGLE_WEATHER_API_KEY=` in `.env` (see `.env.example`). The Vite `/api` proxy forwards to Express.
+- `npm run cf:dev` (Wrangler): put the same key in `.dev.vars` (gitignored).
+
+Without a local key the Google route returns `503` with `fallback: true` and the UI uses Open-Meteo.
 
 Personal / non-commercial use. Respect provider terms.
 

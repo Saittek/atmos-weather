@@ -20,6 +20,9 @@ database_name = "atmos-db"
 database_id = "4c902a95-fbfb-4fb8-b682-735d786bfc97"
 migrations_dir = "migrations"
 
+# Secrets (never put keys in [vars]):
+#   npx wrangler secret put GOOGLE_WEATHER_API_KEY
+#   (alias: GOOGLE_MAPS_API_KEY)
 # Public VAPID key (safe to expose). Private key is a secret: VAPID_PRIVATE_KEY
 [vars]
 VAPID_PUBLIC_KEY = "BL2kQvsIciHjcDJJRqnvB8u-SCwqt6eaL0IKneuvq2INHjOvjFXDFl6Kv2YW1d1uIBvsqJFiG4_Y_IhU2606qXw"
