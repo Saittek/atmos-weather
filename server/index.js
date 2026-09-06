@@ -19,6 +19,35 @@ import {
   roomIdFromCoords,
 } from './chat.js'
 import { firesNear } from './firms.js'
+import { readFileSync, existsSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { fetchGoogleWeatherMapped, googleWeatherApiKey } from '../worker/google-weather.js'
+
+/** Load gitignored local secrets (.env / .dev.vars) for Express — never commit keys. */
+function loadLocalSecrets() {
+  for (const name of ['.env', '.dev.vars']) {
+    const p = resolve(process.cwd(), name)
+    if (!existsSync(p)) continue
+    try {
+      const text = readFileSync(p, 'utf8')
+      for (const line of text.split(/\r?\n/)) {
+        const trimmed = line.trim()
+        if (!trimmed || trimmed.startsWith('#')) continue
+        const eq = trimmed.indexOf('=')
+        if (eq < 1) continue
+        const key = trimmed.slice(0, eq).trim()
+        let val = trimmed.slice(eq + 1).trim()
+        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+          val = val.slice(1, -1)
+        }
+        if (process.env[key] == null || process.env[key] === '') process.env[key] = val
+      }
+    } catch {
+      /* ignore unreadable env files */
+    }
+  }
+}
+loadLocalSecrets()
 
 const app = express()
 const PORT = Number(process.env.PORT) || 8787
@@ -65,8 +94,39 @@ app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
     service: 'solara-api',
-    features: ['auth', 'chat', 'fires'],
+    features: ['auth', 'chat', 'fires', 'google-weather'],
+    secrets: {
+      googleWeather: Boolean(googleWeatherApiKey(process.env)),
+    },
   })
+})
+
+/** Google Weather API proxy — same contract as the Cloudflare Worker. */
+app.get('/api/weather/google', async (req, res) => {
+  try {
+    const lat = parseFloat(String(req.query.lat ?? ''))
+    const lon = parseFloat(String(req.query.lon ?? ''))
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+      return res.status(400).json({ error: 'lat and lon required' })
+    }
+    if (Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+      return res.status(400).json({ error: 'lat/lon out of range' })
+    }
+    if (!googleWeatherApiKey(process.env)) {
+      return res.status(503).json({ error: 'Google Weather not configured', fallback: true })
+    }
+    const lite = req.query.lite === '1' || req.query.lite === 'true'
+    const data = await fetchGoogleWeatherMapped(process.env, { lat, lon, lite })
+    res.set('Cache-Control', 'public, max-age=90')
+    res.json(data)
+  } catch (e) {
+    const status = e?.unconfigured ? 503 : e?.status >= 400 && e?.status < 600 ? e.status : 502
+    console.error('google-weather', e?.message || e)
+    res.status(status).json({
+      error: e?.message || 'Google Weather failed',
+      fallback: true,
+    })
+  }
 })
 
 /** Active fire hotspots near a point (NASA FIRMS 24h) */

@@ -21,6 +21,7 @@ import {
 } from './forecastModels'
 import { fetchNearestEcccCityPage, mergeEcccIntoWeather } from './ecccCityPage'
 import { fetchNearestMetar } from './metar'
+import { fetchGoogleWeather } from './googleWeather'
 import { getApiBase } from '../lib/native'
 import { todayDailyIndex } from '../utils/weatherStory'
 
@@ -215,8 +216,27 @@ async function fetchForecastRaw(params: URLSearchParams): Promise<WeatherData | 
   }
 }
 
+async function attachMetar(
+  lat: number,
+  lon: number,
+  data: WeatherData,
+  timeoutMs: number,
+): Promise<WeatherData> {
+  try {
+    const metar = await Promise.race([
+      fetchNearestMetar(lat, lon),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs)),
+    ])
+    if (metar) return { ...data, solara_obs: metar }
+  } catch {
+    /* forecast is enough */
+  }
+  return data
+}
+
 /**
- * Main forecast load: region-aware models + short/long blend for accuracy.
+ * Main forecast load: Google WeatherNext 3 first (via Worker proxy), then
+ * region-aware Open-Meteo models + short/long blend on fallback.
  * US → HRRR + ECMWF · Canada → ECCC City Page + GEM + ECMWF · Europe → ICON + ECMWF · else best_match.
  */
 export async function fetchWeather(
@@ -227,20 +247,28 @@ export async function fetchWeather(
   const lite = Boolean(opts?.lite)
   const pick = pickModels(lat, lon)
   const region = detectForecastRegion(lat, lon)
+  const googleKey = cacheKey(lat, lon, `${lite ? 'lite' : 'full'}:google`)
   const key = cacheKey(lat, lon, `${lite ? 'lite' : 'full'}:${pick.label}:eccc`)
+
+  const googleHit = forecastCache.get(googleKey)
+  if (googleHit && Date.now() - googleHit.at < FORECAST_TTL_MS) {
+    return attachMetar(lat, lon, googleHit.data, 1600)
+  }
+
+  const google = await fetchGoogleWeather(lat, lon, { lite })
+  if (google) {
+    if (forecastCache.size > 24) {
+      const first = forecastCache.keys().next().value
+      if (first != null) forecastCache.delete(first)
+    }
+    const data = await attachMetar(lat, lon, google, 2800)
+    forecastCache.set(googleKey, { at: Date.now(), data })
+    return data
+  }
+
   const hit = forecastCache.get(key)
   if (hit && Date.now() - hit.at < FORECAST_TTL_MS) {
-    // Keep forecast cache; refresh surface obs lightly
-    try {
-      const metar = await Promise.race([
-        fetchNearestMetar(lat, lon),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 1600)),
-      ])
-      if (metar) return { ...hit.data, solara_obs: metar }
-    } catch {
-      /* ignore */
-    }
-    return hit.data
+    return attachMetar(lat, lon, hit.data, 1600)
   }
 
   if (forecastCache.size > 24) {
@@ -361,15 +389,9 @@ export async function fetchWeather(
 
   if (!data) throw new Error('Weather forecast failed')
 
-  // Surface obs (METAR) — best-effort, don't block forever
-  try {
-    const metar = await Promise.race([
-      fetchNearestMetar(lat, lon),
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), 2800)),
-    ])
-    if (metar) data = { ...data, solara_obs: metar }
-  } catch {
-    /* forecast is enough */
+  data = await attachMetar(lat, lon, data, 2800)
+  if (data.solara_source && !data.solara_source.provider) {
+    data = { ...data, solara_source: { ...data.solara_source, provider: 'open-meteo' } }
   }
 
   forecastCache.set(key, { at: Date.now(), data })

@@ -17,6 +17,19 @@ Expect `ok: true` and secrets flags (jwt / cron / vapidPrivate).
 - Optional: hit `/api/sky/kp` daily; 5xx means stargaze aurora may degrade (client also tries SWPC directly).
 - After each deploy: `npm run test:all` (smoke + core).
 
+### Google Weather API (WeatherNext 3)
+Primary current / hourly / daily forecast. Key stays on the Worker — never in the client.
+
+```bash
+# After enabling Weather API + creating a restricted key in Google Cloud:
+npx wrangler secret put GOOGLE_WEATHER_API_KEY
+npm run deploy
+```
+
+Health: `GET /api/health` → `secrets.googleWeather` is `true` when the secret is set.  
+If the secret is missing or Google errors, the SPA falls back to Open-Meteo (no user-facing outage).  
+Local Express reads `GOOGLE_WEATHER_API_KEY` from `.env` / `.dev.vars`.
+
 ### Password reset email
 ```bash
 npx wrangler secret put RESEND_API_KEY   # from resend.com
