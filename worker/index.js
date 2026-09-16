@@ -887,7 +887,7 @@ export default {
         }
         if (!googleWeatherApiKey(env)) {
           return json(
-            { error: 'Google Weather not configured', fallback: true },
+            { error: 'Google Weather not configured — set GOOGLE_WEATHER_API_KEY' },
             503,
           )
         }
@@ -905,7 +905,6 @@ export default {
           return json(
             {
               error: e?.message || 'Google Weather failed',
-              fallback: true,
             },
             status,
           )

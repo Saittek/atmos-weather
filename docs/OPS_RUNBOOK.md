@@ -11,7 +11,7 @@ Expect `ok: true` and secrets flags (jwt / cron / vapidPrivate).
 - Poll `GET /api/health` every **5 minutes** (UptimeRobot, Better Stack, Cloudflare, etc.).
 - Alert if:
   - HTTP not 200, or `ok !== true`
-  - `secrets.jwt`, `secrets.cron`, or `secrets.vapidPrivate` flip to `false`
+  - `secrets.jwt`, `secrets.cron`, `secrets.vapidPrivate`, or `secrets.googleWeather` flip to `false`
   - Worker logs show repeated `alert-push-cron failed` or `health-cron secrets missing`
 - Cron already logs `health-cron` + `alert-push-cron` every 10m (Workers Observability).
 - Optional: hit `/api/sky/kp` daily; 5xx means stargaze aurora may degrade (client also tries SWPC directly).
@@ -27,7 +27,7 @@ npm run deploy
 ```
 
 Health: `GET /api/health` → `secrets.googleWeather` is `true` when the secret is set.  
-If the secret is missing or Google errors, the SPA falls back to Open-Meteo (no user-facing outage).  
+If the secret is missing, `/api/weather/google` returns 503 and the dashboard cannot load a forecast.  
 Local Express reads `GOOGLE_WEATHER_API_KEY` from `.env` / `.dev.vars`.
 
 ### Password reset email

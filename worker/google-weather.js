@@ -256,6 +256,36 @@ function pressureHpa(obj) {
   return num(obj?.airPressure?.meanSeaLevelMillibars, 1013.25)
 }
 
+/** Google has no 15-min product — split each hour into four even slots for next-hour UI. */
+function synthesizeMinutely15(hourly) {
+  const time = []
+  const precipitation = []
+  const weather_code = []
+  const wind_speed_10m = []
+  const temperature_2m = []
+  const hours = Math.min(hourly.time.length, 12)
+  for (let i = 0; i < hours; i++) {
+    const stamp = String(hourly.time[i] || '')
+    const m = stamp.match(/^(\d{4}-\d{2}-\d{2}T)(\d{2}):(\d{2})/)
+    if (!m) continue
+    const hour = Number(m[2])
+    const baseMin = Number(m[3])
+    const slice = (hourly.precipitation[i] ?? 0) / 4
+    for (let q = 0; q < 4; q++) {
+      const mins = baseMin + q * 15
+      const wrapH = hour + Math.floor(mins / 60)
+      const mm = String(mins % 60).padStart(2, '0')
+      const hh = String(wrapH % 24).padStart(2, '0')
+      time.push(`${m[1]}${hh}:${mm}`)
+      precipitation.push(slice)
+      weather_code.push(hourly.weather_code[i] ?? 0)
+      wind_speed_10m.push(hourly.wind_speed_10m[i] ?? 0)
+      temperature_2m.push(hourly.temperature_2m[i] ?? 0)
+    }
+  }
+  return { time, precipitation, weather_code, wind_speed_10m, temperature_2m }
+}
+
 /**
  * Map Google current + hourly + daily payloads into Solara's WeatherData.
  * Throws if required series are missing.
@@ -425,6 +455,8 @@ export function mapGoogleToWeatherData(current, hourly, daily, lat, lon) {
 
   if (!d.time.length) throw new Error('Google daily unmapped')
 
+  const minutely_15 = synthesizeMinutely15(h)
+
   return {
     latitude: num(lat),
     longitude: num(lon),
@@ -434,6 +466,7 @@ export function mapGoogleToWeatherData(current, hourly, daily, lat, lon) {
     current: mappedCurrent,
     hourly: h,
     daily: d,
+    minutely_15,
     current_units: {
       time: 'iso8601',
       temperature_2m: '°C',
@@ -504,7 +537,7 @@ async function fetchHourlyPages(lat, lon, apiKey, hoursWanted) {
       unitsSystem: 'METRIC',
       languageCode: 'en',
       hours,
-      pageSize: 24,
+      pageSize: 48,
     }
     if (pageToken) params.pageToken = pageToken
     const json = await googleGet('/v1/forecast/hours:lookup', params, apiKey)
@@ -522,6 +555,9 @@ async function fetchHourlyPages(lat, lon, apiKey, hoursWanted) {
  * Fetch current + hourly + daily from Google and map to WeatherData.
  * @returns {Promise<object>}
  */
+const mappedCache = new Map()
+const MAPPED_TTL_MS = 90_000
+
 export async function fetchGoogleWeatherMapped(env, { lat, lon, lite = false }) {
   const apiKey = googleWeatherApiKey(env)
   if (!apiKey) {
@@ -531,7 +567,11 @@ export async function fetchGoogleWeatherMapped(env, { lat, lon, lite = false }) 
     throw err
   }
 
-  const hoursWanted = lite ? 72 : 120
+  const cacheKey = `${lite ? 'l' : 'f'}:${lat.toFixed(3)},${lon.toFixed(3)}`
+  const hit = mappedCache.get(cacheKey)
+  if (hit && Date.now() - hit.at < MAPPED_TTL_MS) return hit.data
+
+  const hoursWanted = lite ? 72 : 168
   const loc = {
     'location.latitude': lat,
     'location.longitude': lon,
@@ -545,5 +585,11 @@ export async function fetchGoogleWeatherMapped(env, { lat, lon, lite = false }) 
     googleGet('/v1/forecast/days:lookup', { ...loc, days: 10, pageSize: 10 }, apiKey),
   ])
 
-  return mapGoogleToWeatherData(current, hourly, daily, lat, lon)
+  const data = mapGoogleToWeatherData(current, hourly, daily, lat, lon)
+  if (mappedCache.size > 80) {
+    const first = mappedCache.keys().next().value
+    if (first != null) mappedCache.delete(first)
+  }
+  mappedCache.set(cacheKey, { at: Date.now(), data })
+  return data
 }

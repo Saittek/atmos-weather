@@ -5,41 +5,13 @@ import type { WeatherData } from '../api/types'
 import { formatMetarLine } from '../api/metar'
 import type { Units } from './format'
 
-/** e.g. "Sources · Environment Canada City Page + GEM/ECMWF · Open-Meteo" */
+/** e.g. "Sources · Google WeatherNext 3" */
 export function formatWeatherSource(weather: WeatherData | null | undefined): string {
   const s = weather?.solara_source
-  if (!s?.strategy) {
-    return 'Sources · Open-Meteo forecast'
-  }
-
-  if (s.provider === 'google' || /WeatherNext|Google Weather/i.test(s.strategy)) {
+  if (s?.provider === 'google' || /WeatherNext|Google Weather/i.test(s?.strategy || '')) {
     return 'Sources · Google WeatherNext 3'
   }
-
-  const strategy = s.strategy
-  // ECCC path
-  if (/ECCC/i.test(strategy)) {
-    const models = [s.shortModel, s.longModel].filter(Boolean).join(' / ')
-    return models
-      ? `Sources · ${strategy} (models ${models}) · Open-Meteo`
-      : `Sources · ${strategy} · Open-Meteo`
-  }
-
-  // Named national blends (UKMO, JMA, AROME, KMA, CMA, KNMI, MET Norway, ICON…)
-  if (
-    /HRRR|ECMWF|ICON|GEM|UKMO|JMA|AROME|KMA|CMA|KNMI|MET Norway|Météo|Best|blend|NBM/i.test(
-      strategy,
-    )
-  ) {
-    const bits = [strategy]
-    if (s.shortModel) bits.push(`near-term ${s.shortModel}`)
-    if (s.longModel && s.longModel !== s.shortModel) bits.push(`longer ${s.longModel}`)
-    return `Sources · Solara blend (${bits.join(' · ')}) · Open-Meteo`
-  }
-
-  const short = s.shortModel ? ` · ${s.shortModel}` : ''
-  const long = s.longModel && s.longModel !== s.shortModel ? ` · ${s.longModel}` : ''
-  return `Sources · Solara blend (${strategy}${short}${long}) · Open-Meteo`
+  return 'Sources · Google WeatherNext 3'
 }
 
 /** Surface observation line when METAR is attached */

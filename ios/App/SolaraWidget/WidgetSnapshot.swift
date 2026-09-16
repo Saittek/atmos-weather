@@ -224,20 +224,11 @@ enum OpenMeteoWidgetFetch {
         placeName: String? = nil,
         completion: @escaping (WidgetSnapshot?) -> Void
     ) {
-        var components = URLComponents(string: "https://api.open-meteo.com/v1/forecast")
+        var components = URLComponents(string: "https://solaraweather.com/api/weather/google")
         components?.queryItems = [
-            URLQueryItem(name: "latitude", value: String(lat)),
-            URLQueryItem(name: "longitude", value: String(lon)),
-            URLQueryItem(
-                name: "current",
-                value: "temperature_2m,apparent_temperature,weather_code,precipitation,relative_humidity_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m"
-            ),
-            URLQueryItem(
-                name: "daily",
-                value: "temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code,uv_index_max,precipitation_sum,sunrise,sunset,wind_speed_10m_max"
-            ),
-            URLQueryItem(name: "timezone", value: "auto"),
-            URLQueryItem(name: "forecast_days", value: "1"),
+            URLQueryItem(name: "lat", value: String(lat)),
+            URLQueryItem(name: "lon", value: String(lon)),
+            URLQueryItem(name: "lite", value: "1"),
         ]
         guard let url = components?.url else {
             completion(nil)

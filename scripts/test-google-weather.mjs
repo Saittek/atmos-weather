@@ -212,6 +212,11 @@ try {
     w.solara_source?.strategy === 'Google WeatherNext 3',
   )
   assert('current_units celsius', w.current_units.temperature_2m === '°C')
+  assert('synthesized 15-min slots', w.minutely_15?.time?.length === 8)
+  assert(
+    '15-min precip splits the hour',
+    Math.abs((w.minutely_15?.precipitation?.[0] ?? 0) - 1.4 / 4) < 1e-9,
+  )
 } catch (e) {
   fail('mapGoogleToWeatherData', e?.message || String(e))
 }

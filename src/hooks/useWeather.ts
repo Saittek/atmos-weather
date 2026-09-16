@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   fetchAirQuality,
   fetchAlerts,
-  fetchMultiModel,
   fetchPressureProfile,
   fetchTropicalStorms,
   fetchWeather,
@@ -537,13 +536,12 @@ export function useWeather() {
             if (gen !== fetchGen.current) return
             if (typeof document !== 'undefined' && document.hidden) return
             try {
-              const [m, pr, st] = await Promise.all([
-                fetchMultiModel(loc.latitude, loc.longitude),
+              const [pr, st] = await Promise.all([
                 fetchPressureProfile(loc.latitude, loc.longitude),
                 fetchTropicalStorms(),
               ])
               if (gen !== fetchGen.current) return
-              setModels(m)
+              setModels([])
               setProfile(pr)
               setStorms(st)
             } catch {

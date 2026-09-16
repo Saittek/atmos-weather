@@ -35,7 +35,7 @@ npm run build
 npx wrangler d1 migrations apply atmos-db --remote
 # Interactive secret (pick a long random string):
 npx wrangler secret put JWT_SECRET
-# Optional — Google WeatherNext 3 as the primary forecast (Open-Meteo stays the fallback):
+# Required — Google WeatherNext 3 forecast:
 npx wrangler secret put GOOGLE_WEATHER_API_KEY
 npx wrangler deploy
 ```
@@ -55,7 +55,7 @@ or your CI). Ensure `JWT_SECRET` is set as a Worker secret and D1 migrations are
 
 | Feature | How |
 |--------|-----|
-| Forecasts | Worker `/api/weather/google` (Google WeatherNext 3) → Open-Meteo fallback |
+| Forecasts | Worker `/api/weather/google` (Google WeatherNext 3) |
 | Radar, alerts, maps | Browser → public APIs |
 | Accounts / login / prefs sync | Worker `/api/auth/*`, `/api/user/*` → D1 |
 | Area chat | Worker `/api/chat/*` → D1 |
@@ -142,11 +142,10 @@ JWT sessions last 30 days. Signed-in users can **Change password**; **Forgot pas
 ### Forecasts & data
 - Current conditions + adaptive sky gradients
 - **Precip timing sentence** (15-min + hourly: when it starts, how much)
-- Clear source line (**Google WeatherNext 3** when the Worker key is set; Open-Meteo / ECCC blend on fallback)
+- Clear source line (**Google WeatherNext 3**)
 - 48-hour hourly + 24h graphs (temp / pop / precip)
-- 14-day outlook with expandable details
+- 10-day outlook with expandable details
 - Weekend plain-English outlook + clothing / activity tips
-- Multi-model compare (Best match, GFS, ECMWF, ICON)
 - Atmospheric pressure-level profile
 - Air quality (US AQI + pollutants)
 - NWS severe alerts (US) + Environment Canada alerts
@@ -164,15 +163,15 @@ JWT sessions last 30 days. Signed-in users can **Change password**; **Forgot pas
 
 | Data | Source |
 |------|--------|
-| Forecast (primary) | [Google Maps Platform Weather API](https://developers.google.com/maps/documentation/weather) (WeatherNext 3), via Worker `/api/weather/google` |
-| Forecast (fallback) | [Open-Meteo](https://open-meteo.com/) region blends (HRRR / GEM / ICON / ECMWF) + ECCC City Page in Canada |
+| Forecast | [Google Maps Platform Weather API](https://developers.google.com/maps/documentation/weather) (WeatherNext 3), via Worker `/api/weather/google` |
 | Radar / satellite | [RainViewer](https://www.rainviewer.com/) |
-| Geocoding | Open-Meteo + Nominatim |
+| Geocoding | Open-Meteo geocoding + Nominatim |
+| Air quality | Open-Meteo air-quality API |
 | US alerts | [NWS](https://www.weather.gov/) |
 | Canada alerts | Environment and Climate Change Canada |
 | Tropical | NHC / NWS |
 
-Radar, alerts, air quality, METAR, and ECCC extras stay on their existing paths. The Google key is **never** sent to the browser.
+Radar, alerts, air quality, METAR, and city search stay on their existing paths. The Google key is **never** sent to the browser.
 
 ### Enable Google Weather (one-time)
 
@@ -186,14 +185,14 @@ npx wrangler secret put GOOGLE_WEATHER_API_KEY
 npm run deploy
 ```
 
-`GOOGLE_MAPS_API_KEY` is accepted as an alias. Until the secret is set (or if Google returns an error), Solara keeps using Open-Meteo unchanged.
+`GOOGLE_MAPS_API_KEY` is accepted as an alias. Forecasts will not load until this secret is set.
 
 **Local dev**
 
 - `npm run dev` (Express on `:8787`): put `GOOGLE_WEATHER_API_KEY=` in `.env` (see `.env.example`). The Vite `/api` proxy forwards to Express.
 - `npm run cf:dev` (Wrangler): put the same key in `.dev.vars` (gitignored).
 
-Without a local key the Google route returns `503` with `fallback: true` and the UI uses Open-Meteo.
+Without a local key the Google route returns `503` and the dashboard shows an error.
 
 Personal / non-commercial use. Respect provider terms.
 

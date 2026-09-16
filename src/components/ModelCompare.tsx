@@ -19,7 +19,9 @@ export function ModelCompare({ models, units, timezone }: Props) {
         <div className="panel-header">
           <h2>📡 Multi-model</h2>
         </div>
-        <p className="muted-center">Model ensemble unavailable right now.</p>
+        <p className="muted-center">
+          Solara uses a single Google WeatherNext 3 forecast — Open-Meteo model compare is retired.
+        </p>
       </section>
     )
   }

@@ -113,7 +113,7 @@ app.get('/api/weather/google', async (req, res) => {
       return res.status(400).json({ error: 'lat/lon out of range' })
     }
     if (!googleWeatherApiKey(process.env)) {
-      return res.status(503).json({ error: 'Google Weather not configured', fallback: true })
+      return res.status(503).json({ error: 'Google Weather not configured — set GOOGLE_WEATHER_API_KEY' })
     }
     const lite = req.query.lite === '1' || req.query.lite === 'true'
     const data = await fetchGoogleWeatherMapped(process.env, { lat, lon, lite })
@@ -124,7 +124,6 @@ app.get('/api/weather/google', async (req, res) => {
     console.error('google-weather', e?.message || e)
     res.status(status).json({
       error: e?.message || 'Google Weather failed',
-      fallback: true,
     })
   }
 })

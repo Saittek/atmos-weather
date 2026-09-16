@@ -11,7 +11,7 @@ Run after every TestFlight install. Mark fails and file as bugs.
 ## Right now trust
 - [ ] Temp matches local conditions within reason
 - [ ] High ≥ current temp; Low ≤ current temp (“Today H / L”)
-- [ ] Source line shows blend / ECCC / Open-Meteo clearly
+- [ ] Source line shows Google WeatherNext 3
 - [ ] Precip timing sentence present (dry or “starts ~time · amount”)
 - [ ] Airplane mode → offline banner + last weather
 - [ ] Stale data (>45m) shows freshness banner + “pull to refresh”

@@ -13,13 +13,6 @@ import type {
 } from './types'
 import { filterActiveAlerts } from '../utils/activeAlerts'
 import { isDaytimeNow } from '../utils/daylight'
-import {
-  blendWeatherData,
-  pickModels,
-  detectForecastRegion,
-  fallbackModels,
-} from './forecastModels'
-import { fetchNearestEcccCityPage, mergeEcccIntoWeather } from './ecccCityPage'
 import { fetchNearestMetar } from './metar'
 import { fetchGoogleWeather } from './googleWeather'
 import { getApiBase } from '../lib/native'
@@ -94,128 +87,6 @@ export type FetchWeatherOpts = {
   lite?: boolean
 }
 
-const CURRENT_VARS = [
-  'temperature_2m',
-  'relative_humidity_2m',
-  'apparent_temperature',
-  'is_day',
-  'precipitation',
-  'rain',
-  'showers',
-  'snowfall',
-  'weather_code',
-  'cloud_cover',
-  'pressure_msl',
-  'surface_pressure',
-  'wind_speed_10m',
-  'wind_direction_10m',
-  'wind_gusts_10m',
-].join(',')
-
-const HOURLY_VARS = [
-  'temperature_2m',
-  'relative_humidity_2m',
-  'dew_point_2m',
-  'apparent_temperature',
-  'precipitation_probability',
-  'precipitation',
-  'rain',
-  'showers',
-  'snowfall',
-  'weather_code',
-  'pressure_msl',
-  'cloud_cover',
-  'cloud_cover_low',
-  'cloud_cover_mid',
-  'cloud_cover_high',
-  'visibility',
-  'wind_speed_10m',
-  'wind_direction_10m',
-  'wind_gusts_10m',
-  'uv_index',
-  'is_day',
-].join(',')
-
-const DAILY_VARS = [
-  'weather_code',
-  'temperature_2m_max',
-  'temperature_2m_min',
-  'apparent_temperature_max',
-  'apparent_temperature_min',
-  'sunrise',
-  'sunset',
-  'daylight_duration',
-  'sunshine_duration',
-  'uv_index_max',
-  'precipitation_sum',
-  'rain_sum',
-  'showers_sum',
-  'snowfall_sum',
-  'precipitation_hours',
-  'precipitation_probability_max',
-  'wind_speed_10m_max',
-  'wind_gusts_10m_max',
-  'wind_direction_10m_dominant',
-].join(',')
-
-function buildForecastParams(
-  lat: number,
-  lon: number,
-  opts: {
-    lite: boolean
-    model: string
-    /** Short-range fetch: fewer days/hours, keep 15-min precip */
-    mode: 'short' | 'long' | 'single'
-  },
-): URLSearchParams {
-  const { lite, model, mode } = opts
-  const short = mode === 'short'
-  const params = new URLSearchParams({
-    latitude: String(lat),
-    longitude: String(lon),
-    current: CURRENT_VARS,
-    hourly: HOURLY_VARS,
-    daily: DAILY_VARS,
-    timezone: 'auto',
-  })
-
-  if (model && model !== 'best_match') {
-    params.set('models', model)
-  }
-
-  if (short) {
-    // High-res nowcasting window (HRRR / GEM / ICON)
-    params.set('forecast_days', '2')
-    params.set('forecast_hours', '36')
-    params.set('minutely_15', 'precipitation,weather_code,wind_speed_10m,temperature_2m')
-    params.set('forecast_minutely_15', lite ? '12' : '16')
-  } else {
-    // Always request 14 daily days (small payload); lite still trims hourly hours
-    params.set('forecast_days', '14')
-    params.set('forecast_hours', lite ? '72' : '120')
-    params.set('past_days', '1')
-    // 15-min on long fetch too when single-model (global best_match)
-    if (mode === 'single') {
-      params.set('minutely_15', 'precipitation,weather_code,wind_speed_10m,temperature_2m')
-      params.set('forecast_minutely_15', lite ? '12' : '16')
-    }
-  }
-
-  return params
-}
-
-async function fetchForecastRaw(params: URLSearchParams): Promise<WeatherData | null> {
-  try {
-    const res = await fetch(`${FORECAST}?${params}`)
-    if (!res.ok) return null
-    const data = (await res.json()) as WeatherData
-    if (!data?.current || !data?.hourly?.time?.length) return null
-    return data
-  } catch {
-    return null
-  }
-}
-
 async function attachMetar(
   lat: number,
   lon: number,
@@ -235,9 +106,7 @@ async function attachMetar(
 }
 
 /**
- * Main forecast load: Google WeatherNext 3 first (via Worker proxy), then
- * region-aware Open-Meteo models + short/long blend on fallback.
- * US → HRRR + ECMWF · Canada → ECCC City Page + GEM + ECMWF · Europe → ICON + ECMWF · else best_match.
+ * Main forecast: Google WeatherNext 3 only (Worker `/api/weather/google`).
  */
 export async function fetchWeather(
   lat: number,
@@ -245,30 +114,11 @@ export async function fetchWeather(
   opts?: FetchWeatherOpts,
 ): Promise<WeatherData> {
   const lite = Boolean(opts?.lite)
-  const pick = pickModels(lat, lon)
-  const region = detectForecastRegion(lat, lon)
   const googleKey = cacheKey(lat, lon, `${lite ? 'lite' : 'full'}:google`)
-  const key = cacheKey(lat, lon, `${lite ? 'lite' : 'full'}:${pick.label}:eccc`)
 
   const googleHit = forecastCache.get(googleKey)
   if (googleHit && Date.now() - googleHit.at < FORECAST_TTL_MS) {
     return attachMetar(lat, lon, googleHit.data, 1600)
-  }
-
-  const google = await fetchGoogleWeather(lat, lon, { lite })
-  if (google) {
-    if (forecastCache.size > 24) {
-      const first = forecastCache.keys().next().value
-      if (first != null) forecastCache.delete(first)
-    }
-    const data = await attachMetar(lat, lon, google, 2800)
-    forecastCache.set(googleKey, { at: Date.now(), data })
-    return data
-  }
-
-  const hit = forecastCache.get(key)
-  if (hit && Date.now() - hit.at < FORECAST_TTL_MS) {
-    return attachMetar(lat, lon, hit.data, 1600)
   }
 
   if (forecastCache.size > 24) {
@@ -276,125 +126,9 @@ export async function fetchWeather(
     if (first != null) forecastCache.delete(first)
   }
 
-  // Canada: start Environment Canada City Page in parallel with models
-  const ecccPromise =
-    region === 'canada'
-      ? fetchNearestEcccCityPage(lat, lon).catch(() => null)
-      : Promise.resolve(null)
-
-  let data: WeatherData | null = null
-  const chain = fallbackModels(pick)
-
-  async function tryModel(
-    model: string,
-    mode: 'short' | 'long' | 'single',
-  ): Promise<WeatherData | null> {
-    return fetchForecastRaw(buildForecastParams(lat, lon, { lite, model, mode }))
-  }
-
-  if (pick.shortModel) {
-    const [short0, long0, eccc] = await Promise.all([
-      tryModel(pick.shortModel, 'short'),
-      tryModel(pick.longModel, 'long'),
-      ecccPromise,
-    ])
-
-    let short = short0
-    let long = long0
-    let longModelUsed = pick.longModel
-    let shortModelUsed = pick.shortModel
-
-    // If preferred long failed, walk fallback chain
-    if (!long) {
-      for (const m of chain) {
-        if (m === pick.shortModel || m === pick.longModel) continue
-        long = await tryModel(m, 'long')
-        if (long) {
-          longModelUsed = m
-          break
-        }
-      }
-    }
-    if (!short) {
-      for (const m of chain) {
-        if (m === pick.shortModel) continue
-        short = await tryModel(m, 'short')
-        if (short) {
-          shortModelUsed = m
-          break
-        }
-      }
-    }
-
-    const usedPick = {
-      ...pick,
-      shortModel: shortModelUsed,
-      longModel: longModelUsed,
-    }
-
-    if (long && short) {
-      data = blendWeatherData(short, long, usedPick)
-    } else if (long) {
-      data = blendWeatherData(null, long, usedPick)
-    } else if (short) {
-      data = {
-        ...short,
-        solara_source: {
-          strategy: pick.label,
-          shortModel: shortModelUsed,
-        },
-      }
-    }
-
-    if (data && eccc) {
-      try {
-        data = mergeEcccIntoWeather(data, eccc)
-      } catch {
-        /* keep model blend if ECCC map fails */
-      }
-    }
-  } else {
-    const eccc = await ecccPromise
-    for (const m of chain) {
-      data = await tryModel(m, 'single')
-      if (data) {
-        data = {
-          ...data,
-          solara_source: {
-            strategy: pick.label,
-            longModel: m,
-          },
-        }
-        break
-      }
-    }
-    if (data && eccc) {
-      try {
-        data = mergeEcccIntoWeather(data, eccc)
-      } catch {
-        /* ignore */
-      }
-    }
-  }
-
-  if (!data) {
-    data = await tryModel('best_match', 'single')
-    if (data) {
-      data = {
-        ...data,
-        solara_source: { strategy: 'Best match', longModel: 'best_match' },
-      }
-    }
-  }
-
-  if (!data) throw new Error('Weather forecast failed')
-
-  data = await attachMetar(lat, lon, data, 2800)
-  if (data.solara_source && !data.solara_source.provider) {
-    data = { ...data, solara_source: { ...data.solara_source, provider: 'open-meteo' } }
-  }
-
-  forecastCache.set(key, { at: Date.now(), data })
+  const google = await fetchGoogleWeather(lat, lon, { lite })
+  const data = await attachMetar(lat, lon, google, 2800)
+  forecastCache.set(googleKey, { at: Date.now(), data })
   return data
 }
 
@@ -518,31 +252,14 @@ export async function fetchLocationSnapshot(
   loc: LocationResult,
 ): Promise<LocationSnapshot | null> {
   try {
-    const pick = pickModels(loc.latitude, loc.longitude)
-    // Prefer high-res short model for rain timing on pins
-    const model = pick.shortModel || pick.longModel || 'best_match'
-    const params = new URLSearchParams({
-      latitude: String(loc.latitude),
-      longitude: String(loc.longitude),
-      current: 'temperature_2m,weather_code,is_day,precipitation',
-      hourly: 'precipitation,precipitation_probability,weather_code',
-      minutely_15: 'precipitation',
-      daily: 'temperature_2m_max,temperature_2m_min',
-      timezone: 'auto',
-      forecast_days: '2',
-      forecast_hours: '12',
-      forecast_minutely_15: '8',
-    })
-    if (model !== 'best_match') params.set('models', model)
-    const [wRes, aRes, alRes] = await Promise.all([
-      fetch(`${FORECAST}?${params}`),
+    const [w, aRes, alRes] = await Promise.all([
+      fetchGoogleWeather(loc.latitude, loc.longitude, { lite: true }),
       fetch(
         `${AIR}?latitude=${loc.latitude}&longitude=${loc.longitude}&current=us_aqi&timezone=auto`,
       ).catch(() => null),
       fetchAlerts(loc.latitude, loc.longitude),
     ])
-    if (!wRes.ok) return null
-    const w = await wRes.json()
+    if (!w?.current) return null
     let aqi: number | null = null
     if (aRes?.ok) {
       const a = await aRes.json()
