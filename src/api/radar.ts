@@ -60,8 +60,8 @@ export interface RadarSourceMeta {
 export const RADAR_SOURCES: RadarSourceMeta[] = [
   {
     id: 'mapbox_radar',
-    name: 'Mapbox + radar',
-    desc: 'Worldwide precip loop; uses a Mapbox dark map when a token is set, otherwise the built-in dark map',
+    name: 'HD radar',
+    desc: 'Worldwide precip loop (RainViewer). Uses a Mapbox dark map when a token is set.',
     coverage: 'Global',
     animated: true,
     maxNativeZoom: 7,

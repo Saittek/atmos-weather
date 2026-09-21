@@ -21,9 +21,10 @@ const EXPANDED_DAYS = 14
 interface Props {
   weather: WeatherData
   units: Units
+  onSelectDay?: (isoDate: string) => void
 }
 
-export function DailyForecast({ weather, units }: Props) {
+export function DailyForecast({ weather, units, onSelectDay }: Props) {
   const { t, locale } = useI18n()
   const d = weather.daily
   const todayIdx = todayDailyIndex(weather)
@@ -109,7 +110,12 @@ export function DailyForecast({ weather, units }: Props) {
               <button
                 type="button"
                 className="daily-row"
-                onClick={() => setOpen(isOpen ? null : i)}
+                onClick={() => {
+                  const next = isOpen ? null : i
+                  setOpen(next)
+                  if (next != null) onSelectDay?.(d.time[next].slice(0, 10))
+                  else onSelectDay?.(d.time[todayIdx].slice(0, 10))
+                }}
                 aria-expanded={isOpen}
               >
                 <span className="d-day" title={formatDay(day, weather.timezone)}>

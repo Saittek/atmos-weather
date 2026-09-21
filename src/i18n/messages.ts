@@ -120,7 +120,7 @@ const en = {
   'settings.planFree': 'Solara Free',
   'settings.planPro': 'Solara Pro',
   'settings.planHintFree':
-    'Everything core is free. Preview Pro is a local demo only — no payment and no cloud upgrade yet.',
+    'Solara is free. There is no paid plan yet — Preview Pro only unlocks extra saved places on this device.',
   'settings.planHintPro':
     'Preview Pro (this device only): more saved places, ad-free. Not a paid plan; sync uses the same account limits.',
   'settings.previewPro': 'Try Preview Pro (no charge)',
@@ -435,7 +435,7 @@ const fr: Record<MessageKey, string> = {
   'settings.planFree': 'Solara Gratuit',
   'settings.planPro': 'Solara Pro',
   'settings.planHintFree':
-    'Le cœur de Solara est gratuit. L’aperçu Pro est une démo locale seulement — pas de paiement ni de forfait cloud.',
+    'Solara est gratuit. Pas de forfait payant pour l’instant — l’aperçu Pro n’ajoute que des lieux enregistrés sur cet appareil.',
   'settings.planHintPro':
     'Aperçu Pro (cet appareil) : plus de lieux, sans pub. Ce n’est pas un forfait payant; la synchro suit les mêmes limites de compte.',
   'settings.previewPro': 'Essayer l’aperçu Pro (sans frais)',

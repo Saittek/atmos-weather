@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
@@ -32,9 +33,9 @@ import { useHomeAlerts } from '../hooks/useHomeAlerts'
 import { sameExactPlace } from '../hooks/useWeather'
 import { ThreatBanner } from '../components/ThreatBanner'
 import { WhatMattersNow } from '../components/WhatMattersNow'
-import { ModelConfidence } from '../components/ModelConfidence'
-import { TodayHero } from '../components/TodayHero'
 import { OutdoorGlance } from '../components/OutdoorGlance'
+import { CommuteRow } from '../components/CommuteRow'
+import { RadarPeek } from '../components/RadarPeek'
 import { ModulePrefsPanel } from '../components/ModulePrefsPanel'
 import { WhatChanged } from '../components/WhatChanged'
 import { WeekendBrief } from '../components/WeekendBrief'
@@ -105,9 +106,6 @@ const LifestyleScores = lazy(() =>
 )
 const DayLastYear = lazy(() =>
   import('../components/DayLastYear').then((m) => ({ default: m.DayLastYear })),
-)
-const ModelCompare = lazy(() =>
-  import('../components/ModelCompare').then((m) => ({ default: m.ModelCompare })),
 )
 const CityCompare = lazy(() =>
   import('../components/CityCompare').then((m) => ({ default: m.CityCompare })),
@@ -191,7 +189,6 @@ export default function DashboardPage() {
     weather,
     air,
     alerts,
-    models,
     profile,
     storms,
     loading,
@@ -245,6 +242,8 @@ export default function DashboardPage() {
   })
 
   const rainWatch = useRainWatch(favorites, notifyAlerts, location, homeLocation, workLocation)
+  const [hourlyDay, setHourlyDay] = useState<string | null>(null)
+  const stormDismissedFor = useRef<string | null>(null)
 
   useEffect(() => {
     if (weather && location) markFirstWeatherOk()
@@ -305,6 +304,19 @@ export default function DashboardPage() {
   })
 
   const activeAlerts = useMemo(() => filterActiveAlerts(alerts), [alerts])
+
+  useEffect(() => {
+    if (!location) return
+    const key = locationKey(location)
+    const hot = activeAlerts.some((a) => /severe|extreme/i.test(a.severity))
+    if (!hot) return
+    if (stormDismissedFor.current === key) return
+    setStormMode(true)
+  }, [activeAlerts, location, setStormMode])
+
+  useEffect(() => {
+    setHourlyDay(null)
+  }, [location?.latitude, location?.longitude])
   const topAlertSeverity = useMemo(() => {
     if (!activeAlerts.length) return undefined
     const rank = (s: string) =>
@@ -707,7 +719,14 @@ export default function DashboardPage() {
               <strong>🌩 {tNav('app.stormMode')}</strong>
               <span>{tNav('app.stormBanner')}</span>
             </div>
-            <button type="button" className="chip-btn" onClick={() => setStormMode(false)}>
+            <button
+              type="button"
+              className="chip-btn"
+              onClick={() => {
+                if (location) stormDismissedFor.current = locationKey(location)
+                setStormMode(false)
+              }}
+            >
               {tNav('app.stormExit')}
             </button>
           </div>
@@ -755,22 +774,6 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Mobile: saved places first — pick a location, then scroll into weather */}
-        <div className="favorites-mobile-slot" id="favorites">
-          <Favorites
-            favorites={favorites}
-            current={location}
-            onSelect={loadForLocation}
-            onRemove={toggleFavorite}
-            signedIn={!!user}
-            accountSynced={cloudSynced}
-            home={homeLocation}
-            geoLoading={geoLoading}
-            onSetHome={setHomeLocation}
-            onGoHome={goHome}
-          />
-        </div>
-
         {!location && !loading && !error && (
           <div className="empty-state empty-state-rich">
             <div className="empty-icon" aria-hidden>
@@ -789,6 +792,23 @@ export default function DashboardPage() {
                 {tNav('empty.stargaze')}
               </Link>
             </div>
+          </div>
+        )}
+
+        {!weather && (favorites.length > 0 || homeLocation) && (
+          <div className="favorites-mobile-slot" id="favorites">
+            <Favorites
+              favorites={favorites}
+              current={location}
+              onSelect={loadForLocation}
+              onRemove={toggleFavorite}
+              signedIn={!!user}
+              accountSynced={cloudSynced}
+              home={homeLocation}
+              geoLoading={geoLoading}
+              onSetHome={setHomeLocation}
+              onGoHome={goHome}
+            />
           </div>
         )}
 
@@ -827,19 +847,18 @@ export default function DashboardPage() {
                   offline={offline}
                   air={air}
                   onShare={() => void onShare()}
+                  stargazePath={stargazePath}
                 />
 
-                <TodayHero
-                  weather={weather}
+                <CommuteRow
                   units={units}
-                  placeName={
-                    homeLocation && sameExactPlace(location, homeLocation)
-                      ? 'Home'
-                      : workLocation && sameExactPlace(location, workLocation)
-                        ? 'Work'
-                        : location.name
-                  }
-                  air={air}
+                  current={location}
+                  weather={weather}
+                  home={homeLocation}
+                  work={workLocation}
+                  snapshots={rainWatch.snapshots}
+                  onGoHome={goHome}
+                  onGoWork={goWork}
                 />
 
                 {/* Phone/iOS: top-bar quick-nav is CSS-hidden — keep modes one tap away */}
@@ -896,14 +915,43 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              <HourlyForecast weather={weather} units={units} />
+              <HourlyForecast weather={weather} units={units} selectedDay={hourlyDay} />
 
               {/* One 7-day control (removed duplicate WeekStrip) */}
               <div className="daily-mobile-slot">
-                <DailyForecast weather={weather} units={units} />
+                <DailyForecast
+                  weather={weather}
+                  units={units}
+                  onSelectDay={(iso) => setHourlyDay(iso)}
+                />
               </div>
 
-              {radarBlock}
+              {isMobile ? (
+                <RadarPeek
+                  lat={location.latitude}
+                  lon={location.longitude}
+                  placeName={location.name}
+                  radarPath={radarPath}
+                  units={units}
+                />
+              ) : (
+                radarBlock
+              )}
+
+              <div className="favorites-mobile-slot" id="favorites">
+                <Favorites
+                  favorites={favorites}
+                  current={location}
+                  onSelect={loadForLocation}
+                  onRemove={toggleFavorite}
+                  signedIn={!!user}
+                  accountSynced={cloudSynced}
+                  home={homeLocation}
+                  geoLoading={geoLoading}
+                  onSetHome={setHomeLocation}
+                  onGoHome={goHome}
+                />
+              </div>
 
               <AllergySection air={air} weather={weather} />
 
@@ -1005,16 +1053,6 @@ export default function DashboardPage() {
                             lon={location.longitude}
                           />
                         )}
-                        {(modPrefs.models || !isMobile) && models.length >= 2 && (
-                          <ModelConfidence
-                            models={models}
-                            weather={weather}
-                            units={units}
-                          />
-                        )}
-                        {(modPrefs.models || !isMobile) && (
-                          <ModelCompare models={models} units={units} timezone={weather.timezone} />
-                        )}
                         {!isMobile && (
                           <CityCompare units={units} home={location} homeWeather={weather} />
                         )}
@@ -1070,7 +1108,11 @@ export default function DashboardPage() {
               </div>
 
               <div className="daily-desktop-slot">
-                <DailyForecast weather={weather} units={units} />
+                <DailyForecast
+                  weather={weather}
+                  units={units}
+                  onSelectDay={(iso) => setHourlyDay(iso)}
+                />
               </div>
 
               <div className="outdoor-desktop-slot">
@@ -1081,8 +1123,8 @@ export default function DashboardPage() {
               <footer className="credits">
                 <p>
                   Forecasts by{' '}
-                  <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">
-                    Open-Meteo
+                  <a href="https://developers.google.com/maps/documentation/weather" target="_blank" rel="noreferrer">
+                    Google WeatherNext 3
                   </a>
                   . Radar by{' '}
                   <a href="https://mesonet.agron.iastate.edu/" target="_blank" rel="noreferrer">
@@ -1112,6 +1154,31 @@ export default function DashboardPage() {
           </main>
         )}
       </div>
+
+      {location && (
+        <nav className="mobile-bottom-nav" aria-label="Primary">
+          <button
+            type="button"
+            className="is-active"
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          >
+            <span aria-hidden>☀</span>
+            Home
+          </button>
+          <Link to={radarPath}>
+            <span aria-hidden>📡</span>
+            Radar
+          </Link>
+          <Link to={stargazePath}>
+            <span aria-hidden>✨</span>
+            Sky
+          </Link>
+          <Link to="/globe">
+            <span aria-hidden>🌍</span>
+            Earth
+          </Link>
+        </nav>
+      )}
 
       <FirstRunCoach
         weatherReady={Boolean(weather && location)}

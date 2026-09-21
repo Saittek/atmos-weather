@@ -63,6 +63,6 @@ export const MODULE_LABELS: { id: ModuleId; label: string; hint: string }[] = [
   { id: 'fireMap', label: 'Always show fire map', hint: 'Otherwise only when smoky' },
   { id: 'chat', label: 'Area chat', hint: 'Local community' },
   { id: 'shareCard', label: 'Share card panel', hint: 'Big share block' },
-  { id: 'models', label: 'Model compare', hint: 'Multi-model detail' },
+  { id: 'models', label: 'Model compare (retired)', hint: 'Google WeatherNext 3 is the only forecast' },
   { id: 'planning', label: 'Planning tools', hint: 'Trip, snow, climate' },
 ]

@@ -22,6 +22,8 @@ import { WeatherIcon3D } from './WeatherIcon3D'
 interface Props {
   weather: WeatherData
   units: Units
+  /** YYYY-MM-DD — show that calendar day instead of rolling next hours */
+  selectedDay?: string | null
 }
 
 function hourLabel(
@@ -49,7 +51,7 @@ function hourPrecipLabel(mm: number, units: Units): string {
   return formatPrecip(mm, units)
 }
 
-export function HourlyForecast({ weather, units }: Props) {
+export function HourlyForecast({ weather, units, selectedDay = null }: Props) {
   const { t, locale } = useI18n()
   const locTag = localeTag(locale)
   const { hourly, timezone } = weather
@@ -61,9 +63,16 @@ export function HourlyForecast({ weather, units }: Props) {
   const mobile =
     typeof window !== 'undefined' && window.matchMedia('(max-width: 720px)').matches
   const count = mobile ? 24 : 48
-  const items = Array.from({ length: count }, (_, i) => i + idx).filter(
+  const rolling = Array.from({ length: count }, (_, i) => i + idx).filter(
     (i) => i < hourly.time.length,
   )
+  const dayItems =
+    selectedDay && selectedDay.length >= 10
+      ? hourly.time
+          .map((_, i) => i)
+          .filter((i) => String(hourly.time[i]).slice(0, 10) === selectedDay.slice(0, 10))
+      : null
+  const items = dayItems && dayItems.length ? dayItems : rolling
 
   const maxPrecip = Math.max(
     0.3,
@@ -79,11 +88,55 @@ export function HourlyForecast({ weather, units }: Props) {
       <div className="panel-header">
         <h2>{t('panel.hourly')}</h2>
         <span className="panel-hint">
-          {endIso
-            ? `${hourLabel(hourly.time[idx], timezone, true, nowLbl, locTag)} → ${hourLabel(endIso, timezone, false, nowLbl, locTag)} · ${unit}`
-            : `→ · ${unit}`}
+          {selectedDay && dayItems?.length
+            ? `${selectedDay} · ${unit}`
+            : endIso
+              ? `${hourLabel(hourly.time[idx], timezone, true, nowLbl, locTag)} → ${hourLabel(endIso, timezone, false, nowLbl, locTag)} · ${unit}`
+              : `→ · ${unit}`}
         </span>
       </div>
+      {items.length > 2 && (
+        <svg className="hourly-graph" viewBox={`0 0 ${Math.max(items.length * 8, 80)} 72`} preserveAspectRatio="none" aria-hidden>
+          {(() => {
+            const temps = items.map((i) => hourly.temperature_2m[i] ?? 0)
+            const precs = items.map((i) => hourly.precipitation[i] ?? 0)
+            const tMin = Math.min(...temps)
+            const tMax = Math.max(...temps)
+            const span = Math.max(tMax - tMin, 1)
+            const pMax = Math.max(0.4, ...precs)
+            const w = Math.max(items.length * 8, 80)
+            const barW = Math.max(2, w / items.length - 1.5)
+            const pts = temps
+              .map((v, n) => {
+                const x = (n + 0.5) * (w / items.length)
+                const y = 10 + (1 - (v - tMin) / span) * 50
+                return `${x.toFixed(1)},${y.toFixed(1)}`
+              })
+              .join(' ')
+            return (
+              <>
+                {precs.map((p, n) => {
+                  const h = (p / pMax) * 40
+                  if (h < 1) return null
+                  const x = n * (w / items.length) + 0.5
+                  return (
+                    <rect
+                      key={hourly.time[items[n]]}
+                      className="hg-bar"
+                      x={x}
+                      y={68 - h}
+                      width={barW}
+                      height={h}
+                      rx="1"
+                    />
+                  )
+                })}
+                <polyline className="hg-line" points={pts} />
+              </>
+            )
+          })()}
+        </svg>
+      )}
       <div className="hourly-scroll" role="list" tabIndex={0}>
         {items.map((i) => {
           const temp = hourly.temperature_2m[i]

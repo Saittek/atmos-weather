@@ -99,10 +99,16 @@ export function useRainWatch(
           const key = `rain-${locationKey(s.location)}-${Math.floor(s.rainStartsInMin / 15)}`
           if (!notified.current.has(key)) {
             notified.current.add(key)
+            const startAt = new Date(Date.now() + s.rainStartsInMin * 60_000)
+            const leaveAt = new Date(
+              Date.now() + Math.max(0, s.rainStartsInMin - 20) * 60_000,
+            )
+            const clock = (d: Date) =>
+              d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
             const msg =
               s.rainStartsInMin <= 5
                 ? `Rain starting now near ${s.location.name}`
-                : `Rain in ~${s.rainStartsInMin} min near ${s.location.name}`
+                : `Rain starts at ${clock(startAt)} near ${s.location.name} · leave by ${clock(leaveAt)}`
             setBanner(msg)
             window.setTimeout(() => setBanner(null), 8000)
             void notify('Solara rain watch', msg, key)

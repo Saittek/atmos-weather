@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type MouseEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
+import { Link } from 'react-router-dom'
 import type { AirQualityData, LocationResult, WeatherData } from '../api/types'
 import { fetchClimateNormal, formatLocationLabel } from '../api/weather'
 import type { Units } from '../utils/format'
@@ -27,6 +28,7 @@ import { formatObsSource, formatWeatherSource, todayRangeHint } from '../utils/w
 import { useI18n } from '../i18n/I18nProvider'
 import { trAqi, trUv, trWeatherLabel } from '../i18n/messages'
 import { WeatherIcon3D } from './WeatherIcon3D'
+import { buildStargazeBrief, gradeLabel } from '../utils/stargaze'
 
 interface Props {
   weather: WeatherData
@@ -42,6 +44,7 @@ interface Props {
   offline?: boolean
   air?: AirQualityData | null
   onShare?: () => void
+  stargazePath?: string
 }
 
 export function CurrentWeather({
@@ -58,6 +61,7 @@ export function CurrentWeather({
   offline = false,
   air = null,
   onShare,
+  stargazePath,
 }: Props) {
   const { t, locale } = useI18n()
   const c = weather.current
@@ -135,6 +139,17 @@ export function CurrentWeather({
 
   const sourceLine = formatWeatherSource(weather)
   const obsLine = formatObsSource(weather, units)
+  const tonight = useMemo(() => {
+    if (isDay) return null
+    try {
+      return buildStargazeBrief(weather, {
+        lat: location.latitude,
+        lon: location.longitude,
+      })
+    } catch {
+      return null
+    }
+  }, [isDay, weather, location.latitude, location.longitude])
 
   const onMove = (e: MouseEvent<HTMLElement>) => {
     if (mobile) return
@@ -254,17 +269,24 @@ export function CurrentWeather({
               {obsLine}
             </p>
           )}
-          <p
-            className={`current-precip-timing wet-${timing.level}`}
+          <h2
+            className={`hero-lead wet-${timing.level}`}
             role="status"
-            title="Near-term precip from 15‑min / hourly forecast"
           >
             {precipSentence}
+          </h2>
+          <p className="hero-nowcast-note">
+            Next-hour timing is estimated from Google hourly data, not radar minutes.
           </p>
           {rainLabel && rainLabel !== precipSentence && (
             <p className="current-next-precip" role="status">
               {rainLabel}
             </p>
+          )}
+          {tonight && stargazePath && (
+            <Link to={stargazePath} className="hero-tonight">
+              Tonight · {tonight.goLabel} · {gradeLabel(tonight.tonightGrade)}
+            </Link>
           )}
         </div>
 

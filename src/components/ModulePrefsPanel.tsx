@@ -35,7 +35,7 @@ export function ModulePrefsPanel({ prefs, onChange }: Props) {
       </div>
       <p className="module-prefs-lead muted-center">{t('settings.modulesLead')}</p>
       <ul className="module-prefs-list">
-        {MODULE_LABELS.map((m) => {
+        {MODULE_LABELS.filter((m) => m.id !== 'models').map((m) => {
           const keys = MOD_KEYS[m.id]
           return (
             <li key={m.id}>

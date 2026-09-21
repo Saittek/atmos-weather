@@ -39,19 +39,27 @@ export function AreaChat({ location }: Props) {
   const locName = location?.name
   const roomId = room?.id
 
-  // Resolve room when location or panel opens
+  // Resolve room when location is known so we can hide an empty chat
   useEffect(() => {
-    if (locLat == null || locLon == null || !open) return
+    if (locLat == null || locLon == null) return
     let cancelled = false
     setLoading(true)
     setError(null)
     setMessages([])
     lastTsRef.current = undefined
     void fetchChatRoom(locLat, locLon, locName)
-      .then((r) => {
+      .then(async (r) => {
         if (cancelled) return
         setRoom(r)
         setActiveNearby(r.activeNearby ?? 0)
+        try {
+          const data = await fetchChatMessages(r.id, { limit: 20 })
+          if (cancelled) return
+          setMessages(data.messages)
+          setActiveNearby(data.onlineHint || r.activeNearby || 0)
+        } catch {
+          /* quiet peek */
+        }
       })
       .catch((e: Error) => {
         if (!cancelled) setError(e.message)
@@ -62,7 +70,7 @@ export function AreaChat({ location }: Props) {
     return () => {
       cancelled = true
     }
-  }, [locLat, locLon, locName, open])
+  }, [locLat, locLon, locName])
 
   // Load + poll messages
   useEffect(() => {
@@ -171,6 +179,13 @@ export function AreaChat({ location }: Props) {
   }
 
   if (!location) return null
+  if (!open && !loading && activeNearby < 1 && messages.length === 0) {
+    return (
+      <p className="muted-center chat-quiet">
+        Area chat is quiet here. It appears when someone nearby posts.
+      </p>
+    )
+  }
 
   return (
     <>
