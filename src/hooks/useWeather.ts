@@ -14,7 +14,6 @@ import type {
   AirQualityData,
   DensityMode,
   LocationResult,
-  ModelSeries,
   PressureLevelProfile,
   ThemeMode,
   TropicalStorm,
@@ -219,7 +218,6 @@ export function useWeather() {
   const [weather, setWeather] = useState<WeatherData | null>(null)
   const [air, setAir] = useState<AirQualityData | null>(null)
   const [alerts, setAlerts] = useState<WeatherAlert[]>([])
-  const [models, setModels] = useState<ModelSeries[]>([])
   const [profile, setProfile] = useState<PressureLevelProfile | null>(null)
   const [storms, setStorms] = useState<TropicalStorm[]>([])
   const [loading, setLoading] = useState(false)
@@ -405,7 +403,6 @@ export function useWeather() {
           setAir(null)
           setAlerts([])
           setSevereActive(false)
-          setModels([])
           setProfile(null)
           setStorms([])
         }
@@ -541,7 +538,6 @@ export function useWeather() {
                 fetchTropicalStorms(),
               ])
               if (gen !== fetchGen.current) return
-              setModels([])
               setProfile(pr)
               setStorms(st)
             } catch {
@@ -560,7 +556,6 @@ export function useWeather() {
           }
         } else {
           // Clear stale secondary from previous location
-          setModels([])
           setProfile(null)
           setStorms([])
         }
@@ -1019,7 +1014,6 @@ export function useWeather() {
     weather,
     air,
     alerts,
-    models,
     profile,
     storms,
     loading,

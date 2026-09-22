@@ -3,8 +3,6 @@ import type {
   GridPoint,
   LocationResult,
   LocationSnapshot,
-  ModelId,
-  ModelSeries,
   PressureLevelProfile,
   TropicalGlobeData,
   TropicalStorm,
@@ -610,54 +608,6 @@ export async function fetchAlerts(lat: number, lon: number): Promise<WeatherAler
   const [us, ca] = await Promise.all([fetchUsAlerts(lat, lon), fetchCanadaAlerts(lat, lon)])
   // Canada first if both (border cases rare); severity sort happens in UI
   return filterActiveAlerts([...ca, ...us])
-}
-
-const MODEL_META: { id: ModelId; label: string; param?: string }[] = [
-  { id: 'best_match', label: 'Best match' },
-  { id: 'gfs_hrrr', label: 'HRRR (US)', param: 'gfs_hrrr' },
-  { id: 'gfs_seamless', label: 'GFS seamless', param: 'gfs_seamless' },
-  { id: 'ecmwf_ifs025', label: 'ECMWF IFS', param: 'ecmwf_ifs025' },
-  { id: 'icon_seamless', label: 'ICON (DWD)', param: 'icon_seamless' },
-  { id: 'gem_seamless', label: 'GEM (Canada)', param: 'gem_seamless' },
-]
-
-export async function fetchMultiModel(lat: number, lon: number): Promise<ModelSeries[]> {
-  const results = await Promise.all(
-    MODEL_META.map(async (m) => {
-      try {
-        const params = new URLSearchParams({
-          latitude: String(lat),
-          longitude: String(lon),
-          hourly: 'temperature_2m,precipitation',
-          forecast_days: '3',
-          timezone: 'auto',
-        })
-        if (m.param) params.set('models', m.param)
-        const res = await fetch(`${FORECAST}?${params}`)
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const data = await res.json()
-        return {
-          id: m.id,
-          label: m.label,
-          hourly: data.hourly
-            ? {
-                time: data.hourly.time,
-                temperature_2m: data.hourly.temperature_2m,
-                precipitation: data.hourly.precipitation,
-              }
-            : null,
-        } satisfies ModelSeries
-      } catch (e) {
-        return {
-          id: m.id,
-          label: m.label,
-          hourly: null,
-          error: e instanceof Error ? e.message : 'failed',
-        } satisfies ModelSeries
-      }
-    }),
-  )
-  return results
 }
 
 const PRESSURE_LEVELS = [1000, 925, 850, 700, 500, 300, 250, 200] as const

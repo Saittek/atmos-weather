@@ -8,7 +8,6 @@ export type ModuleId =
   | 'fireMap'
   | 'chat'
   | 'shareCard'
-  | 'models'
   | 'planning'
 
 export interface ModulePrefs {
@@ -18,7 +17,6 @@ export interface ModulePrefs {
   fireMap: boolean
   chat: boolean
   shareCard: boolean
-  models: boolean
   planning: boolean
 }
 
@@ -31,7 +29,6 @@ export const DEFAULT_MODULE_PREFS: ModulePrefs = {
   fireMap: false,
   chat: false,
   shareCard: false,
-  models: false,
   planning: false, // Advanced still available when user opts in
 }
 
@@ -39,8 +36,10 @@ export function loadModulePrefs(): ModulePrefs {
   try {
     const raw = localStorage.getItem(KEY)
     if (!raw) return { ...DEFAULT_MODULE_PREFS }
-    const p = JSON.parse(raw) as Partial<ModulePrefs>
-    return { ...DEFAULT_MODULE_PREFS, ...p }
+    const p = JSON.parse(raw) as Partial<ModulePrefs> & { models?: boolean }
+    const { models: _retired, ...rest } = p
+    void _retired
+    return { ...DEFAULT_MODULE_PREFS, ...rest }
   } catch {
     return { ...DEFAULT_MODULE_PREFS }
   }
@@ -63,6 +62,5 @@ export const MODULE_LABELS: { id: ModuleId; label: string; hint: string }[] = [
   { id: 'fireMap', label: 'Always show fire map', hint: 'Otherwise only when smoky' },
   { id: 'chat', label: 'Area chat', hint: 'Local community' },
   { id: 'shareCard', label: 'Share card panel', hint: 'Big share block' },
-  { id: 'models', label: 'Model compare (retired)', hint: 'Google WeatherNext 3 is the only forecast' },
   { id: 'planning', label: 'Planning tools', hint: 'Trip, snow, climate' },
 ]

@@ -12,7 +12,6 @@ const MOD_KEYS: Record<ModuleId, { label: MessageKey; hint: MessageKey }> = {
   fireMap: { label: 'mod.fireMap', hint: 'mod.fireMapHint' },
   chat: { label: 'mod.chat', hint: 'mod.chatHint' },
   shareCard: { label: 'mod.shareCard', hint: 'mod.shareCardHint' },
-  models: { label: 'mod.models', hint: 'mod.modelsHint' },
   planning: { label: 'mod.planning', hint: 'mod.planningHint' },
 }
 
@@ -35,7 +34,7 @@ export function ModulePrefsPanel({ prefs, onChange }: Props) {
       </div>
       <p className="module-prefs-lead muted-center">{t('settings.modulesLead')}</p>
       <ul className="module-prefs-list">
-        {MODULE_LABELS.filter((m) => m.id !== 'models').map((m) => {
+        {MODULE_LABELS.map((m) => {
           const keys = MOD_KEYS[m.id]
           return (
             <li key={m.id}>
