@@ -96,9 +96,15 @@
   gap: 0.4rem;
 }
 
-.radar-peek .solara-radar.is-compact .sr-stage {
+.radar-peek .solara-radar.is-compact .sr-stage,
+.solara-radar.is-peek .sr-stage {
   height: 168px;
   min-height: 168px;
+}
+
+.solara-radar.is-peek .sr-dock,
+.solara-radar.is-peek .sr-layers {
+  display: none;
 }
 
 .radar-peek-head {

@@ -6,7 +6,7 @@ import type { Units } from '../utils/format'
 import { UnitToggle } from './UnitToggle'
 import { AccountMenu } from './AccountMenu'
 import { ModulePrefsPanel } from './ModulePrefsPanel'
-import { getEntitlements, setPlanLocal, type PlanId } from '../lib/entitlements'
+import { getEntitlements } from '../lib/entitlements'
 import { isAnalyticsOptedOut, setAnalyticsOptOut } from '../lib/analytics'
 import {
   loadModulePrefs,
@@ -140,11 +140,6 @@ export function SettingsBar({
     saveModulePrefs(next)
   }
 
-  const applyPlan = (p: PlanId) => {
-    setPlanLocal(p)
-    setPlan(getEntitlements(p))
-  }
-
   useEffect(() => {
     if (!moreOpen) return
     const onKey = (e: KeyboardEvent) => {
@@ -178,28 +173,7 @@ export function SettingsBar({
             {plan.plan === 'pro' ? t('pro.badge') : t('pro.free')}
           </span>
         </div>
-        <p className="settings-plan-hint">
-          {plan.plan === 'pro' ? t('settings.planHintPro') : t('settings.planHintFree')}
-        </p>
-        <div className="settings-plan-actions">
-          {plan.plan === 'free' ? (
-            <button
-              type="button"
-              className="chip-btn settings-more-action"
-              onClick={() => applyPlan('pro')}
-            >
-              {t('settings.previewPro')}
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="chip-btn settings-more-action"
-              onClick={() => applyPlan('free')}
-            >
-              {t('settings.backFree')}
-            </button>
-          )}
-        </div>
+        <p className="settings-plan-hint">{t('settings.planHintFree')}</p>
       </div>
 
       <div className="settings-more-section settings-modules-card">

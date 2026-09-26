@@ -113,6 +113,7 @@ export function CurrentWeather({
   const cardRef = useRef<HTMLElement>(null)
   const [vsNormal, setVsNormal] = useState<string | null>(null)
   const [nowTick, setNowTick] = useState(() => Date.now())
+  const [showDetails, setShowDetails] = useState(false)
   const mobile = isMobileViewport()
 
   useEffect(() => {
@@ -275,9 +276,7 @@ export function CurrentWeather({
           >
             {precipSentence}
           </h2>
-          <p className="hero-nowcast-note">
-            Next-hour timing is estimated from Google hourly data, not radar minutes.
-          </p>
+          <p className="hero-nowcast-note">{t('hero.nowcastNote')}</p>
           {rainLabel && rainLabel !== precipSentence && (
             <p className="current-next-precip" role="status">
               {rainLabel}
@@ -285,7 +284,10 @@ export function CurrentWeather({
           )}
           {tonight && stargazePath && (
             <Link to={stargazePath} className="hero-tonight">
-              Tonight · {tonight.goLabel} · {gradeLabel(tonight.tonightGrade)}
+              {t('hero.tonight', {
+                go: tonight.goLabel,
+                grade: gradeLabel(tonight.tonightGrade),
+              })}
             </Link>
           )}
         </div>
@@ -317,7 +319,7 @@ export function CurrentWeather({
                 l: formatTemp(low, units),
               })}
             </span>
-            {vsNormal && <span className="vs-normal-line">{vsNormal}</span>}
+            {!mobile && vsNormal && <span className="vs-normal-line">{vsNormal}</span>}
           </div>
         </div>
 
@@ -346,26 +348,39 @@ export function CurrentWeather({
                 : t('hero.alerts', { n: alertCount })}
             </span>
           )}
-          {rainLabel && <span className="current-chip rain">{rainLabel}</span>}
           <span className="current-chip">
             {formatSpeed(c.wind_speed_10m, units)} {windDirection(c.wind_direction_10m)}
           </span>
-          <span className="current-chip">{c.relative_humidity_2m}% humidity</span>
-          {uv >= 0.5 && (
-            <span className="current-chip" style={{ borderColor: uvInfo.color }}>
-              UV {uv.toFixed(0)} · {uvInfo.label}
-            </span>
-          )}
-          {aqiInfo && aqi != null && (
+          {aqiInfo && aqi != null && aqi >= 50 && (
             <span className="current-chip" style={{ borderColor: aqiInfo.color }}>
               AQI {Math.round(aqi)} · {aqiInfo.label}
             </span>
           )}
-          {sunrise && sunset && (
-            <span className="current-chip">
-              ☀ {formatTime(sunrise, weather.timezone)} ·{' '}
-              {formatTime(sunset, weather.timezone)}
-            </span>
+          {(showDetails || !mobile) && (
+            <>
+              <span className="current-chip">{c.relative_humidity_2m}% humidity</span>
+              {uv >= 0.5 && (
+                <span className="current-chip" style={{ borderColor: uvInfo.color }}>
+                  UV {uv.toFixed(0)} · {uvInfo.label}
+                </span>
+              )}
+              {sunrise && sunset && (
+                <span className="current-chip">
+                  ☀ {formatTime(sunrise, weather.timezone)} ·{' '}
+                  {formatTime(sunset, weather.timezone)}
+                </span>
+              )}
+              {vsNormal && <span className="current-chip">{vsNormal}</span>}
+            </>
+          )}
+          {mobile && (
+            <button
+              type="button"
+              className="current-chip"
+              onClick={() => setShowDetails((v) => !v)}
+            >
+              {showDetails ? t('hero.lessDetails') : t('hero.moreDetails')}
+            </button>
           )}
         </div>
       </div>

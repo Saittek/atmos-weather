@@ -72,7 +72,8 @@ export function HourlyForecast({ weather, units, selectedDay = null }: Props) {
           .map((_, i) => i)
           .filter((i) => String(hourly.time[i]).slice(0, 10) === selectedDay.slice(0, 10))
       : null
-  const items = dayItems && dayItems.length ? dayItems : rolling
+  const dayMissing = Boolean(selectedDay && selectedDay.length >= 10 && !(dayItems && dayItems.length))
+  const items = dayMissing ? [] : dayItems && dayItems.length ? dayItems : rolling
 
   const maxPrecip = Math.max(
     0.3,
@@ -88,13 +89,18 @@ export function HourlyForecast({ weather, units, selectedDay = null }: Props) {
       <div className="panel-header">
         <h2>{t('panel.hourly')}</h2>
         <span className="panel-hint">
-          {selectedDay && dayItems?.length
-            ? `${selectedDay} · ${unit}`
-            : endIso
-              ? `${hourLabel(hourly.time[idx], timezone, true, nowLbl, locTag)} → ${hourLabel(endIso, timezone, false, nowLbl, locTag)} · ${unit}`
-              : `→ · ${unit}`}
+          {dayMissing
+            ? t('panel.hourlyBeyond')
+            : selectedDay && dayItems?.length
+              ? `${selectedDay} · ${unit}`
+              : endIso
+                ? `${hourLabel(hourly.time[idx], timezone, true, nowLbl, locTag)} → ${hourLabel(endIso, timezone, false, nowLbl, locTag)} · ${unit}`
+                : `→ · ${unit}`}
         </span>
       </div>
+      {dayMissing && (
+        <p className="muted-center">{t('panel.hourlyBeyondHint')}</p>
+      )}
       {items.length > 2 && (
         <svg className="hourly-graph" viewBox={`0 0 ${Math.max(items.length * 8, 80)} 72`} preserveAspectRatio="none" aria-hidden>
           {(() => {

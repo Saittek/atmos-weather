@@ -58,6 +58,8 @@ export interface SolaraRadarProps {
   focusRequest?: MapFocusRequest | null
   threatPolygons?: StormWarning[] | null
   homeLocation?: LocationResult | null
+  /** Compact looping map with no chrome — home peek */
+  peek?: boolean
 }
 
 type SpeedKey = 'slow' | 'normal' | 'fast'
@@ -561,6 +563,7 @@ export function SolaraRadar({
   initialSource,
   focusRequest = null,
   homeLocation = null,
+  peek = false,
 }: SolaraRadarProps) {
   void _units
   const { te } = useI18n()
@@ -573,7 +576,7 @@ export function SolaraRadar({
   const mapRef = useRef<MapLibreMap | null>(null)
   const mapReadyRef = useRef(false)
   const basemapInitRef = useRef(true)
-  const wantPlay = useRef(false)
+  const wantPlay = useRef(peek)
   const tileUrlRef = useRef<string | null>(null)
   const opacityRef = useRef(0.84)
   const bufRef = useRef<RadarBufState>({ active: 0, url: null })
@@ -599,7 +602,7 @@ export function SolaraRadar({
   )
   const [frames, setFrames] = useState<RadarFrame[]>([])
   const [frameIdx, setFrameIdx] = useState(0)
-  const [playing, setPlaying] = useState(false)
+  const [playing, setPlaying] = useState(peek)
   const [speed, setSpeed] = useState<SpeedKey>(lite ? 'slow' : 'normal')
   const [opacity, setOpacity] = useState(0.84)
   const [basemap, setBasemap] = useState<BasemapId>('dark')
@@ -1260,7 +1263,7 @@ export function SolaraRadar({
       ref={(n) => {
         wrapRef.current = n
       }}
-      className={`panel radar-panel solara-radar ${pageMode ? 'is-page radar-page-mode' : 'is-compact radar-compact'} ${fullscreen ? 'is-fullscreen' : ''}`}
+      className={`panel radar-panel solara-radar ${pageMode ? 'is-page radar-page-mode' : 'is-compact radar-compact'} ${fullscreen ? 'is-fullscreen' : ''} ${peek ? 'is-peek' : ''}`}
       id={mapId}
     >
       <div className="sr-stage">
@@ -1301,6 +1304,7 @@ export function SolaraRadar({
         )}
       </div>
 
+      {!peek && (
       <div className="sr-dock">
         <div className="sr-row sr-row-main">
           <div className="sr-time">
@@ -1440,6 +1444,7 @@ export function SolaraRadar({
           </button>
         </div>
       </div>
+      )}
     </section>
   )
 }

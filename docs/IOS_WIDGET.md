@@ -25,7 +25,7 @@ It is **not** the web `/widget` page or “Add to Home Screen” PWA icon.
 2. React builds a JSON snapshot and calls `SolaraWidget.setSnapshot`.
 3. Plugin writes JSON to App Group `UserDefaults` and reloads WidgetKit timelines.
 4. Extension reads the snapshot and paints SwiftUI.
-5. If the snapshot is older than ~45 minutes, the extension re-fetches **Open-Meteo** itself using stored lat/lon.
+5. If the snapshot is older than ~45 minutes, the extension re-fetches **Google WeatherNext 3** via `https://solaraweather.com/api/weather/google` using stored lat/lon.
 
 ## Apple Developer setup (one-time)
 

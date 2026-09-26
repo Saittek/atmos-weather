@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { Link } from 'react-router-dom'
 import type { Units } from '../utils/format'
+import { useI18n } from '../i18n/I18nProvider'
 import { ErrorBoundary } from './ErrorBoundary'
 import { Deferred } from './Deferred'
 
@@ -15,12 +16,13 @@ interface Props {
 }
 
 export function RadarPeek({ lat, lon, placeName, radarPath, units }: Props) {
+  const { t } = useI18n()
   return (
-    <section className="radar-peek" aria-label="Radar peek">
+    <section className="radar-peek" aria-label={t('peek.radar')}>
       <div className="panel-header radar-peek-head">
-        <h2>Radar</h2>
+        <h2>{t('peek.radar')}</h2>
         <Link to={radarPath} className="chip-btn">
-          Full radar
+          {t('peek.full')}
         </Link>
       </div>
       <Deferred force={false} rootMargin="80px 0px" minHeight={160}>
@@ -33,6 +35,7 @@ export function RadarPeek({ lat, lon, placeName, radarPath, units }: Props) {
               units={units}
               mapId="radar-peek"
               pageMode={false}
+              peek
             />
           </ErrorBoundary>
         </Suspense>

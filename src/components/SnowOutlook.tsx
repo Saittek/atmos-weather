@@ -82,7 +82,7 @@ export function SnowOutlook({ weather, units }: Props) {
         })}
       </ul>
       <p className="model-note">
-        Snow amounts are model estimates (Open-Meteo snowfall in cm; inches when using °F).
+        Snow amounts are Google WeatherNext 3 estimates (cm; inches when using °F).
       </p>
     </section>
   )

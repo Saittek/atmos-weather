@@ -308,7 +308,13 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!location) return
     const key = locationKey(location)
-    const hot = activeAlerts.some((a) => /severe|extreme/i.test(a.severity))
+    const hot = activeAlerts.some((a) => {
+      if (/extreme/i.test(a.severity)) return true
+      const blob = `${a.event} ${a.headline}`.toLowerCase()
+      return /tornado|severe thunderstorm|hurricane|flash flood warning|blizzard|ice storm/.test(
+        blob,
+      )
+    })
     if (!hot) return
     if (stormDismissedFor.current === key) return
     setStormMode(true)
@@ -926,7 +932,7 @@ export default function DashboardPage() {
                 />
               </div>
 
-              {isMobile ? (
+              {isMobile && !wantRadar ? (
                 <RadarPeek
                   lat={location.latitude}
                   lon={location.longitude}
@@ -1163,19 +1169,19 @@ export default function DashboardPage() {
             onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
           >
             <span aria-hidden>☀</span>
-            Home
+            {tNav('nav.tabHome')}
           </button>
           <Link to={radarPath}>
             <span aria-hidden>📡</span>
-            Radar
+            {tNav('nav.radar')}
           </Link>
           <Link to={stargazePath}>
             <span aria-hidden>✨</span>
-            Sky
+            {tNav('nav.tabSky')}
           </Link>
           <Link to="/globe">
             <span aria-hidden>🌍</span>
-            Earth
+            {tNav('nav.tabEarth')}
           </Link>
         </nav>
       )}

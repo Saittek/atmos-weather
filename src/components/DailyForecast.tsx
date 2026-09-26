@@ -16,7 +16,7 @@ import { trWeatherLabel } from '../i18n/messages'
 import { WeatherIcon3D } from './WeatherIcon3D'
 
 const COLLAPSED_DAYS = 7
-const EXPANDED_DAYS = 14
+const EXPANDED_DAYS = 10
 
 interface Props {
   weather: WeatherData
@@ -211,7 +211,7 @@ export function DailyForecast({ weather, units, onSelectDay }: Props) {
             className="chip-btn daily-expand-btn daily-expand-btn-wide"
             onClick={() => setExpanded(true)}
           >
-            Show full 14-day outlook
+            {t('panel.showMore')}
           </button>
         </div>
       )}
