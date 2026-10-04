@@ -237,6 +237,11 @@ const en = {
 
   // Forecast panels
   'panel.hourly': 'Hourly',
+  'panel.hourlyLineTemp': 'Temperature',
+  'panel.hourlyLineRain': 'Rain ({unit})',
+  'panel.hourlyGraphAria': 'Temperature as a line, rain amount as bars ({unit})',
+  'panel.hourlyCardRain': 'Bar + amount = rain ({unit})',
+  'panel.hourlyChance': '% chance',
   'panel.daily': '10-day forecast',
   'panel.daily7': '7-day forecast',
   'panel.showMore': 'Show 10 days',
@@ -576,6 +581,11 @@ const fr: Record<MessageKey, string> = {
     'Vous devez connaître votre mot de passe actuel. Accès perdu? Utilisez Mot de passe oublié ou le soutien.',
 
   'panel.hourly': 'Horaire',
+  'panel.hourlyLineTemp': 'Température',
+  'panel.hourlyLineRain': 'Pluie ({unit})',
+  'panel.hourlyGraphAria': 'Température en ligne, quantité de pluie en barres ({unit})',
+  'panel.hourlyCardRain': 'Barre + quantité = pluie ({unit})',
+  'panel.hourlyChance': '% de probabilité',
   'panel.daily': 'Prévisions 10 jours',
   'panel.daily7': 'Prévisions 7 jours',
   'panel.showMore': 'Afficher 10 jours',

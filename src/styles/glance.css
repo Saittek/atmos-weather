@@ -71,10 +71,14 @@
   color: var(--text-mute);
 }
 
+.hourly-graph-wrap {
+  margin: 0 0 0.65rem;
+}
+
 .hourly-graph {
   width: 100%;
   height: 72px;
-  margin: 0 0 0.65rem;
+  margin: 0;
   display: block;
 }
 
@@ -84,10 +88,46 @@
 
 .hourly-graph .hg-line {
   fill: none;
-  stroke: #f8fafc;
+  stroke: var(--text, #f8fafc);
   stroke-width: 1.75;
   stroke-linejoin: round;
   stroke-linecap: round;
+}
+
+.hourly-graph-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  margin: 0.28rem 0 0;
+  font-size: 0.68rem;
+  font-weight: 650;
+  color: var(--text-mute, #94a3b8);
+}
+
+.hourly-graph-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.hg-key-line,
+.hg-key-bar {
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.hg-key-line {
+  width: 1.15rem;
+  height: 0;
+  border-top: 2px solid var(--text, #f8fafc);
+  border-radius: 2px;
+}
+
+.hg-key-bar {
+  width: 0.42rem;
+  height: 0.72rem;
+  border-radius: 2px;
+  background: rgba(56, 189, 248, 0.7);
 }
 
 .radar-peek {

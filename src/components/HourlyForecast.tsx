@@ -102,46 +102,64 @@ export function HourlyForecast({ weather, units, selectedDay = null }: Props) {
         <p className="muted-center">{t('panel.hourlyBeyondHint')}</p>
       )}
       {items.length > 2 && (
-        <svg className="hourly-graph" viewBox={`0 0 ${Math.max(items.length * 8, 80)} 72`} preserveAspectRatio="none" aria-hidden>
-          {(() => {
-            const temps = items.map((i) => hourly.temperature_2m[i] ?? 0)
-            const precs = items.map((i) => hourly.precipitation[i] ?? 0)
-            const tMin = Math.min(...temps)
-            const tMax = Math.max(...temps)
-            const span = Math.max(tMax - tMin, 1)
-            const pMax = Math.max(0.4, ...precs)
-            const w = Math.max(items.length * 8, 80)
-            const barW = Math.max(2, w / items.length - 1.5)
-            const pts = temps
-              .map((v, n) => {
-                const x = (n + 0.5) * (w / items.length)
-                const y = 10 + (1 - (v - tMin) / span) * 50
-                return `${x.toFixed(1)},${y.toFixed(1)}`
-              })
-              .join(' ')
-            return (
-              <>
-                {precs.map((p, n) => {
-                  const h = (p / pMax) * 40
-                  if (h < 1) return null
-                  const x = n * (w / items.length) + 0.5
-                  return (
-                    <rect
-                      key={hourly.time[items[n]]}
-                      className="hg-bar"
-                      x={x}
-                      y={68 - h}
-                      width={barW}
-                      height={h}
-                      rx="1"
-                    />
-                  )
-                })}
-                <polyline className="hg-line" points={pts} />
-              </>
-            )
-          })()}
-        </svg>
+        <div className="hourly-graph-wrap">
+          <svg
+            className="hourly-graph"
+            viewBox={`0 0 ${Math.max(items.length * 8, 80)} 72`}
+            preserveAspectRatio="none"
+            role="img"
+            aria-label={t('panel.hourlyGraphAria', { unit })}
+          >
+            {(() => {
+              const temps = items.map((i) => hourly.temperature_2m[i] ?? 0)
+              const precs = items.map((i) => hourly.precipitation[i] ?? 0)
+              const tMin = Math.min(...temps)
+              const tMax = Math.max(...temps)
+              const span = Math.max(tMax - tMin, 1)
+              const pMax = Math.max(0.4, ...precs)
+              const w = Math.max(items.length * 8, 80)
+              const barW = Math.max(2, w / items.length - 1.5)
+              const pts = temps
+                .map((v, n) => {
+                  const x = (n + 0.5) * (w / items.length)
+                  const y = 10 + (1 - (v - tMin) / span) * 50
+                  return `${x.toFixed(1)},${y.toFixed(1)}`
+                })
+                .join(' ')
+              return (
+                <>
+                  {precs.map((p, n) => {
+                    const h = (p / pMax) * 40
+                    if (h < 1) return null
+                    const x = n * (w / items.length) + 0.5
+                    return (
+                      <rect
+                        key={hourly.time[items[n]]}
+                        className="hg-bar"
+                        x={x}
+                        y={68 - h}
+                        width={barW}
+                        height={h}
+                        rx="1"
+                      />
+                    )
+                  })}
+                  <polyline className="hg-line" points={pts} />
+                </>
+              )
+            })()}
+          </svg>
+          <p className="hourly-graph-legend">
+            <span>
+              <i className="hg-key-line" aria-hidden />
+              {t('panel.hourlyLineTemp')}
+            </span>
+            <span>
+              <i className="hg-key-bar" aria-hidden />
+              {t('panel.hourlyLineRain', { unit })}
+            </span>
+          </p>
+        </div>
       )}
       <div className="hourly-scroll" role="list" tabIndex={0}>
         {items.map((i) => {
@@ -221,8 +239,8 @@ export function HourlyForecast({ weather, units, selectedDay = null }: Props) {
         })}
       </div>
       <p className="hourly-legend">
-        <span className="hourly-legend-rain">Bar + amount = rain ({unit})</span>
-        <span>% chance</span>
+        <span className="hourly-legend-rain">{t('panel.hourlyCardRain', { unit })}</span>
+        <span>{t('panel.hourlyChance')}</span>
       </p>
     </section>
   )
