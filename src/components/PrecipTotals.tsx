@@ -1,6 +1,6 @@
 import type { WeatherData } from '../api/types'
 import type { Units } from '../utils/format'
-import { formatPrecip, parseWeatherLocal } from '../utils/format'
+import { formatPrecip, formatSnow, parseWeatherLocal } from '../utils/format'
 import { todayDailyIndex } from '../utils/weatherStory'
 
 interface Props {
@@ -51,7 +51,7 @@ export function PrecipTotals({ weather, units }: Props) {
         </div>
       </div>
       {snowToday > 0 && (
-        <p className="snow-total-note">Snow today: ~{snowToday.toFixed(1)} cm</p>
+        <p className="snow-total-note">Snow today: ~{formatSnow(snowToday, units)}</p>
       )}
     </section>
   )

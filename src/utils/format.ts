@@ -32,6 +32,15 @@ export function precipUnit(units: Units): string {
   return units === 'metric' ? 'mm' : 'in'
 }
 
+/** snowfall / snowfall_sum are centimetres (Open-Meteo; Google mapped the same). */
+export function snowUnit(units: Units): string {
+  return units === 'metric' ? 'cm' : 'in'
+}
+
+export function convertSnow(cm: number, units: Units): number {
+  return units === 'metric' ? cm : cm / 2.54
+}
+
 export function formatTemp(celsius: number, units: Units, decimals = 0): string {
   return `${Math.round(convertTemp(celsius, units) * 10 ** decimals) / 10 ** decimals}°`
 }
@@ -72,6 +81,27 @@ export function formatPrecip(mm: number, units: Units): string {
   }
   if (v < 0.01) return `<0.01 ${precipUnit(units)}`
   return `${v.toFixed(2)} ${precipUnit(units)}`
+}
+
+export function hasSnowCm(cm: number): boolean {
+  return Number.isFinite(cm) && cm >= 0.05
+}
+
+/** Compact snow depth (no unit). `cm` is snowfall centimetres. */
+export function formatSnowAmount(cm: number, units: Units): string {
+  if (!Number.isFinite(cm) || cm < 0.05) return '0'
+  const v = convertSnow(cm, units)
+  if (units === 'metric') {
+    if (v < 0.1) return '<0.1'
+    return v >= 10 ? v.toFixed(0) : v.toFixed(1)
+  }
+  if (v < 0.05) return '<0.05'
+  return v >= 1 ? v.toFixed(1) : v.toFixed(2)
+}
+
+export function formatSnow(cm: number, units: Units): string {
+  if (!Number.isFinite(cm) || cm < 0.05) return `0 ${snowUnit(units)}`
+  return `${formatSnowAmount(cm, units)} ${snowUnit(units)}`
 }
 
 export function formatPressure(hpa: number, units: Units): string {

@@ -5,7 +5,13 @@
 import type { WeatherData } from '../api/types'
 import { detectLocale } from '../i18n/messages'
 import type { Units } from './format'
-import { formatPrecipAmount, parseWeatherLocal, precipUnit } from './format'
+import {
+  formatPrecipAmount,
+  formatSnowAmount,
+  parseWeatherLocal,
+  precipUnit,
+  snowUnit,
+} from './format'
 
 export interface PrecipTiming {
   /** Full sentence for hero / glance */
@@ -41,13 +47,16 @@ export function precipTiming(weather: WeatherData, units: Units = 'metric'): Pre
   const tz = weather.timezone
   const now = Date.now()
   const windowEnd = now + 6 * 3600_000
+  const snowy = isSnowyCode(weather.current?.weather_code)
   const kindWord = (() => {
-    const code = weather.current?.weather_code
-    if (isSnowyCode(code)) return fr ? 'Neige' : 'Snow'
+    if (snowy) return fr ? 'Neige' : 'Snow'
     const temp = weather.current?.temperature_2m
     if (temp != null && temp <= 0.5) return fr ? 'Précip. hivernales' : 'Wintry precip'
     return fr ? 'Pluie' : 'Rain'
   })()
+  const amtUnit = snowy ? snowUnit(units) : precipUnit(units)
+  const fmtAmt = (n: number) =>
+    snowy ? formatSnowAmount(n, units) : formatPrecipAmount(n, units)
 
   type Slot = { ms: number; mm: number; pop: number; code?: number }
   const slots: Slot[] = []
@@ -99,7 +108,9 @@ export function precipTiming(weather: WeatherData, units: Units = 'metric'): Pre
       if (ms > windowEnd) break
       slots.push({
         ms,
-        mm: h.precipitation[i] ?? 0,
+        mm: snowy
+          ? (h.snowfall[i] ?? h.precipitation[i] ?? 0)
+          : (h.precipitation[i] ?? 0),
         pop: h.precipitation_probability[i] ?? 0,
         code: h.weather_code?.[i],
       })
@@ -147,8 +158,8 @@ export function precipTiming(weather: WeatherData, units: Units = 'metric'): Pre
     const amt =
       next3hMm >= 0.2
         ? fr
-          ? ` · ~${formatPrecipAmount(next3hMm, units)} ${precipUnit(units)} d’ici ${by}`
-          : ` · ~${formatPrecipAmount(next3hMm, units)} ${precipUnit(units)} by ${by}`
+          ? ` · ~${fmtAmt(next3hMm)} ${amtUnit} d’ici ${by}`
+          : ` · ~${fmtAmt(next3hMm)} ${amtUnit} by ${by}`
         : maxPop >= 50
           ? fr
             ? ` · jusqu’à ${Math.round(maxPop)} % de risque`
@@ -165,8 +176,8 @@ export function precipTiming(weather: WeatherData, units: Units = 'metric'): Pre
       short:
         slots[0].mm >= 0.15
           ? fr
-            ? `${kindWord} maintenant${next3hMm >= 0.2 ? ` · ~${formatPrecipAmount(next3hMm, units)} ${precipUnit(units)} / 3 h` : ''}`
-            : `${kindWord} now${next3hMm >= 0.2 ? ` · ~${formatPrecipAmount(next3hMm, units)} ${precipUnit(units)} / 3h` : ''}`
+            ? `${kindWord} maintenant${next3hMm >= 0.2 ? ` · ~${fmtAmt(next3hMm)} ${amtUnit} / 3 h` : ''}`
+            : `${kindWord} now${next3hMm >= 0.2 ? ` · ~${fmtAmt(next3hMm)} ${amtUnit} / 3h` : ''}`
           : fr
             ? `Averses bientôt (${Math.round(slots[0].pop || maxPop)} %)`
             : `Showers soon (${Math.round(slots[0].pop || maxPop)}%)`,
@@ -188,8 +199,8 @@ export function precipTiming(weather: WeatherData, units: Units = 'metric'): Pre
     const amt =
       chunkMm >= 0.2
         ? fr
-          ? ` · ~${formatPrecipAmount(chunkMm, units)} ${precipUnit(units)} d’ici ${endLabel}`
-          : ` · ~${formatPrecipAmount(chunkMm, units)} ${precipUnit(units)} by ${endLabel}`
+          ? ` · ~${fmtAmt(chunkMm)} ${amtUnit} d’ici ${endLabel}`
+          : ` · ~${fmtAmt(chunkMm)} ${amtUnit} by ${endLabel}`
         : when.pop >= 40
           ? fr
             ? ` · ${Math.round(when.pop)} % de risque`
@@ -209,7 +220,7 @@ export function precipTiming(weather: WeatherData, units: Units = 'metric'): Pre
         : `${kindWord} starts ~${startLabel} (${hours})${amt}.`,
       short:
         chunkMm >= 0.2
-          ? `${kindWord} ~${startLabel} · ~${formatPrecipAmount(chunkMm, units)} ${precipUnit(units)}`
+          ? `${kindWord} ~${startLabel} · ~${fmtAmt(chunkMm)} ${amtUnit}`
           : fr
             ? `Risque de ${kindWord.toLowerCase()} ~${startLabel}`
             : `${kindWord} risk ~${startLabel}`,

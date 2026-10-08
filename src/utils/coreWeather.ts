@@ -3,6 +3,7 @@ import type { Units } from './format'
 import {
   convertTemp,
   formatPrecip,
+  formatSnow,
   formatSpeed,
   formatTemp,
   formatWeekday,
@@ -314,7 +315,7 @@ export function hazardBadges(
     badges.push({
       id: 'snow',
       label: snow >= 5 ? 'Significant snow' : 'Snow',
-      detail: `${snow.toFixed(1)} cm expected today`,
+      detail: `${formatSnow(snow, units)} expected today`,
       level: snow >= 5 ? 'warn' : 'info',
     })
   }

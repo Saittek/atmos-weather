@@ -4,6 +4,7 @@ import type { Units } from '../utils/format'
 import {
   formatDay,
   formatPrecip,
+  formatSnow,
   formatSpeed,
   formatTemp,
   formatWeekday,
@@ -162,7 +163,7 @@ export function DailyForecast({ weather, units, onSelectDay }: Props) {
                       <span className="value">
                         {formatPrecip(d.precipitation_sum[i], units)}
                         {d.snowfall_sum[i] > 0 &&
-                          ` · snow ${formatPrecip(d.snowfall_sum[i] * 10, units)}`}
+                          ` · snow ${formatSnow(d.snowfall_sum[i], units)}`}
                       </span>
                     </div>
                     <div>

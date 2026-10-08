@@ -1,7 +1,13 @@
 import type { WeatherData } from '../api/types'
 import { detectLocale } from '../i18n/messages'
 import type { Units } from './format'
-import { formatPrecipAmount, parseWeatherLocal, precipUnit } from './format'
+import {
+  formatPrecipAmount,
+  formatSnowAmount,
+  parseWeatherLocal,
+  precipUnit,
+  snowUnit,
+} from './format'
 import { resolvePrecipKind } from './precipKind'
 
 export interface WetSummary {
@@ -24,6 +30,10 @@ export function willIGetWet(weather: WeatherData, units: Units = 'metric'): WetS
   )
   const precipWord =
     kind === 'snow' ? (fr ? 'neige' : 'snow') : kind === 'mix' ? (fr ? 'mélange' : 'mix') : fr ? 'pluie' : 'rain'
+  const snowy = kind === 'snow'
+  const amtUnit = snowy ? snowUnit(units) : precipUnit(units)
+  const fmtAmt = (n: number) =>
+    snowy ? formatSnowAmount(n, units) : formatPrecipAmount(n, units)
 
   type Slot = { ms: number; mm: number; pop: number; label: string }
   const slots: Slot[] = []
@@ -37,7 +47,9 @@ export function willIGetWet(weather: WeatherData, units: Units = 'metric'): WetS
     })
     slots.push({
       ms,
-      mm: h.precipitation[i] ?? 0,
+      mm: snowy
+        ? (h.snowfall[i] ?? h.precipitation[i] ?? 0)
+        : (h.precipitation[i] ?? 0),
       pop: h.precipitation_probability[i] ?? 0,
       label,
     })
@@ -72,7 +84,7 @@ export function willIGetWet(weather: WeatherData, units: Units = 'metric'): WetS
   }
 
   if (wetIdx === 0 || first.mm >= 0.2) {
-    const amt = `~${formatPrecipAmount(first.mm, units)} ${precipUnit(units)}`
+    const amt = `~${fmtAmt(first.mm)} ${amtUnit}`
     return {
       title: fr
         ? heavyIdx === 0

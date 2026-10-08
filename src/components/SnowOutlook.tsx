@@ -1,6 +1,6 @@
 import type { WeatherData } from '../api/types'
 import type { Units } from '../utils/format'
-import { formatTemp } from '../utils/format'
+import { formatSnow, formatTemp } from '../utils/format'
 import { todayDailyIndex } from '../utils/weatherStory'
 import { getWeatherInfo } from '../utils/weatherCodes'
 
@@ -56,12 +56,8 @@ export function SnowOutlook({ weather, units }: Props) {
       <ul className="snow-list">
         {days.map((day) => {
           const info = getWeatherInfo(day.code, true)
-          // Open-Meteo snowfall_sum is cm
           const cm = day.snow
-          const display =
-            units === 'metric'
-              ? `${cm.toFixed(1)} cm`
-              : `${(cm / 2.54).toFixed(1)} in`
+          const display = formatSnow(cm, units)
           return (
             <li key={day.date}>
               <span className="snow-day">
