@@ -139,6 +139,27 @@
 
 .mode-page-back {
   flex-shrink: 0;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 0.28rem;
+  box-sizing: border-box;
+  min-height: 2.15rem;
+  height: 2.15rem;
+  padding: 0 0.85rem !important;
+  line-height: 1;
+  text-align: center;
+}
+
+.mode-page-back-chevron,
+.mode-page-back-text {
+  display: block;
+  line-height: 1;
+}
+
+.mode-page-back-chevron {
+  font-size: 0.95em;
+  transform: translateY(-0.04em);
 }
 
 .mode-page-actions {
@@ -428,6 +449,11 @@
 
   .mode-page-nav .icon-chip {
     width: 2rem;
+    height: 2rem;
+  }
+
+  .mode-page-back {
+    min-height: 2rem;
     height: 2rem;
   }
 

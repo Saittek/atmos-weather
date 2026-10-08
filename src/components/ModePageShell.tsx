@@ -42,7 +42,7 @@ export function ModePageShell({
   fullViewport = false,
 }: Props) {
   const { t } = useI18n()
-  const back = backLabel ?? t('page.back')
+  const back = (backLabel ?? t('page.back')).replace(/^\s*←\s*/, '')
 
   return (
     <div
@@ -61,8 +61,11 @@ export function ModePageShell({
     >
       <header className="mode-page-bar">
         <div className="mode-page-bar-start">
-          <Link to={backTo} className="chip-btn mode-page-back" title={t('page.back')}>
-            {back}
+          <Link to={backTo} className="chip-btn mode-page-back" title={back}>
+            <span className="mode-page-back-chevron" aria-hidden>
+              ←
+            </span>
+            <span className="mode-page-back-text">{back}</span>
           </Link>
           <div className="mode-page-brand">
             {emoji ? (
